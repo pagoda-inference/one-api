@@ -21,19 +21,23 @@ const (
 )
 
 type Token struct {
-	Id             int     `json:"id"`
-	UserId         int     `json:"user_id"`
-	Key            string  `json:"key" gorm:"type:char(48);uniqueIndex"`
-	Status         int     `json:"status" gorm:"default:1"`
-	Name           string  `json:"name" gorm:"index" `
-	CreatedTime    int64   `json:"created_time" gorm:"bigint"`
-	AccessedTime   int64   `json:"accessed_time" gorm:"bigint"`
-	ExpiredTime    int64   `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
-	RemainQuota    int64   `json:"remain_quota" gorm:"bigint;default:0"`
-	UnlimitedQuota bool    `json:"unlimited_quota" gorm:"default:false"`
-	UsedQuota      int64   `json:"used_quota" gorm:"bigint;default:0"` // used quota
-	Models         *string `json:"models" gorm:"type:text"`            // allowed models
-	Subnet         *string `json:"subnet" gorm:"default:''"`           // allowed subnet
+	Id                  int     `json:"id"`
+	UserId              int     `json:"user_id"`
+	Key                 string  `json:"key" gorm:"type:char(48);uniqueIndex"`
+	Status              int     `json:"status" gorm:"default:1"`
+	Name                string  `json:"name" gorm:"index" `
+	CreatedTime         int64   `json:"created_time" gorm:"bigint"`
+	AccessedTime        int64   `json:"accessed_time" gorm:"bigint"`
+	ExpiredTime         int64   `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
+	RemainQuota         int64   `json:"remain_quota" gorm:"bigint;default:0"`
+	UnlimitedQuota      bool    `json:"unlimited_quota" gorm:"default:false"`
+	UsedQuota           int64   `json:"used_quota" gorm:"bigint;default:0"` // used quota
+	Models              *string `json:"models" gorm:"type:text"`            // allowed models
+	Subnet              *string `json:"subnet" gorm:"default:''"`           // allowed subnet
+	// Rate limiting fields
+	RateLimitRpm        int     `json:"rate_limit_rpm" gorm:"default:0"`              // Requests per minute, 0 means unlimited
+	RateLimitTpm        int     `json:"rate_limit_tpm" gorm:"default:0"`              // Tokens per minute, 0 means unlimited
+	RateLimitConcurrent int     `json:"rate_limit_concurrent" gorm:"default:0"`       // Max concurrent requests, 0 means unlimited
 }
 
 func GetAllUserTokens(userId int, startIdx int, num int, order string) ([]*Token, error) {
@@ -132,7 +136,7 @@ func (t *Token) Insert() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (t *Token) Update() error {
 	var err error
-	err = DB.Model(t).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota", "models", "subnet").Updates(t).Error
+	err = DB.Model(t).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota", "models", "subnet", "rate_limit_rpm", "rate_limit_tpm", "rate_limit_concurrent").Updates(t).Error
 	return err
 }
 

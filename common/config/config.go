@@ -182,3 +182,6 @@ var CircuitBreakerTimeout = env.Int("CIRCUIT_BREAKER_TIMEOUT", 30)
 // Request Queue Settings
 var MaxConcurrentRequests = env.Int("MAX_CONCURRENT_REQUESTS", 1000)
 var RequestQueueTimeout = env.Int("REQUEST_QUEUE_TIMEOUT", 5)
+
+// Load Balancing Settings
+var EnableWeightedLoadBalancing = env.Bool("ENABLE_WEIGHTED_LB", true)

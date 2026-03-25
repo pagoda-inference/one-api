@@ -5,16 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/songquanpeng/one-api/common"
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/logger"
-	"github.com/songquanpeng/one-api/common/random"
 	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/songquanpeng/one-api/common"
+	"github.com/songquanpeng/one-api/common/config"
+	"github.com/songquanpeng/one-api/common/logger"
+	"github.com/songquanpeng/one-api/common/random"
+	"github.com/songquanpeng/one-api/monitor"
 )
 
 var (
@@ -234,8 +236,9 @@ func CacheGetRandomSatisfiedChannel(group string, model string, ignoreFirstPrior
 	if len(channels) == 0 {
 		return nil, errors.New("channel not found")
 	}
+
+	// Filter by priority
 	endIdx := len(channels)
-	// choose by priority
 	firstChannel := channels[0]
 	if firstChannel.GetPriority() > 0 {
 		for i := range channels {
@@ -245,11 +248,22 @@ func CacheGetRandomSatisfiedChannel(group string, model string, ignoreFirstPrior
 			}
 		}
 	}
-	idx := rand.Intn(endIdx)
-	if ignoreFirstPriority {
-		if endIdx < len(channels) { // which means there are more than one priority
-			idx = random.RandRange(endIdx, len(channels))
+
+	// Get filtered channels
+	filteredChannels := channels[:endIdx]
+	if ignoreFirstPriority && endIdx < len(channels) {
+		filteredChannels = channels[endIdx:]
+	}
+
+	// Use weighted load balancer if enabled
+	if config.EnableWeightedLoadBalancing {
+		selected := monitor.SelectChannelWithWeight(filteredChannels)
+		if selected != nil {
+			return selected, nil
 		}
 	}
-	return channels[idx], nil
+
+	// Fallback to simple random selection
+	idx := rand.Intn(len(filteredChannels))
+	return filteredChannels[idx], nil
 }

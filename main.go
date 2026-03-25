@@ -101,6 +101,11 @@ func main() {
 		logger.SysLog(fmt.Sprintf("health checker enabled with interval: %d seconds", config.HealthCheckInterval))
 	}
 
+	// Initialize request queue for backpressure control
+	middleware.InitRequestQueue()
+	logger.SysLog(fmt.Sprintf("request queue enabled: max_concurrent=%d, timeout=%ds",
+		config.MaxConcurrentRequests, config.RequestQueueTimeout))
+
 	// Initialize i18n
 	if err := i18n.Init(); err != nil {
 		logger.FatalLog("failed to initialize i18n: " + err.Error())
