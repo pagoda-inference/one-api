@@ -164,3 +164,21 @@ var UserContentRequestTimeout = env.Int("USER_CONTENT_REQUEST_TIMEOUT", 30)
 
 var EnforceIncludeUsage = env.Bool("ENFORCE_INCLUDE_USAGE", false)
 var TestPrompt = env.String("TEST_PROMPT", "Output only your specific model name with no additional text.")
+
+// HTTP Connection Pool Settings
+var MaxIdleConns = env.Int("MAX_IDLE_CONNS", 1000)
+var MaxIdleConnsPerHost = env.Int("MAX_IDLE_CONNS_PER_HOST", 100)
+var MaxConnsPerHost = env.Int("MAX_CONNS_PER_HOST", 200)
+
+// Health Check Settings
+var HealthCheckInterval = env.Int("HEALTH_CHECK_INTERVAL", 30)
+var HealthCheckFailThreshold = env.Int("HEALTH_CHECK_FAIL_THRESHOLD", 3)
+
+// Circuit Breaker Settings
+var CircuitBreakerThreshold = env.Int("CIRCUIT_BREAKER_THRESHOLD", 5)
+var CircuitBreakerSuccessThreshold = env.Int("CIRCUIT_BREAKER_SUCCESS_THRESHOLD", 3)
+var CircuitBreakerTimeout = env.Int("CIRCUIT_BREAKER_TIMEOUT", 30)
+
+// Request Queue Settings
+var MaxConcurrentRequests = env.Int("MAX_CONCURRENT_REQUESTS", 1000)
+var RequestQueueTimeout = env.Int("REQUEST_QUEUE_TIMEOUT", 5)

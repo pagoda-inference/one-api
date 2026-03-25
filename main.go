@@ -19,6 +19,7 @@ import (
 	"github.com/songquanpeng/one-api/controller"
 	"github.com/songquanpeng/one-api/middleware"
 	"github.com/songquanpeng/one-api/model"
+	"github.com/songquanpeng/one-api/monitor"
 	"github.com/songquanpeng/one-api/relay/adaptor/openai"
 	"github.com/songquanpeng/one-api/router"
 )
@@ -93,6 +94,12 @@ func main() {
 	}
 	openai.InitTokenEncoders()
 	client.Init()
+
+	// Start health checker for proactive channel monitoring
+	monitor.StartHealthChecker()
+	if config.HealthCheckInterval > 0 {
+		logger.SysLog(fmt.Sprintf("health checker enabled with interval: %d seconds", config.HealthCheckInterval))
+	}
 
 	// Initialize i18n
 	if err := i18n.Init(); err != nil {
