@@ -1,42 +1,58 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Input, Select, Tag, Button, Drawer, Descriptions, Statistic, message } from 'antd'
-import { SearchOutlined, CheckCircleOutlined, RobotOutlined, SyncOutlined } from '@ant-design/icons'
-import { getMarketModels, getMarketProviders, getMarketStats, calculatePrice, Model, calculatePrice } from '../services/api'
+import { Row, Col, Card, Input, Select, Tag, Button, Drawer, Descriptions, Statistic, message, Tabs } from 'antd'
+import { SearchOutlined, CheckCircleOutlined, RobotOutlined, SyncOutlined, ExperimentOutlined, CrownOutlined } from '@ant-design/icons'
+import { getMarketModels, getMarketStats, getMarketGroups, getModelTrial, startModelTrial, calculatePrice, Model, ModelGroup, MarketStats } from '../services/api'
 
 const { Search } = Input
+const { TabPane } = Tabs
 
 const ModelMarket: React.FC = () => {
-  const [loading, setLoading] = useState(true)
   const [models, setModels] = useState<Model[]>([])
-  const [providers, setProviders] = useState<string[]>([])
-  const [stats, setStats] = useState<{ total_models: number; total_providers: number } | null>(null)
+  const [groups, setGroups] = useState<ModelGroup[]>([])
+  const [stats, setStats] = useState<MarketStats | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('')
-  const [providerFilter, setProviderFilter] = useState<string>('')
+  const [groupFilter, setGroupFilter] = useState<number | null>(null)
   const [selectedModel, setSelectedModel] = useState<Model | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [priceCalc, setPriceCalc] = useState<{ prompt_tokens: number; completion_tokens: number; quota_cost: number } | null>(null)
+  const [trialInfo, setTrialInfo] = useState<any>(null)
+  const [trialLoading, setTrialLoading] = useState(false)
 
   useEffect(() => {
     loadData()
-  }, [typeFilter, providerFilter])
+  }, [typeFilter, groupFilter])
 
   const loadData = async () => {
     try {
-      setLoading(true)
-      const [modelsRes, providersRes, statsRes] = await Promise.all([
-        getMarketModels({ type: typeFilter, q: search, limit: 50 }),
-        getMarketProviders(),
+      const [modelsRes, groupsRes, statsRes] = await Promise.all([
+        getMarketModels({ type: typeFilter, limit: 100 }),
+        getMarketGroups(),
         getMarketStats()
       ])
 
-      setModels(modelsRes.data.data.models || [])
-      setProviders(providersRes.data.data || [])
+      let allModels = modelsRes.data.data.models || []
+
+      // Apply group filter
+      if (groupFilter) {
+        allModels = allModels.filter((m: Model) => m.group_id === groupFilter)
+      }
+
+      // Apply search filter
+      if (search) {
+        const keyword = search.toLowerCase()
+        allModels = allModels.filter((m: Model) =>
+          m.name.toLowerCase().includes(keyword) ||
+          m.id.toLowerCase().includes(keyword) ||
+          m.provider.toLowerCase().includes(keyword)
+        )
+      }
+
+      setModels(allModels)
+      setGroups(groupsRes.data.data || [])
       setStats(statsRes.data.data)
     } catch (error) {
       console.error('Failed to load models:', error)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -49,6 +65,30 @@ const ModelMarket: React.FC = () => {
     setSelectedModel(model)
     setDrawerVisible(true)
     setPriceCalc(null)
+    setTrialInfo(null)
+
+    // Load trial info
+    try {
+      const res = await getModelTrial(model.id)
+      setTrialInfo(res.data.data)
+    } catch (error) {
+      console.error('Failed to load trial info:', error)
+    }
+  }
+
+  const handleStartTrial = async () => {
+    if (!selectedModel) return
+    setTrialLoading(true)
+    try {
+      await startModelTrial(selectedModel.id)
+      message.success('试用已开启')
+      const res = await getModelTrial(selectedModel.id)
+      setTrialInfo(res.data.data)
+    } catch (error) {
+      message.error('开启试用失败')
+    } finally {
+      setTrialLoading(false)
+    }
   }
 
   const calcPrice = async (promptTokens: number, completionTokens: number) => {
@@ -87,6 +127,25 @@ const ModelMarket: React.FC = () => {
     return `¥${price.toFixed(4)}/1K`
   }
 
+  const formatQuota = (quota: number) => {
+    if (quota >= 1000000) return (quota / 1000000).toFixed(1) + 'M'
+    if (quota >= 1000) return (quota / 1000).toFixed(0) + 'K'
+    return quota.toString()
+  }
+
+  const getSLAColor = (sla: string) => {
+    switch (sla) {
+      case 'enterprise': return 'red'
+      case 'premium': return 'gold'
+      default: return 'green'
+    }
+  }
+
+  const getSLAIcon = (sla: string) => {
+    if (sla === 'enterprise') return <CrownOutlined />
+    return null
+  }
+
   return (
     <div>
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -97,15 +156,15 @@ const ModelMarket: React.FC = () => {
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="模型提供商" value={stats?.total_providers || 0} />
+            <Statistic title="模型分组" value={stats?.total_groups || 0} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card>
             <Statistic
-              title="平均输入价格"
-              value={stats?.avg_input_price || 0}
-              formatter={(v) => `¥${Number(v).toFixed(4)}/1K`}
+              title="支持试用模型"
+              value={stats?.trial_models || 0}
+              prefix={<ExperimentOutlined />}
             />
           </Card>
         </Col>
@@ -137,14 +196,14 @@ const ModelMarket: React.FC = () => {
           </Col>
           <Col xs={12} sm={6} md={4}>
             <Select
-              placeholder="提供商"
+              placeholder="选择分组"
               allowClear
               style={{ width: '100%' }}
-              value={providerFilter || undefined}
-              onChange={(v) => { setProviderFilter(v || ''); loadData() }}
+              value={groupFilter || undefined}
+              onChange={(v) => setGroupFilter(v || null)}
             >
-              {providers.map(p => (
-                <Select.Option key={p.name} value={p.name}>{p.name}</Select.Option>
+              {groups.map(g => (
+                <Select.Option key={g.id} value={g.id}>{g.name}</Select.Option>
               ))}
             </Select>
           </Col>
@@ -154,68 +213,110 @@ const ModelMarket: React.FC = () => {
         </Row>
       </Card>
 
-      <Row gutter={[16, 16]}>
-        {models.map(model => (
-          <Col xs={24} sm={12} lg={8} xl={6} key={model.id}>
-            <Card
-              hoverable
-              className="model-card"
-              onClick={() => showModelDetail(model)}
-              cover={
-                <div style={{
-                  height: 120,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: 'white',
-                  fontSize: 48
-                }}>
-                  {getModelIcon(model.model_type)}
-                </div>
-              }
-            >
-              <Card.Meta
-                title={
-                  <div>
-                    <div>{model.name}</div>
-                    <div style={{ fontSize: 12, color: '#999', fontWeight: 'normal' }}>
-                      {model.provider} · {model.id}
+      <Tabs defaultActiveKey="1">
+        <TabPane tab={`全部模型 (${models.length})`} key="1">
+          <Row gutter={[16, 16]}>
+            {models.map(model => (
+              <Col xs={24} sm={12} lg={8} xl={6} key={model.id}>
+                <Card
+                  hoverable
+                  className="model-card"
+                  onClick={() => showModelDetail(model)}
+                  cover={
+                    <div style={{
+                      height: 100,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      fontSize: 36
+                    }}>
+                      {getModelIcon(model.model_type)}
+                    </div>
+                  }
+                >
+                  <Card.Meta
+                    title={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>{model.name}</span>
+                        {model.is_trial && <Tag color="green" icon={<ExperimentOutlined />}>试用</Tag>}
+                        {model.sla === 'enterprise' && <Tag color="red" icon={<CrownOutlined />}>企业</Tag>}
+                      </div>
+                    }
+                    description={
+                      <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>
+                        {model.provider} · {model.id}
+                      </div>
+                    }
+                  />
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#666', height: 36, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {model.description}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
+                    {getCapabilityTags(model.capabilities)?.slice(0, 2)}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
+                    <span style={{ fontSize: 11, color: '#999' }}>输入</span>
+                    <span style={{ fontSize: 13, color: '#1890ff', fontWeight: 500 }}>
+                      {formatPrice(model.input_price)}
+                    </span>
+                  </div>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </TabPane>
+
+        <TabPane tab="分组浏览" key="2">
+          <Row gutter={[16, 16]}>
+            {groups.map(group => (
+              <Col xs={24} sm={12} lg={8} key={group.id}>
+                <Card
+                  hoverable
+                  onClick={() => { setGroupFilter(group.id); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 8,
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 24
+                    }}>
+                      <RobotOutlined />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600 }}>{group.name}</div>
+                      <div style={{ fontSize: 12, color: '#999' }}>{group.description}</div>
+                      <div style={{ fontSize: 12, color: '#1890ff' }}>{group.model_count} 个模型</div>
                     </div>
                   </div>
-                }
-                description={
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ fontSize: 12, color: '#666', height: 40, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {model.description}
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                      {getCapabilityTags(model.capabilities)?.slice(0, 3)}
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
-                      <span style={{ fontSize: 12, color: '#999' }}>输入</span>
-                      <span style={{ fontSize: 14, color: '#1890ff', fontWeight: 500 }}>
-                        {formatPrice(model.input_price)}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 12, color: '#999' }}>输出</span>
-                      <span style={{ fontSize: 14, color: '#1890ff', fontWeight: 500 }}>
-                        {formatPrice(model.output_price)}
-                      </span>
-                    </div>
-                  </div>
-                }
-              />
-            </Card>
-          </Col>
-        ))}
-      </Row>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </TabPane>
+      </Tabs>
 
       <Drawer
-        title={selectedModel?.name}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{selectedModel?.name}</span>
+            {selectedModel?.is_trial && <Tag color="green">支持试用</Tag>}
+            {selectedModel?.sla && (
+              <Tag color={getSLAColor(selectedModel.sla)} icon={getSLAIcon(selectedModel.sla)}>
+                {selectedModel.sla === 'enterprise' ? '企业版' : selectedModel.sla === 'premium' ? '高级版' : '标准版'}
+              </Tag>
+            )}
+          </div>
+        }
         placement="right"
-        width={500}
+        width={520}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
       >
@@ -228,7 +329,49 @@ const ModelMarket: React.FC = () => {
               <Descriptions.Item label="上下文长度">{selectedModel.context_len.toLocaleString()} tokens</Descriptions.Item>
               <Descriptions.Item label="输入价格">{formatPrice(selectedModel.input_price)}</Descriptions.Item>
               <Descriptions.Item label="输出价格">{formatPrice(selectedModel.output_price)}</Descriptions.Item>
+              {selectedModel.is_trial && selectedModel.trial_quota && (
+                <Descriptions.Item label="试用额度">{formatQuota(selectedModel.trial_quota)} tokens</Descriptions.Item>
+              )}
             </Descriptions>
+
+            {selectedModel.is_trial && (
+              <Card title="试用功能" style={{ marginTop: 16 }}>
+                {trialInfo ? (
+                  trialInfo.available ? (
+                    <div>
+                      <Statistic
+                        title="剩余试用额度"
+                        value={formatQuota(trialInfo.quota_limit - trialInfo.quota_used)}
+                        suffix="tokens"
+                      />
+                      <div style={{ marginTop: 16 }}>
+                        <Button type="primary" disabled>已开启试用</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <p style={{ color: '#666' }}>试用状态: {trialInfo.reason}</p>
+                      {trialInfo.quota_used > 0 && (
+                        <Statistic
+                          title="已使用"
+                          value={formatQuota(trialInfo.quota_used)}
+                          suffix={`/ ${formatQuota(trialInfo.quota_limit || 0)}`}
+                        />
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <div>
+                    <p style={{ color: '#666', marginBottom: 16 }}>
+                      该模型支持试用，您将获得 {formatQuota(selectedModel.trial_quota || 0)} tokens 的免费试用额度。
+                    </p>
+                    <Button type="primary" loading={trialLoading} onClick={handleStartTrial}>
+                      开启试用
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            )}
 
             <Card title="能力标签" style={{ marginTop: 16 }}>
               {getCapabilityTags(selectedModel.capabilities) || '无'}
@@ -261,6 +404,19 @@ const ModelMarket: React.FC = () => {
                   </div>
                 </div>
               )}
+            </Card>
+
+            <Card title="使用说明" style={{ marginTop: 16 }}>
+              <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, fontSize: 12 }}>
+{`import openai
+openai.api_key = "your-api-key"
+openai.api_base = "https://your-domain.com/v1"
+
+response = openai.ChatCompletion.create(
+    model="${selectedModel.id}",
+    messages=[{"role": "user", "content": "Hello!"}]
+)`}
+              </pre>
             </Card>
           </div>
         )}
