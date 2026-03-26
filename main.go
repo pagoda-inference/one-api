@@ -112,6 +112,13 @@ func main() {
 		logger.SysLog(fmt.Sprintf("payment enabled: exchange_rate=%.2f", config.PaymentExchangeRate))
 	}
 
+	// Initialize default models for marketplace
+	if err := model.InitializeDefaultModels(); err != nil {
+		logger.SysErrorf("failed to initialize default models: " + err.Error())
+	} else {
+		logger.SysLog("model marketplace initialized with default models")
+	}
+
 	// Initialize i18n
 	if err := i18n.Init(); err != nil {
 		logger.FatalLog("failed to initialize i18n: " + err.Error())

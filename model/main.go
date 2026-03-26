@@ -172,6 +172,9 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&Invoice{}); err != nil {
 		return err
 	}
+	if err = DB.AutoMigrate(&ModelInfo{}); err != nil {
+		return err
+	}
 	return nil
 }
 

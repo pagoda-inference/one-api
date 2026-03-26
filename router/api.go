@@ -65,6 +65,22 @@ func SetApiRouter(router *gin.Engine) {
 				paymentRoute.POST("/invoice", controller.CreateInvoice)
 				paymentRoute.GET("/invoice", controller.GetInvoices)
 				paymentRoute.GET("/invoice/:id", controller.GetInvoice)
+
+			// Market routes
+			marketRoute := userRoute.Group("/market")
+			marketRoute.Use(middleware.UserAuth())
+			{
+				marketRoute.GET("/models", controller.GetMarketModels)
+				marketRoute.GET("/models/:id", controller.GetMarketModel)
+				marketRoute.GET("/providers", controller.GetMarketProviders)
+				marketRoute.GET("/stats", controller.GetMarketStats)
+				marketRoute.GET("/calculate", controller.CalculatePrice)
+			}
+		}
+
+		// Dashboard v2 (enhanced)
+		apiRouter.GET("/dashboard", middleware.UserAuth(), controller.GetUserDashboardV2)
+		apiRouter.GET("/usage/detail", middleware.UserAuth(), controller.GetUsageDetail)
 			}
 			}
 
