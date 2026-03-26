@@ -32,11 +32,6 @@ func SetRelayRouter(router *gin.Engine) {
 		relayV1Router.POST("/audio/transcriptions", controller.Relay)
 		relayV1Router.POST("/audio/translations", controller.Relay)
 		relayV1Router.POST("/audio/speech", controller.Relay)
-		relayV1Router.GET("/files", controller.RelayNotImplemented)
-		relayV1Router.POST("/files", controller.RelayNotImplemented)
-		relayV1Router.DELETE("/files/:id", controller.RelayNotImplemented)
-		relayV1Router.GET("/files/:id", controller.RelayNotImplemented)
-		relayV1Router.GET("/files/:id/content", controller.RelayNotImplemented)
 		relayV1Router.POST("/fine_tuning/jobs", controller.RelayNotImplemented)
 		relayV1Router.GET("/fine_tuning/jobs", controller.RelayNotImplemented)
 		relayV1Router.GET("/fine_tuning/jobs/:id", controller.RelayNotImplemented)
@@ -47,6 +42,17 @@ func SetRelayRouter(router *gin.Engine) {
 
 		// Anthropic API endpoints - passthrough mode
 		relayV1Router.POST("/messages", controller.RelayAnthropicPassthrough)
+
+		// Batch API endpoints
+		relayV1Router.POST("/files", controller.UploadFile)
+		relayV1Router.GET("/files", controller.ListFiles)
+		relayV1Router.GET("/files/:id", controller.RetrieveFile)
+		relayV1Router.DELETE("/files/:id", controller.DeleteFile)
+		relayV1Router.GET("/files/:id/content", controller.RetrieveFileContent)
+		relayV1Router.POST("/batches", controller.CreateBatch)
+		relayV1Router.GET("/batches", controller.ListBatches)
+		relayV1Router.GET("/batches/:id", controller.RetrieveBatch)
+		relayV1Router.POST("/batches/:id/cancel", controller.CancelBatch)
 
 		relayV1Router.POST("/assistants", controller.RelayNotImplemented)
 		relayV1Router.GET("/assistants/:id", controller.RelayNotImplemented)
