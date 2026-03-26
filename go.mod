@@ -1,4 +1,4 @@
-module github.com/songquanpeng/one-api
+module github.com/pagoda-inference/one-api
 
 go 1.20
 
