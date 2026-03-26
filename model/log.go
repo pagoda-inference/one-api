@@ -249,3 +249,261 @@ func SearchLogsByDayAndModel(userId, start, end int) (LogStatistics []*LogStatis
 
 	return LogStatistics, err
 }
+
+// TokenUsageStatistic represents usage statistics by token
+type TokenUsageStatistic struct {
+	TokenId          int    `gorm:"column:token_id" json:"token_id"`
+	TokenName        string `gorm:"column:token_name" json:"token_name"`
+	RequestCount     int    `gorm:"column:request_count" json:"request_count"`
+	Quota            int    `gorm:"column:quota" json:"quota"`
+	PromptTokens     int    `gorm:"column:prompt_tokens" json:"prompt_tokens"`
+	CompletionTokens int    `gorm:"column:completion_tokens" json:"completion_tokens"`
+}
+
+// ModelUsageStatistic represents usage statistics by model
+type ModelUsageStatistic struct {
+	ModelName        string `gorm:"column:model_name" json:"model_name"`
+	RequestCount     int    `gorm:"column:request_count" json:"request_count"`
+	Quota            int    `gorm:"column:quota" json:"quota"`
+	PromptTokens     int    `gorm:"column:prompt_tokens" json:"prompt_tokens"`
+	CompletionTokens int    `gorm:"column:completion_tokens" json:"completion_tokens"`
+}
+
+// ChannelUsageStatistic represents usage statistics by channel
+type ChannelUsageStatistic struct {
+	ChannelId        int    `gorm:"column:channel_id" json:"channel_id"`
+	ChannelName      string `gorm:"column:channel_name" json:"channel_name"`
+	RequestCount     int    `gorm:"column:request_count" json:"request_count"`
+	Quota            int    `gorm:"column:quota" json:"quota"`
+	PromptTokens     int    `gorm:"column:prompt_tokens" json:"prompt_tokens"`
+	CompletionTokens int    `gorm:"column:completion_tokens" json:"completion_tokens"`
+}
+
+// GetTokenUsageStatistics returns usage statistics grouped by token
+func GetTokenUsageStatistics(userId int, startTimestamp, endTimestamp int64) ([]*TokenUsageStatistic, error) {
+	var stats []*TokenUsageStatistic
+
+	query := LOG_DB.Table("logs").
+		Select(`
+			token_name,
+			COUNT(1) as request_count,
+			SUM(quota) as quota,
+			SUM(prompt_tokens) as prompt_tokens,
+			SUM(completion_tokens) as completion_tokens
+		`).
+		Where("type = ?", LogTypeConsume).
+		Group("token_name").
+		Order("request_count DESC")
+
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	if startTimestamp > 0 {
+		query = query.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp > 0 {
+		query = query.Where("created_at <= ?", endTimestamp)
+	}
+
+	err := query.Scan(&stats).Error
+	return stats, err
+}
+
+// GetModelUsageStatistics returns usage statistics grouped by model
+func GetModelUsageStatistics(userId int, startTimestamp, endTimestamp int64) ([]*ModelUsageStatistic, error) {
+	var stats []*ModelUsageStatistic
+
+	query := LOG_DB.Table("logs").
+		Select(`
+			model_name,
+			COUNT(1) as request_count,
+			SUM(quota) as quota,
+			SUM(prompt_tokens) as prompt_tokens,
+			SUM(completion_tokens) as completion_tokens
+		`).
+		Where("type = ?", LogTypeConsume).
+		Where("model_name != ''").
+		Group("model_name").
+		Order("request_count DESC")
+
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	if startTimestamp > 0 {
+		query = query.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp > 0 {
+		query = query.Where("created_at <= ?", endTimestamp)
+	}
+
+	err := query.Scan(&stats).Error
+	return stats, err
+}
+
+// GetChannelUsageStatistics returns usage statistics grouped by channel
+func GetChannelUsageStatistics(userId int, startTimestamp, endTimestamp int64) ([]*ChannelUsageStatistic, error) {
+	var stats []*ChannelUsageStatistic
+
+	query := LOG_DB.Table("logs").
+		Select(`
+			channel_id,
+			COUNT(1) as request_count,
+			SUM(quota) as quota,
+			SUM(prompt_tokens) as prompt_tokens,
+			SUM(completion_tokens) as completion_tokens
+		`).
+		Where("type = ?", LogTypeConsume).
+		Where("channel_id > 0").
+		Group("channel_id").
+		Order("request_count DESC")
+
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	if startTimestamp > 0 {
+		query = query.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp > 0 {
+		query = query.Where("created_at <= ?", endTimestamp)
+	}
+
+	err := query.Scan(&stats).Error
+	return stats, err
+}
+
+// HourlyUsageStatistic represents usage statistics by hour
+type HourlyUsageStatistic struct {
+	Hour             string `gorm:"column:hour" json:"hour"`
+	RequestCount     int    `gorm:"column:request_count" json:"request_count"`
+	Quota            int    `gorm:"column:quota" json:"quota"`
+	PromptTokens     int    `gorm:"column:prompt_tokens" json:"prompt_tokens"`
+	CompletionTokens int    `gorm:"column:completion_tokens" json:"completion_tokens"`
+}
+
+// GetHourlyUsageStatistics returns usage statistics grouped by hour
+func GetHourlyUsageStatistics(userId int, startTimestamp, endTimestamp int64) ([]*HourlyUsageStatistic, error) {
+	var stats []*HourlyUsageStatistic
+
+	hourSelect := "DATE_FORMAT(FROM_UNIXTIME(created_at), '%Y-%m-%d %H:00') as hour"
+	if common.UsingPostgreSQL {
+		hourSelect = "TO_CHAR(date_trunc('hour', to_timestamp(created_at)), 'YYYY-MM-DD HH24:00') as hour"
+	}
+	if common.UsingSQLite {
+		hourSelect = "strftime('%Y-%m-%d %H:00', datetime(created_at, 'unixepoch')) as hour"
+	}
+
+	query := LOG_DB.Raw(`
+		SELECT `+hourSelect+`,
+		COUNT(1) as request_count,
+		SUM(quota) as quota,
+		SUM(prompt_tokens) as prompt_tokens,
+		SUM(completion_tokens) as completion_tokens
+		FROM logs
+		WHERE type = ?
+	`, LogTypeConsume)
+
+	if userId > 0 {
+		query = LOG_DB.Raw(`
+			SELECT `+hourSelect+`,
+			COUNT(1) as request_count,
+			SUM(quota) as quota,
+			SUM(prompt_tokens) as prompt_tokens,
+			SUM(completion_tokens) as completion_tokens
+			FROM logs
+			WHERE type = ? AND user_id = ?
+		`, LogTypeConsume, userId)
+	}
+
+	if startTimestamp > 0 || endTimestamp > 0 {
+		var args []interface{}
+		sql := `
+			SELECT `+hourSelect+`,
+			COUNT(1) as request_count,
+			SUM(quota) as quota,
+			SUM(prompt_tokens) as prompt_tokens,
+			SUM(completion_tokens) as completion_tokens
+			FROM logs
+			WHERE type = ?
+		`
+		args = append(args, LogTypeConsume)
+
+		if userId > 0 {
+			sql += " AND user_id = ?"
+			args = append(args, userId)
+		}
+		if startTimestamp > 0 {
+			sql += " AND created_at >= ?"
+			args = append(args, startTimestamp)
+		}
+		if endTimestamp > 0 {
+			sql += " AND created_at <= ?"
+			args = append(args, endTimestamp)
+		}
+		sql += " GROUP BY hour ORDER BY hour"
+		query = LOG_DB.Raw(sql, args...)
+	} else {
+		sql := `
+			SELECT `+hourSelect+`,
+			COUNT(1) as request_count,
+			SUM(quota) as quota,
+			SUM(prompt_tokens) as prompt_tokens,
+			SUM(completion_tokens) as completion_tokens
+			FROM logs
+			WHERE type = ?
+		`
+		if userId > 0 {
+			sql += " AND user_id = ?"
+			query = LOG_DB.Raw(sql+" GROUP BY hour ORDER BY hour", LogTypeConsume, userId)
+		} else {
+			query = LOG_DB.Raw(sql+" GROUP BY hour ORDER BY hour", LogTypeConsume)
+		}
+	}
+
+	err := query.Scan(&stats).Error
+	return stats, err
+}
+
+// GetUserUsageSummary returns a summary of usage for a user
+func GetUserUsageSummary(userId int, startTimestamp, endTimestamp int64) (map[string]interface{}, error) {
+	var totalQuota int64
+	var totalPromptTokens int64
+	var totalCompletionTokens int64
+	var totalRequests int64
+
+	query := LOG_DB.Table("logs").
+		Where("type = ?", LogTypeConsume)
+
+	if userId > 0 {
+		query = query.Where("user_id = ?", userId)
+	}
+	if startTimestamp > 0 {
+		query = query.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp > 0 {
+		query = query.Where("created_at <= ?", endTimestamp)
+	}
+
+	err := query.Select(`
+		COUNT(1) as total_requests,
+		COALESCE(SUM(quota), 0) as total_quota,
+		COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens,
+		COALESCE(SUM(completion_tokens), 0) as total_completion_tokens
+	`).Scan(map[string]interface{}{
+		"total_requests":          &totalRequests,
+		"total_quota":             &totalQuota,
+		"total_prompt_tokens":     &totalPromptTokens,
+		"total_completion_tokens": &totalCompletionTokens,
+	}).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"total_requests":          totalRequests,
+		"total_quota":             totalQuota,
+		"total_prompt_tokens":     totalPromptTokens,
+		"total_completion_tokens": totalCompletionTokens,
+		"total_tokens":            totalPromptTokens + totalCompletionTokens,
+	}, nil
+}

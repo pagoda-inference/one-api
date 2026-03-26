@@ -185,3 +185,10 @@ var RequestQueueTimeout = env.Int("REQUEST_QUEUE_TIMEOUT", 5)
 
 // Load Balancing Settings
 var EnableWeightedLoadBalancing = env.Bool("ENABLE_WEIGHTED_LB", true)
+
+// Metrics Settings
+var MetricsEnabled = env.Bool("METRICS_ENABLED", true)
+var MetricsPath = env.String("METRICS_PATH", "/metrics")
+
+// Least Connection Load Balancing Settings
+var EnableLeastConnectionLB = env.Bool("ENABLE_LEAST_CONNECTION_LB", false)

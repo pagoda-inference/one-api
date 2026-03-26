@@ -112,6 +112,22 @@ func SetApiRouter(router *gin.Engine) {
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), controller.SearchUserLogs)
+		usageRoute := apiRouter.Group("/usage")
+		usageRoute.Use(middleware.UserAuth())
+		{
+			usageRoute.GET("/summary", controller.GetUsageSummary)
+			usageRoute.GET("/by-token", controller.GetUsageByToken)
+			usageRoute.GET("/by-model", controller.GetUsageByModel)
+			usageRoute.GET("/by-channel", controller.GetUsageByChannel)
+			usageRoute.GET("/by-hour", controller.GetUsageByHour)
+			usageRoute.GET("/daily", controller.GetUsageDaily)
+		}
+		adminUsageRoute := apiRouter.Group("/admin/usage")
+		adminUsageRoute.Use(middleware.AdminAuth())
+		{
+			adminUsageRoute.GET("/summary", controller.AdminGetUsageSummary)
+			adminUsageRoute.GET("/by-user", controller.AdminGetUsageByUser)
+		}
 		groupRoute := apiRouter.Group("/group")
 		groupRoute.Use(middleware.AdminAuth())
 		{
