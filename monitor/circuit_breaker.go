@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/logger"
-	"github.com/songquanpeng/one-api/model"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/model"
 )
 
 // State represents the circuit breaker state

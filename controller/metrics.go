@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/songquanpeng/one-api/middleware"
-	"github.com/songquanpeng/one-api/monitor"
+	"github.com/pagoda-inference/one-api/middleware"
+	"github.com/pagoda-inference/one-api/monitor"
 )
 
 // GetMetrics handles GET /metrics (Prometheus format)

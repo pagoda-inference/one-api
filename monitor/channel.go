@@ -3,10 +3,10 @@ package monitor
 import (
 	"fmt"
 
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/logger"
-	"github.com/songquanpeng/one-api/common/message"
-	"github.com/songquanpeng/one-api/model"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/common/message"
+	"github.com/pagoda-inference/one-api/model"
 )
 
 func notifyRootUser(subject string, content string) {

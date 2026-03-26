@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/songquanpeng/one-api/common/ctxkey"
+	"github.com/pagoda-inference/one-api/common/ctxkey"
 )
 
 func GetRequestBody(c *gin.Context) ([]byte, error) {

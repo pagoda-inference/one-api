@@ -4,17 +4,17 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/songquanpeng/one-api/common/render"
+	"github.com/pagoda-inference/one-api/common/render"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/songquanpeng/one-api/common"
-	"github.com/songquanpeng/one-api/common/helper"
-	"github.com/songquanpeng/one-api/common/logger"
-	"github.com/songquanpeng/one-api/relay/adaptor/openai"
-	"github.com/songquanpeng/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/common"
+	"github.com/pagoda-inference/one-api/common/helper"
+	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
+	"github.com/pagoda-inference/one-api/relay/model"
 )
 
 var (

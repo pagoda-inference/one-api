@@ -5,13 +5,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	"github.com/songquanpeng/one-api/common/ctxkey"
-	"github.com/songquanpeng/one-api/relay/adaptor/gemini"
-	"github.com/songquanpeng/one-api/relay/adaptor/openai"
-	"github.com/songquanpeng/one-api/relay/relaymode"
+	"github.com/pagoda-inference/one-api/common/ctxkey"
+	"github.com/pagoda-inference/one-api/relay/adaptor/gemini"
+	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
+	"github.com/pagoda-inference/one-api/relay/relaymode"
 
-	"github.com/songquanpeng/one-api/relay/meta"
-	"github.com/songquanpeng/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/relay/meta"
+	"github.com/pagoda-inference/one-api/relay/model"
 )
 
 var ModelList = []string{

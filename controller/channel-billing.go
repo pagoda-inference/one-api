@@ -9,17 +9,17 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/songquanpeng/one-api/common/client"
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/logger"
-	"github.com/songquanpeng/one-api/model"
-	"github.com/songquanpeng/one-api/monitor"
-	"github.com/songquanpeng/one-api/relay/channeltype"
+	"github.com/pagoda-inference/one-api/common/client"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/model"
+	"github.com/pagoda-inference/one-api/monitor"
+	"github.com/pagoda-inference/one-api/relay/channeltype"
 
 	"github.com/gin-gonic/gin"
 )
 
-// https://github.com/songquanpeng/one-api/issues/79
+// https://github.com/pagoda-inference/one-api/issues/79
 
 type OpenAISubscriptionResponse struct {
 	Object             string  `json:"object"`

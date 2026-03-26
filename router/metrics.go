@@ -2,8 +2,8 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/controller"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/controller"
 )
 
 // SetMetricsRouter sets up the metrics and health check routes

@@ -8,12 +8,12 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/songquanpeng/one-api/common"
-	"github.com/songquanpeng/one-api/common/blacklist"
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/helper"
-	"github.com/songquanpeng/one-api/common/logger"
-	"github.com/songquanpeng/one-api/common/random"
+	"github.com/pagoda-inference/one-api/common"
+	"github.com/pagoda-inference/one-api/common/blacklist"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/helper"
+	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/common/random"
 )
 
 const (
@@ -75,6 +75,12 @@ func GetAllUsers(startIdx int, num int, order string) (users []*User, err error)
 
 	err = query.Find(&users).Error
 	return users, err
+}
+
+func CountUsers() (int64, error) {
+	var count int64
+	err := DB.Model(&User{}).Where("status != ?", UserStatusDeleted).Count(&count).Error
+	return count, err
 }
 
 func SearchUsers(keyword string) (users []*User, err error) {

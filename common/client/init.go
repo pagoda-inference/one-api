@@ -8,8 +8,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/logger"
 )
 
 var HTTPClient *http.Client

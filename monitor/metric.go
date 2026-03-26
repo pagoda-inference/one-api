@@ -1,7 +1,7 @@
 package monitor
 
 import (
-	"github.com/songquanpeng/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/config"
 )
 
 var store = make(map[int][]bool)

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/helper"
-	"github.com/songquanpeng/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/helper"
+	"github.com/pagoda-inference/one-api/common/logger"
 	"gorm.io/gorm"
 )
 
@@ -64,6 +64,12 @@ func GetAllChannels(startIdx int, num int, scope string) ([]*Channel, error) {
 		err = DB.Order("id desc").Limit(num).Offset(startIdx).Omit("key").Find(&channels).Error
 	}
 	return channels, err
+}
+
+func CountChannels() (int64, error) {
+	var count int64
+	err := DB.Model(&Channel{}).Count(&count).Error
+	return count, err
 }
 
 func SearchChannels(keyword string) (channels []*Channel, err error) {

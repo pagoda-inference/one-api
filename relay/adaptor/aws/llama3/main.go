@@ -9,20 +9,20 @@ import (
 	"net/http"
 	"text/template"
 
-	"github.com/songquanpeng/one-api/common/ctxkey"
-	"github.com/songquanpeng/one-api/common/random"
+	"github.com/pagoda-inference/one-api/common/ctxkey"
+	"github.com/pagoda-inference/one-api/common/random"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	"github.com/songquanpeng/one-api/common"
-	"github.com/songquanpeng/one-api/common/helper"
-	"github.com/songquanpeng/one-api/common/logger"
-	"github.com/songquanpeng/one-api/relay/adaptor/aws/utils"
-	"github.com/songquanpeng/one-api/relay/adaptor/openai"
-	relaymodel "github.com/songquanpeng/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/common"
+	"github.com/pagoda-inference/one-api/common/helper"
+	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/relay/adaptor/aws/utils"
+	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
+	relaymodel "github.com/pagoda-inference/one-api/relay/model"
 )
 
 // Only support llama-3-8b and llama-3-70b instruction models

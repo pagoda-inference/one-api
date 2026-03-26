@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/common/helper"
-	channelhelper "github.com/songquanpeng/one-api/relay/adaptor"
-	"github.com/songquanpeng/one-api/relay/adaptor/openai"
-	"github.com/songquanpeng/one-api/relay/meta"
-	"github.com/songquanpeng/one-api/relay/model"
-	"github.com/songquanpeng/one-api/relay/relaymode"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/helper"
+	channelhelper "github.com/pagoda-inference/one-api/relay/adaptor"
+	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
+	"github.com/pagoda-inference/one-api/relay/meta"
+	"github.com/pagoda-inference/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/relay/relaymode"
 )
 
 type Adaptor struct {

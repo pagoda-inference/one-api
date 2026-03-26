@@ -1,9 +1,9 @@
 package router
 
 import (
-	"github.com/songquanpeng/one-api/controller"
-	"github.com/songquanpeng/one-api/controller/auth"
-	"github.com/songquanpeng/one-api/middleware"
+	"github.com/pagoda-inference/one-api/controller"
+	"github.com/pagoda-inference/one-api/controller/auth"
+	"github.com/pagoda-inference/one-api/middleware"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
@@ -35,6 +35,10 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/callback/alipay", controller.AlipayNotify)
 		apiRouter.POST("/callback/wechat", controller.WechatPayNotify)
 
+		// Dashboard v2 (enhanced)
+		apiRouter.GET("/dashboard", middleware.UserAuth(), controller.GetUserDashboardV2)
+		apiRouter.GET("/usage/detail", middleware.UserAuth(), controller.GetUsageDetail)
+
 		userRoute := apiRouter.Group("/user")
 		{
 			userRoute.POST("/register", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Register)
@@ -65,6 +69,7 @@ func SetApiRouter(router *gin.Engine) {
 				paymentRoute.POST("/invoice", controller.CreateInvoice)
 				paymentRoute.GET("/invoice", controller.GetInvoices)
 				paymentRoute.GET("/invoice/:id", controller.GetInvoice)
+			}
 
 			// Market routes
 			marketRoute := userRoute.Group("/market")
@@ -72,30 +77,66 @@ func SetApiRouter(router *gin.Engine) {
 			{
 				marketRoute.GET("/models", controller.GetMarketModels)
 				marketRoute.GET("/models/:id", controller.GetMarketModel)
+				marketRoute.GET("/models/:id/pricing", controller.GetModelPricing)
+				marketRoute.GET("/models/:id/trial", controller.GetModelTrial)
+				marketRoute.POST("/models/:id/trial", controller.StartModelTrial)
 				marketRoute.GET("/providers", controller.GetMarketProviders)
+				marketRoute.GET("/groups", controller.GetMarketGroups)
+				marketRoute.GET("/groups/:id/models", controller.GetMarketModelsByGroup)
 				marketRoute.GET("/stats", controller.GetMarketStats)
 				marketRoute.GET("/calculate", controller.CalculatePrice)
+				marketRoute.GET("/trials", controller.GetUserTrials)
 			}
 		}
 
-		// Dashboard v2 (enhanced)
-		apiRouter.GET("/dashboard", middleware.UserAuth(), controller.GetUserDashboardV2)
-		apiRouter.GET("/usage/detail", middleware.UserAuth(), controller.GetUsageDetail)
-			}
-			}
-
-			adminRoute := userRoute.Group("/")
-			adminRoute.Use(middleware.AdminAuth())
-			{
-				adminRoute.GET("/", controller.GetAllUsers)
-				adminRoute.GET("/search", controller.SearchUsers)
-				adminRoute.GET("/:id", controller.GetUser)
-				adminRoute.POST("/", controller.CreateUser)
-				adminRoute.POST("/manage", controller.ManageUser)
-				adminRoute.PUT("/", controller.UpdateUser)
-				adminRoute.DELETE("/:id", controller.DeleteUser)
-			}
+		// Admin market routes
+		adminMarketRoute := apiRouter.Group("/admin/market")
+		adminMarketRoute.Use(middleware.AdminAuth())
+		{
+			adminMarketRoute.POST("/pricing", controller.SetModelPricing)
 		}
+
+		// Tenant routes (multi-tenancy)
+		tenantRoute := apiRouter.Group("/tenant")
+		tenantRoute.Use(middleware.UserAuth())
+		{
+			tenantRoute.POST("/", controller.CreateTenant)
+			tenantRoute.GET("/", controller.GetMyTenants)
+			tenantRoute.GET("/:id", controller.GetTenant)
+			tenantRoute.PUT("/:id", controller.UpdateTenant)
+			tenantRoute.GET("/:id/users", controller.GetTenantUsersAPI)
+			tenantRoute.POST("/:id/users", controller.InviteUser)
+			tenantRoute.DELETE("/:id/users/:userId", controller.RemoveUser)
+			tenantRoute.PUT("/:id/users/:userId", controller.UpdateUserRole)
+			tenantRoute.POST("/:id/quota", controller.AllocateUserQuotaAPI)
+			tenantRoute.GET("/:id/audit", controller.GetAuditLogsAPI)
+			tenantRoute.POST("/:id/leave", controller.LeaveTenant)
+		}
+
+		// Admin routes
+		adminRoute := apiRouter.Group("/admin")
+		adminRoute.Use(middleware.AdminAuth())
+		{
+			adminRoute.GET("/", controller.GetAllUsers)
+			adminRoute.GET("/search", controller.SearchUsers)
+			adminRoute.GET("/:id", controller.GetUser)
+			adminRoute.POST("/", controller.CreateUser)
+			adminRoute.POST("/manage", controller.ManageUser)
+			adminRoute.PUT("/", controller.UpdateUser)
+			adminRoute.DELETE("/:id", controller.DeleteUser)
+
+			// Ops routes
+			adminRoute.GET("/ops/stats", controller.GetOpsStats)
+			adminRoute.GET("/ops/revenue", controller.GetOpsRevenue)
+			adminRoute.GET("/ops/usage", controller.GetOpsUsage)
+			adminRoute.GET("/ops/users", controller.GetOpsUsers)
+			adminRoute.GET("/channels/health", controller.GetChannelHealth)
+			adminRoute.GET("/alerts/config", controller.GetAlertConfig)
+			adminRoute.PUT("/alerts/config", controller.UpdateAlertConfig)
+			adminRoute.GET("/system/health", controller.GetSystemHealth)
+			adminRoute.GET("/reports/export", controller.ExportReport)
+		}
+
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{

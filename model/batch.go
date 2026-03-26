@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/songquanpeng/one-api/common/helper"
+	"github.com/pagoda-inference/one-api/common/helper"
 )
 
 // BatchFile represents a file uploaded for batch processing

@@ -1,7 +1,7 @@
 package zhipu
 
 import (
-	"github.com/songquanpeng/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/relay/model"
 	"time"
 )
 

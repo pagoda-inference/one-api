@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/middleware"
-	"github.com/songquanpeng/one-api/model"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/middleware"
+	"github.com/pagoda-inference/one-api/model"
 )
 
 // MetricType represents the type of metric

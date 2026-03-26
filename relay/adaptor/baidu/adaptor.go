@@ -3,15 +3,15 @@ package baidu
 import (
 	"errors"
 	"fmt"
-	"github.com/songquanpeng/one-api/relay/meta"
-	"github.com/songquanpeng/one-api/relay/relaymode"
+	"github.com/pagoda-inference/one-api/relay/meta"
+	"github.com/pagoda-inference/one-api/relay/relaymode"
 	"io"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/songquanpeng/one-api/relay/adaptor"
-	"github.com/songquanpeng/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/relay/adaptor"
+	"github.com/pagoda-inference/one-api/relay/model"
 )
 
 type Adaptor struct {

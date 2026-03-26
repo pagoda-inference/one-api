@@ -1,6 +1,6 @@
 package aiproxy
 
-import "github.com/songquanpeng/one-api/relay/adaptor/openai"
+import "github.com/pagoda-inference/one-api/relay/adaptor/openai"
 
 var ModelList = []string{""}
 

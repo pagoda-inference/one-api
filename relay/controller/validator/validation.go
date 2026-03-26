@@ -2,8 +2,8 @@ package validator
 
 import (
 	"errors"
-	"github.com/songquanpeng/one-api/relay/model"
-	"github.com/songquanpeng/one-api/relay/relaymode"
+	"github.com/pagoda-inference/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/relay/relaymode"
 	"math"
 )
 

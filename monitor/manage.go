@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/songquanpeng/one-api/common/config"
-	"github.com/songquanpeng/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/relay/model"
 )
 
 func ShouldDisableChannel(err *model.Error, statusCode int) bool {
