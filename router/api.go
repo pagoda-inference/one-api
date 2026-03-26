@@ -31,6 +31,10 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/oauth/email/bind", middleware.CriticalRateLimit(), middleware.UserAuth(), controller.EmailBind)
 		apiRouter.POST("/topup", middleware.AdminAuth(), controller.AdminTopUp)
 
+		// Payment callback routes (no auth - called by payment providers)
+		apiRouter.POST("/callback/alipay", controller.AlipayNotify)
+		apiRouter.POST("/callback/wechat", controller.WechatPayNotify)
+
 		userRoute := apiRouter.Group("/user")
 		{
 			userRoute.POST("/register", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Register)
@@ -48,6 +52,20 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/aff", controller.GetAffCode)
 				selfRoute.POST("/topup", controller.TopUp)
 				selfRoute.GET("/available_models", controller.GetUserAvailableModels)
+			}
+
+			// Payment routes
+			paymentRoute := userRoute.Group("/")
+			paymentRoute.Use(middleware.UserAuth())
+			{
+				paymentRoute.POST("/topup/create", controller.CreateTopupOrder)
+				paymentRoute.GET("/topup", controller.GetTopupOrders)
+				paymentRoute.GET("/topup/:id", controller.GetTopupOrder)
+				paymentRoute.POST("/topup/:id/cancel", controller.CancelTopupOrder)
+				paymentRoute.POST("/invoice", controller.CreateInvoice)
+				paymentRoute.GET("/invoice", controller.GetInvoices)
+				paymentRoute.GET("/invoice/:id", controller.GetInvoice)
+			}
 			}
 
 			adminRoute := userRoute.Group("/")

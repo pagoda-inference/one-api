@@ -106,6 +106,12 @@ func main() {
 	logger.SysLog(fmt.Sprintf("request queue enabled: max_concurrent=%d, timeout=%ds",
 		config.MaxConcurrentRequests, config.RequestQueueTimeout))
 
+	// Start payment cleanup worker
+	controller.StartPaymentCleanupWorker()
+	if config.PaymentEnabled {
+		logger.SysLog(fmt.Sprintf("payment enabled: exchange_rate=%.2f", config.PaymentExchangeRate))
+	}
+
 	// Initialize i18n
 	if err := i18n.Init(); err != nil {
 		logger.FatalLog("failed to initialize i18n: " + err.Error())

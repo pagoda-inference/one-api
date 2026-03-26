@@ -192,3 +192,22 @@ var MetricsPath = env.String("METRICS_PATH", "/metrics")
 
 // Least Connection Load Balancing Settings
 var EnableLeastConnectionLB = env.Bool("ENABLE_LEAST_CONNECTION_LB", false)
+
+// Payment Settings
+var PaymentEnabled = env.Bool("PAYMENT_ENABLED", true)
+var PaymentExchangeRate = env.Float64("PAYMENT_EXCHANGE_RATE", 7200) // 1元 = 7200 quota (≈ 1 USD)
+var PaymentOrderExpiry = env.Int("PAYMENT_ORDER_EXPIRY", 30) // minutes
+
+// Alipay Settings
+var AlipayEnabled = env.Bool("ALIPAY_ENABLED", false)
+var AlipayAppId = env.String("ALIPAY_APP_ID", "")
+var AlipayPrivateKey = env.String("ALIPAY_PRIVATE_KEY", "")
+var AlipayPublicKey = env.String("ALIPAY_PUBLIC_KEY", "")
+var AlipayNotifyUrl = env.String("ALIPAY_NOTIFY_URL", "")
+
+// Wechat Pay Settings
+var WechatPayEnabled = env.Bool("WECHATPAY_ENABLED", false)
+var WechatPayAppId = env.String("WECHATPAY_APP_ID", "")
+var WechatPayMchId = env.String("WECHATPAY_MCH_ID", "")
+var WechatPayApiKey = env.String("WECHATPAY_API_KEY", "")
+var WechatPayNotifyUrl = env.String("WECHATPAY_NOTIFY_URL", "")
