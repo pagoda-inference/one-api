@@ -13,3 +13,9 @@ cmd.md
 /one-api
 temp
 .DS_Store
+
+# Build artifacts
+.vite/
+web/dist/
+web/tsconfig.node.tsbuildinfo
+web/tsconfig.tsbuildinfo
