@@ -1,4 +1,5 @@
 import { Button, Card } from 'antd'
+import Logo from '../components/Logo'
 
 const Login: React.FC = () => {
   const handleFeishuLogin = () => {
@@ -30,7 +31,10 @@ const Login: React.FC = () => {
           padding: '32px 24px',
           textAlign: 'center'
         }}>
-          <h1 style={{ color: '#fff', margin: 0, fontSize: 28, fontWeight: 700 }}>One API</h1>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+            <Logo />
+          </div>
+          <h1 style={{ color: '#fff', margin: 0, fontSize: 28, fontWeight: 700 }}>BEDI 宝塔</h1>
           <p style={{ color: 'rgba(255,255,255,0.8)', margin: '8px 0 0', fontSize: 14 }}>AI 模型网关平台</p>
         </div>
 

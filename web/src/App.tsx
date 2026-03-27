@@ -7,6 +7,7 @@ import {
   MenuFoldOutlined, MenuUnfoldOutlined
 } from '@ant-design/icons'
 import React, { useState, useEffect } from 'react'
+import Logo from './components/Logo'
 
 import Dashboard from './pages/Dashboard'
 import ModelMarket from './pages/ModelMarket'
@@ -151,37 +152,15 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           borderBottom: '1px solid #f0f0f0'
         }}>
           {collapsed ? (
-            <div style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontWeight: 700,
-              fontSize: 14
-            }}>1</div>
+            <Logo />
           ) : (
             <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: 10
             }}>
-              <div style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 700,
-                fontSize: 14
-              }}>1</div>
-              <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>One API</span>
+              <Logo />
+              <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>BEDI 宝塔</span>
             </div>
           )}
         </div>
