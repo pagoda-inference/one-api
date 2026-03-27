@@ -135,6 +135,16 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.PUT("/alerts/config", controller.UpdateAlertConfig)
 			adminRoute.GET("/system/health", controller.GetSystemHealth)
 			adminRoute.GET("/reports/export", controller.ExportReport)
+
+			// Model management routes
+			adminRoute.GET("/models", controller.ListModels)
+			adminRoute.GET("/models/types", controller.GetModelTypes)
+			adminRoute.GET("/models/statuses", controller.GetModelStatuses)
+			adminRoute.GET("/models/:id", controller.GetModel)
+			adminRoute.POST("/models", controller.CreateModel)
+			adminRoute.PUT("/models/:id", controller.UpdateModel)
+			adminRoute.DELETE("/models/:id", controller.DeleteModel)
+			adminRoute.POST("/models/upload-logo", controller.UploadModelLogo)
 		}
 
 		optionRoute := apiRouter.Group("/option")

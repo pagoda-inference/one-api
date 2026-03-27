@@ -22,10 +22,22 @@ const ModelMarket: React.FC = () => {
   const [trialInfo, setTrialInfo] = useState<any>(null)
   const [trialLoading, setTrialLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [logoConfig, setLogoConfig] = useState<{ models: Record<string, string>; _default: string; _providers: Record<string, string> } | null>(null)
 
   useEffect(() => {
     loadData()
+    loadLogoConfig()
   }, [typeFilter, groupFilter])
+
+  const loadLogoConfig = async () => {
+    try {
+      const res = await fetch('/logos/logos.json')
+      const config = await res.json()
+      setLogoConfig(config)
+    } catch (error) {
+      console.error('Failed to load logo config:', error)
+    }
+  }
 
   const loadData = async () => {
     try {
@@ -117,6 +129,29 @@ const ModelMarket: React.FC = () => {
       case 'vlm': return <ExperimentOutlined />
       default: return <RobotOutlined />
     }
+  }
+
+  const getModelLogo = (modelName: string, provider?: string) => {
+    if (!logoConfig) return null
+
+    // 先尝试精确匹配模型名
+    if (logoConfig.models[modelName]) {
+      return `/logos/${logoConfig.models[modelName]}`
+    }
+
+    // 再尝试模糊匹配（包含关系）
+    for (const [key, value] of Object.entries(logoConfig.models)) {
+      if (modelName.includes(key) || key.includes(modelName)) {
+        return `/logos/${value}`
+      }
+    }
+
+    // 用 provider 的 logo
+    if (provider && logoConfig._providers[provider]) {
+      return `/logos/${logoConfig._providers[provider]}`
+    }
+
+    return null
   }
 
   // Low saturation candy colors for capability tags (n1n style)
@@ -248,6 +283,26 @@ const ModelMarket: React.FC = () => {
       styles={{ body: { padding: 16 } }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        {getModelLogo(model.name, model.provider) ? (
+          <img
+            src={getModelLogo(model.name, model.provider)!}
+            alt={model.name}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 10,
+              objectFit: 'contain',
+              flexShrink: 0,
+              background: '#f5f5f5'
+            }}
+            onError={(e) => {
+              // 如果图片加载失败，显示图标
+              const target = e.target as HTMLImageElement
+              target.style.display = 'none'
+              target.nextElementSibling?.classList.remove('hidden')
+            }}
+          />
+        ) : null}
         <div style={{
           width: 44,
           height: 44,
@@ -258,8 +313,9 @@ const ModelMarket: React.FC = () => {
           justifyContent: 'center',
           color: '#fff',
           fontSize: 18,
-          flexShrink: 0
-        }}>
+          flexShrink: 0,
+          ...(getModelLogo(model.name, model.provider) ? { display: 'none' } : {})
+        }} className={getModelLogo(model.name, model.provider) ? 'hidden' : ''}>
           {getModelIcon(model.model_type)}
         </div>
 
@@ -349,6 +405,24 @@ const ModelMarket: React.FC = () => {
       styles={{ body: { padding: '12px 16px' } }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {getModelLogo(model.name, model.provider) ? (
+          <img
+            src={getModelLogo(model.name, model.provider)!}
+            alt={model.name}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              objectFit: 'contain',
+              background: '#f5f5f5'
+            }}
+            onError={(e) => {
+              const target = e.target as HTMLImageElement
+              target.style.display = 'none'
+              target.nextElementSibling?.classList.remove('hidden')
+            }}
+          />
+        ) : null}
         <div style={{
           width: 36,
           height: 36,
@@ -358,8 +432,9 @@ const ModelMarket: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           color: '#fff',
-          fontSize: 16
-        }}>
+          fontSize: 16,
+          ...(getModelLogo(model.name, model.provider) ? { display: 'none' } : {})
+        }} className={getModelLogo(model.name, model.provider) ? 'hidden' : ''}>
           {getModelIcon(model.model_type)}
         </div>
 

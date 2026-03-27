@@ -4,7 +4,7 @@ import {
   DashboardOutlined, ShopOutlined, KeyOutlined, PlusSquareOutlined,
   HistoryOutlined, FileTextOutlined, SettingOutlined, TeamOutlined,
   BellOutlined, GlobalOutlined, LogoutOutlined, UserOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined
+  MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined, DatabaseOutlined
 } from '@ant-design/icons'
 import React, { useState, useEffect } from 'react'
 import Logo from './components/Logo'
@@ -16,8 +16,10 @@ import Topup from './pages/Topup'
 import Usage from './pages/Usage'
 import Invoices from './pages/Invoices'
 import OpsDashboard from './pages/OpsDashboard'
+import ModelManagement from './pages/ModelManagement'
 import Teams from './pages/Teams'
 import Login from './pages/Login'
+import ApiDocs from './pages/ApiDocs'
 import { getUserInfo, logout, User } from './services/api'
 
 const { Content } = Layout
@@ -76,6 +78,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const commonMenuItems = [
     { key: '/dashboard', icon: <DashboardOutlined />, label: '数据看板' },
     { key: '/market', icon: <ShopOutlined />, label: '模型广场' },
+    { key: '/docs', icon: <ApiOutlined />, label: 'API 文档' },
     { key: '/keys', icon: <KeyOutlined />, label: 'API Keys' },
     { key: '/usage', icon: <HistoryOutlined />, label: '用量明细' },
     { key: '/topup', icon: <PlusSquareOutlined />, label: '充值中心' },
@@ -85,6 +88,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Admin menu items
   const adminMenuItems = [
     { key: '/ops', icon: <SettingOutlined />, label: '运营管理' },
+    { key: '/ops/models', icon: <DatabaseOutlined />, label: '模型管理' },
     { key: '/teams', icon: <TeamOutlined />, label: '团队管理' },
   ]
 
@@ -272,7 +276,9 @@ const App: React.FC = () => {
         <Route path="/usage" element={<ProtectedPage><Usage /></ProtectedPage>} />
         <Route path="/invoices" element={<ProtectedPage><Invoices /></ProtectedPage>} />
         <Route path="/ops" element={<ProtectedPage><OpsDashboard /></ProtectedPage>} />
+        <Route path="/ops/models" element={<ProtectedPage><ModelManagement /></ProtectedPage>} />
         <Route path="/teams" element={<ProtectedPage><Teams /></ProtectedPage>} />
+        <Route path="/docs" element={<ProtectedPage><ApiDocs /></ProtectedPage>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

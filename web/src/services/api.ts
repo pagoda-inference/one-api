@@ -397,3 +397,47 @@ export const startModelTrial = (modelId: string) =>
 
 export const getUserTrials = () =>
   api.get('/market/trials')
+
+// Model Management APIs (Admin)
+export interface ModelItem {
+  id: string
+  name: string
+  provider: string
+  model_type: string
+  description: string
+  context_len: number
+  input_price: number
+  output_price: number
+  capabilities: string
+  status: string
+  icon_url: string
+  sort_order: number
+  created_time: number
+  updated_time: number
+}
+
+export const listModels = () =>
+  api.get<{ success: boolean; data: ModelItem[] }>('/admin/models')
+
+export const getModel = (id: string) =>
+  api.get<{ success: boolean; data: ModelItem }>(`/admin/models/${id}`)
+
+export const createModel = (data: Partial<ModelItem>) =>
+  api.post<{ success: boolean; data: ModelItem }>('/admin/models', data)
+
+export const updateModel = (id: string, data: Partial<ModelItem>) =>
+  api.put<{ success: boolean; data: ModelItem }>(`/admin/models/${id}`, data)
+
+export const deleteModel = (id: string) =>
+  api.delete<{ success: boolean }>(`/admin/models/${id}`)
+
+export const uploadModelLogo = (formData: FormData) =>
+  api.post<{ success: boolean; data: { url: string } }>('/admin/models/upload-logo', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+
+export const getModelTypes = () =>
+  api.get<{ success: boolean; data: { value: string; label: string }[] }>('/admin/models/types')
+
+export const getModelStatuses = () =>
+  api.get<{ success: boolean; data: { value: string; label: string }[] }>('/admin/models/statuses')
