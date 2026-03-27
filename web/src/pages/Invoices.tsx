@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, message, Collapse } from 'antd'
-import { PlusOutlined, FileTextOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Collapse } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 import { getInvoices, createInvoice, getTopupOrders, Invoice, TopupOrder } from '../services/api'
 
 const { Panel } = Collapse
 const { TextArea } = Input
-const { Option } = Select
-
 const Invoices: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [invoices, setInvoices] = useState<Invoice[]>([])

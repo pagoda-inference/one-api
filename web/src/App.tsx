@@ -17,7 +17,6 @@ import Invoices from './pages/Invoices'
 import OpsDashboard from './pages/OpsDashboard'
 import Teams from './pages/Teams'
 import Login from './pages/Login'
-import Register from './pages/Register'
 import { getUserInfo, logout, User } from './services/api'
 
 const { Content } = Layout
@@ -285,7 +284,6 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<ProtectedPage><Dashboard /></ProtectedPage>} />
         <Route path="/market" element={<ProtectedPage><ModelMarket /></ProtectedPage>} />
         <Route path="/keys" element={<ProtectedPage><ApiKeys /></ProtectedPage>} />

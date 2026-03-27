@@ -7,7 +7,7 @@ const { Option } = Select
 const { TabPane } = Tabs
 
 const Teams: React.FC = () => {
-  const [loading, setLoading] = useState(false)
+  const [, setLoading] = useState(false)
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null)
   const [users, setUsers] = useState<TenantUser[]>([])
@@ -15,7 +15,6 @@ const Teams: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false)
   const [inviteModalVisible, setInviteModalVisible] = useState(false)
   const [quotaModalVisible, setQuotaModalVisible] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<TenantUser | null>(null)
   const [currentRole, setCurrentRole] = useState<number>(2)
   const [createForm] = Form.useForm()
   const [inviteForm] = Form.useForm()
@@ -176,7 +175,6 @@ const Teams: React.FC = () => {
         {currentRole <= 1 && r.role > 0 && (
           <>
             <Button size="small" onClick={() => {
-              setSelectedUser(r)
               quotaForm.setFieldsValue({ target_user_id: r.id })
               setQuotaModalVisible(true)
             }}>分配额度</Button>

@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Table, DatePicker, Select, Statistic, Spin, Progress, Tag, Tabs, Button, Space, Modal, Form, Input, message } from 'antd'
+import { Row, Col, Card, Table, Statistic, Spin, Progress, Tag, Tabs, Button, Space, Modal, Form, Input, message } from 'antd'
 import { DollarOutlined, UserOutlined, ApiOutlined, RiseOutlined, SafetyCertificateOutlined, AlertOutlined, DashboardOutlined, LineChartOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
-import dayjs from 'dayjs'
-import { getOpsStats, getOpsRevenue, getChannelHealth, getSystemHealth, getAlertConfig, updateAlertConfig, exportReport, OpsStats, ChannelHealth, SystemHealth, AlertConfig } from '../services/api'
+import { getOpsStats, getChannelHealth, getSystemHealth, getAlertConfig, updateAlertConfig, exportReport, OpsStats, ChannelHealth, SystemHealth, AlertConfig } from '../services/api'
 
-const { RangePicker } = DatePicker
-const { Option } = Select
 const { TabPane } = Tabs
 
 const OpsDashboard: React.FC = () => {
@@ -91,24 +88,6 @@ const OpsDashboard: React.FC = () => {
         { name: '营收', data: revenues, type: 'bar', itemStyle: { color: '#52c41a' } },
         { name: '充值', data: topups, type: 'bar', itemStyle: { color: '#1890ff' } }
       ]
-    }
-  }
-
-  const getUsageChartOption = () => {
-    if (!stats) return {}
-    const models = Object.keys(stats.usage_by_model || {})
-    const usages = models.map(m => stats.usage_by_model[m] || 0)
-
-    return {
-      title: { text: '模型用量分布 (近7天)', left: 'center' },
-      tooltip: { trigger: 'axis' },
-      xAxis: { type: 'category', data: models, axisLabel: { rotate: 45 } },
-      yAxis: { type: 'value', name: 'Token数' },
-      series: [{
-        data: usages,
-        type: 'bar',
-        itemStyle: { color: '#1890ff' }
-      }]
     }
   }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Tag, Space, message, Popconfirm } from 'antd'
 import { PlusOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
-import { getTokens, createToken, deleteToken, getUserInfo } from '../services/api'
+import { getTokens, createToken, deleteToken } from '../services/api'
 
 interface Token {
   id: number

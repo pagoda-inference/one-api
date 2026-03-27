@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Row, Col, Card, Table, DatePicker, Select, Statistic, Spin } from 'antd'
-import { RiseOutlined, ApiOutlined } from '@ant-design/icons'
+import { ApiOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import dayjs from 'dayjs'
 import { getUsageSummary, getUsageByModel, getUsageDetail, getMarketModels, ModelUsage, Model, UsageSummary } from '../services/api'
