@@ -1,44 +1,42 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Statistic, Spin, Table, Tag, Progress } from 'antd'
-import { DollarOutlined, ClockCircleOutlined, ApiOutlined, RiseOutlined } from '@ant-design/icons'
+import { Row, Col, Card, Table, Tabs, Badge, Button, Spin, Empty } from 'antd'
+import {
+  DollarOutlined, ApiOutlined, RiseOutlined, TrophyOutlined,
+  WalletOutlined, LineChartOutlined, ThunderboltOutlined, ExperimentOutlined,
+  CopyOutlined
+} from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
-import dayjs from 'dayjs'
-import { getDashboard, getUsageByDay, getTopupOrders, User, UsageSummary, TopupOrder } from '../services/api'
+import { getDashboard, getUsageByDay, getUsageByModel, getTokens, getMarketStats } from '../services/api'
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<User | null>(null)
-  const [usage, setUsage] = useState<UsageSummary | null>(null)
-  const [marketStats, setMarketStats] = useState<{ total_models: number; total_providers: number } | null>(null)
-  const [recentOrders, setRecentOrders] = useState<TopupOrder[]>([])
-  const [usageChartData, setUsageChartData] = useState<{ date: string; tokens: number }[]>([])
+  const [dashboardData, setDashboardData] = useState<any>(null)
+  const [usageData, setUsageData] = useState<any[]>([])
+  const [modelUsage, setModelUsage] = useState<any[]>([])
+  const [tokens, setTokens] = useState<any[]>([])
+  const [marketStats, setMarketStats] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState('trend')
 
   useEffect(() => {
-    loadDashboard()
+    loadData()
   }, [])
 
-  const loadDashboard = async () => {
+  const loadData = async () => {
     try {
       setLoading(true)
-      const [dashboardRes, usageRes] = await Promise.all([
+      const [dashRes, usageRes, modelRes, tokenRes, marketRes] = await Promise.all([
         getDashboard(),
-        getUsageByDay()
+        getUsageByDay({ start: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0] }),
+        getUsageByModel(),
+        getTokens({ limit: 5 }),
+        getMarketStats()
       ])
 
-      const data = dashboardRes.data.data
-      setUser(data.user)
-      setUsage(data.usage)
-      setMarketStats(data.market.total_models)
-      setRecentOrders(data.recent_orders || [])
-
-      // Process usage chart data
-      if (usageRes.data.data) {
-        const chartData = usageRes.data.data.map((item: any) => ({
-          date: item.day,
-          tokens: item.prompt_tokens + item.completion_tokens
-        }))
-        setUsageChartData(chartData)
-      }
+      setDashboardData(dashRes.data.data)
+      setUsageData(usageRes.data.data || [])
+      setModelUsage(modelRes.data.data?.slice(0, 10) || [])
+      setTokens(tokenRes.data.data || [])
+      setMarketStats(marketRes.data.data)
     } catch (error) {
       console.error('Failed to load dashboard:', error)
     } finally {
@@ -46,125 +44,374 @@ const Dashboard: React.FC = () => {
     }
   }
 
-  const getUsageChartOption = () => {
-    const dates = usageChartData.map(d => d.date)
-    const tokens = usageChartData.map(d => d.tokens)
-
-    return {
-      title: { text: '最近7天用量趋势', left: 'center' },
-      tooltip: { trigger: 'axis' },
-      xAxis: { type: 'category', data: dates },
-      yAxis: { type: 'value', name: 'Token数' },
-      series: [{
-        data: tokens,
-        type: 'line',
-        areaStyle: { color: '#1890ff33' },
-        lineStyle: { color: '#1890ff' },
-        itemStyle: { color: '#1890ff' }
-      }]
-    }
-  }
-
   const formatQuota = (quota: number) => {
-    if (quota >= 1000000000) {
-      return (quota / 1000000000).toFixed(2) + 'B'
-    }
-    if (quota >= 1000000) {
-      return (quota / 1000000).toFixed(2) + 'M'
-    }
-    if (quota >= 1000) {
-      return (quota / 1000).toFixed(2) + 'K'
-    }
+    if (quota >= 1000000000) return (quota / 1000000000).toFixed(2) + 'B'
+    if (quota >= 1000000) return (quota / 1000000).toFixed(2) + 'M'
+    if (quota >= 1000) return (quota / 1000).toFixed(2) + 'K'
     return quota.toString()
   }
 
-  if (loading) {
-    return <Spin size="large" style={{ display: 'flex', justifyContent: 'center', marginTop: 100 }} />
+  const formatMoney = (quota: number) => {
+    return (quota / 7200).toFixed(2)
   }
+
+  // Stat card helper
+  const StatCard = ({ title, value, suffix, icon, color, gradient }: any) => (
+    <Card
+      style={{
+        borderRadius: 12,
+        border: 'none',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+      }}
+      styles={{ body: { padding: '20px 24px' } }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ color: '#8c8c8c', fontSize: 14, marginBottom: 8 }}>{title}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: '#262626' }}>
+            {value}
+            <span style={{ fontSize: 14, color: '#8c8c8c', marginLeft: 4 }}>{suffix}</span>
+          </div>
+        </div>
+        <div style={{
+          width: 48,
+          height: 48,
+          borderRadius: 12,
+          background: gradient || `linear-gradient(135deg, ${color}15, ${color}30)`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: gradient || `linear-gradient(135deg, ${color}, ${color}cc)`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            {icon}
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+
+  // Usage chart
+  const getUsageChartOption = () => ({
+    tooltip: { trigger: 'axis' },
+    grid: { left: 50, right: 20, top: 20, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: usageData.map(d => d.day?.slice(5) || ''),
+      axisLine: { lineStyle: { color: '#e8e8e8' } },
+      axisLabel: { color: '#8c8c8c' }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: '#f5f5f5' } },
+      axisLabel: { color: '#8c8c8c' }
+    },
+    series: [{
+      data: usageData.map(d => ({
+        value: (d.prompt_tokens || 0) + (d.completion_tokens || 0),
+        itemStyle: { color: '#667eea' }
+      })),
+      type: 'bar',
+      barWidth: '60%',
+      itemStyle: { borderRadius: [4, 4, 0, 0] },
+      areaStyle: { color: 'rgba(102,126,234,0.1)' }
+    }]
+  })
+
+  // Model usage chart
+  const getModelChartOption = () => ({
+    tooltip: { trigger: 'axis' },
+    grid: { left: 50, right: 20, top: 20, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: modelUsage.map(d => d.model_id?.slice(0, 15) || ''),
+      axisLine: { lineStyle: { color: '#e8e8e8' } },
+      axisLabel: { color: '#8c8c8c', rotate: 30 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: '#f5f5f5' } },
+      axisLabel: { color: '#8c8c8c' }
+    },
+    series: [{
+      data: modelUsage.map(d => ({
+        value: (d.prompt_tokens || 0) + (d.completion_tokens || 0),
+        itemStyle: { color: '#764ba2' }
+      })),
+      type: 'bar',
+      barWidth: '60%',
+      itemStyle: { borderRadius: [4, 4, 0, 0] }
+    }]
+  })
+
+  // Calendar data (simulated sign-in data)
+  const getCalendarData = () => {
+    const data: any[] = []
+    const now = new Date()
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(now.getTime() - i * 86400000)
+      data.push({
+        date: date.toISOString().split('T')[0],
+        status: Math.random() > 0.3 ? 'completed' : 'none'
+      })
+    }
+    return data
+  }
+
+  const calendarData = getCalendarData()
+
+  const tabItems = [
+    { key: 'calendar', label: '签到日历' },
+    { key: 'trend', label: '用量趋势' },
+    { key: 'model', label: '模型排行' },
+    { key: 'ranking', label: '调用排行' }
+  ]
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'calendar':
+        return (
+          <Card style={{ borderRadius: 12, border: 'none' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <span style={{ fontWeight: 600, fontSize: 16 }}>签到日历</span>
+                <span style={{ marginLeft: 12, color: '#52c41a', fontSize: 14 }}>总额度: ¥{formatMoney(dashboardData?.user?.quota || 0)}</span>
+              </div>
+              <Button type="primary" style={{ borderRadius: 8, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}>
+                立即签到
+              </Button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+              {['日', '一', '二', '三', '四', '五', '六'].map(d => (
+                <div key={d} style={{ textAlign: 'center', color: '#8c8c8c', fontSize: 12, padding: 8 }}>{d}</div>
+              ))}
+              {Array.from({ length: 35 }, (_, i) => {
+                const day = i - 3 // Start from offset
+                const date = new Date()
+                date.setDate(date.getDate() + day - 30)
+                const dateStr = date.toISOString().split('T')[0]
+                const isToday = dateStr === new Date().toISOString().split('T')[0]
+                const signData = calendarData.find(c => c.date === dateStr)
+                const isSigned = signData?.status === 'completed'
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      aspectRatio: '1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 8,
+                      background: isToday ? '#667eea15' : isSigned ? '#52c41a15' : '#f5f5f5',
+                      border: isToday ? '2px solid #667eea' : 'none',
+                      fontSize: 12,
+                      color: isSigned ? '#52c41a' : '#8c8c8c',
+                      fontWeight: isSigned ? 600 : 400
+                    }}
+                  >
+                    {Math.abs(day) + 1}
+                  </div>
+                )
+              })}
+            </div>
+          </Card>
+        )
+      case 'trend':
+        return (
+          <Card style={{ borderRadius: 12, border: 'none' }}>
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>最近7天用量趋势</div>
+            {usageData.length > 0 ? (
+              <ReactECharts option={getUsageChartOption()} style={{ height: 300 }} />
+            ) : (
+              <Empty description="暂无用量数据" style={{ padding: 60 }} />
+            )}
+          </Card>
+        )
+      case 'model':
+        return (
+          <Card style={{ borderRadius: 12, border: 'none' }}>
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>模型用量排行</div>
+            {modelUsage.length > 0 ? (
+              <ReactECharts option={getModelChartOption()} style={{ height: 300 }} />
+            ) : (
+              <Empty description="暂无模型用量" style={{ padding: 60 }} />
+            )}
+          </Card>
+        )
+      case 'ranking':
+        return (
+          <Card style={{ borderRadius: 12, border: 'none' }}>
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>Token消耗排行</div>
+            <Table
+              dataSource={modelUsage}
+              rowKey="model_id"
+              pagination={false}
+              columns={[
+                { title: '排名', width: 60, render: (_, __, i) => <Badge count={i + 1} style={{ backgroundColor: '#667eea' }} /> },
+                { title: '模型', dataIndex: 'model_id', ellipsis: true },
+                { title: 'Prompt Tokens', dataIndex: 'prompt_tokens', render: (v) => formatQuota(v) },
+                { title: 'Completion Tokens', dataIndex: 'completion_tokens', render: (v) => formatQuota(v) },
+                {
+                  title: '占比',
+                  width: 100,
+                  render: (_, record) => {
+                    const total = modelUsage.reduce((sum: number, r: any) => sum + (r.prompt_tokens || 0) + (r.completion_tokens || 0), 0)
+                    const percent = total > 0 ? ((record.prompt_tokens + record.completion_tokens) / total * 100).toFixed(1) : '0'
+                    return `${percent}%`
+                  }
+                }
+              ]}
+            />
+          </Card>
+        )
+      default:
+        return null
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  const user = dashboardData?.user || {}
 
   return (
     <div>
+      {/* Stat Cards */}
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="账户余额"
-              value={user?.quota || 0}
-              formatter={(value) => formatQuota(Number(value))}
-              prefix={<DollarOutlined />}
-              suffix="quota"
-            />
-          </Card>
+          <StatCard
+            title="账户余额"
+            value={`¥${formatMoney(user.quota || 0)}`}
+            suffix=""
+            icon={<DollarOutlined style={{ color: '#fff', fontSize: 16 }} />}
+            color="#667eea"
+          />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="本月请求数"
-              value={usage?.total_requests || 0}
-              prefix={<ApiOutlined />}
-            />
-          </Card>
+          <StatCard
+            title="本月请求数"
+            value={dashboardData?.usage?.total_requests?.toLocaleString() || '0'}
+            suffix="次"
+            icon={<ApiOutlined style={{ color: '#fff', fontSize: 16 }} />}
+            color="#52c41a"
+          />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="本月Token用量"
-              value={usage?.total_tokens || 0}
-              formatter={(value) => formatQuota(Number(value))}
-              prefix={<RiseOutlined />}
-            />
-          </Card>
+          <StatCard
+            title="本月Token消耗"
+            value={formatQuota(dashboardData?.usage?.total_tokens || 0)}
+            suffix=""
+            icon={<RiseOutlined style={{ color: '#fff', fontSize: 16 }} />}
+            color="#ff4d4f"
+          />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="可用模型"
-              value={marketStats?.total_models || 0}
-              suffix="个"
-            />
-          </Card>
+          <StatCard
+            title="可用模型"
+            value={marketStats?.total_models || 0}
+            suffix="个"
+            icon={<TrophyOutlined style={{ color: '#fff', fontSize: 16 }} />}
+            color="#faad14"
+          />
         </Col>
       </Row>
 
+      {/* Main Content */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={16}>
-          <Card title="用量趋势">
-            {usageChartData.length > 0 ? (
-              <ReactECharts option={getUsageChartOption()} style={{ height: 300 }} />
-            ) : (
-              <div style={{ textAlign: 'center', color: '#999', padding: 60 }}>暂无用量数据</div>
-            )}
+          {/* Tabs */}
+          <Card
+            style={{ borderRadius: 12, border: 'none' }}
+            styles={{ body: { padding: '16px 20px' } }}
+          >
+            <Tabs
+              activeKey={activeTab}
+              onChange={setActiveTab}
+              items={tabItems}
+              tabBarStyle={{ marginBottom: 16 }}
+            />
+            {renderTabContent()}
           </Card>
         </Col>
+
+        {/* API Quick Access */}
         <Col xs={24} lg={8}>
-          <Card title="最近充值">
-            {recentOrders.length > 0 ? (
-              <Table
-                dataSource={recentOrders}
-                size="small"
-                pagination={false}
-                rowKey="id"
-                columns={[
-                  { title: '金额', dataIndex: 'amount', render: (v) => `¥${v}` },
-                  { title: '额度', dataIndex: 'quota', render: (v) => formatQuota(v) },
-                  {
-                    title: '状态',
-                    dataIndex: 'status',
-                    render: (status) => {
-                      const map: Record<string, { color: string; text: string }> = {
-                        paid: { color: 'green', text: '已支付' },
-                        pending: { color: 'orange', text: '待支付' },
-                        cancelled: { color: 'gray', text: '已取消' }
-                      }
-                      const s = map[status] || { color: 'gray', text: status }
-                      return <Tag color={s.color}>{s.text}</Tag>
-                    }
-                  }
-                ]}
-              />
-            ) : (
-              <div style={{ textAlign: 'center', color: '#999', padding: 40 }}>暂无充值记录</div>
+          <Card
+            title="API快速访问"
+            style={{ borderRadius: 12, border: 'none' }}
+            styles={{ body: { padding: 16 } }}
+            extra={<Button size="small" type="link">查看全部</Button>}
+          >
+            {tokens.slice(0, 3).map((token: any) => (
+              <div
+                key={token.id}
+                style={{
+                  padding: '12px',
+                  background: '#f5f7fa',
+                  borderRadius: 8,
+                  marginBottom: 8
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 500, fontSize: 14 }}>{token.name}</span>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CopyOutlined />}
+                    style={{ color: '#667eea' }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(token.key)
+                      // message.success('已复制')
+                    }}
+                  >
+                    复制
+                  </Button>
+                </div>
+                <div style={{ fontSize: 12, color: '#8c8c8c', fontFamily: 'monospace' }}>
+                  {token.key?.slice(0, 20)}...
+                </div>
+              </div>
+            ))}
+
+            {tokens.length === 0 && (
+              <Empty description="暂无API Key" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             )}
+          </Card>
+
+          {/* Quick Actions */}
+          <Card
+            title="快捷操作"
+            style={{ borderRadius: 12, border: 'none', marginTop: 16 }}
+            styles={{ body: { padding: 16 } }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+              <Button icon={<WalletOutlined />} block style={{ borderRadius: 8, height: 44 }}>
+                充值
+              </Button>
+              <Button icon={<LineChartOutlined />} block style={{ borderRadius: 8, height: 44 }}>
+                用量明细
+              </Button>
+              <Button icon={<ThunderboltOutlined />} block style={{ borderRadius: 8, height: 44 }}>
+                创建Key
+              </Button>
+              <Button icon={<ExperimentOutlined />} block style={{ borderRadius: 8, height: 44 }}>
+                模型试用
+              </Button>
+            </div>
           </Card>
         </Col>
       </Row>

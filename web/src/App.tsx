@@ -1,6 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Layout, Menu } from 'antd'
-import { DashboardOutlined, ShopOutlined, KeyOutlined, PlusSquareOutlined, HistoryOutlined, FileTextOutlined, SettingOutlined, TeamOutlined } from '@ant-design/icons'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Layout, Menu, Avatar, Dropdown, Badge, Button, Modal, message } from 'antd'
+import {
+  DashboardOutlined, ShopOutlined, KeyOutlined, PlusSquareOutlined,
+  HistoryOutlined, FileTextOutlined, SettingOutlined, TeamOutlined,
+  BellOutlined, GlobalOutlined, LogoutOutlined, UserOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined
+} from '@ant-design/icons'
 import React, { useState, useEffect } from 'react'
 
 import Dashboard from './pages/Dashboard'
@@ -11,77 +16,286 @@ import Usage from './pages/Usage'
 import Invoices from './pages/Invoices'
 import OpsDashboard from './pages/OpsDashboard'
 import Teams from './pages/Teams'
-import { getUserInfo, User } from './services/api'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import { getUserInfo, logout, User } from './services/api'
 
-const { Header, Content } = Layout
+const { Content } = Layout
 
-const App: React.FC = () => {
+// Main Layout with Sidebar wrapping children
+const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
-  const [menuItems, setMenuItems] = useState([
-    { key: '/dashboard', icon: <DashboardOutlined />, label: '控制台' },
-    { key: '/market', icon: <ShopOutlined />, label: '模型市场' },
-    { key: '/topup', icon: <PlusSquareOutlined />, label: '充值' },
-    { key: '/keys', icon: <KeyOutlined />, label: 'API Keys' },
-    { key: '/usage', icon: <HistoryOutlined />, label: '用量明细' },
-    { key: '/invoices', icon: <FileTextOutlined />, label: '发票管理' },
-  ])
+  const [collapsed, setCollapsed] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchUser = async () => {
-      try {
-        const res = await getUserInfo()
-        setUser(res.data.data)
-      } catch (error) {
-        console.error('Failed to fetch user info:', error)
+      const token = localStorage.getItem('access_token')
+      if (token) {
+        try {
+          const res = await getUserInfo()
+          setUser(res.data.data)
+        } catch (error) {
+          localStorage.removeItem('access_token')
+        }
       }
+      setLoading(false)
     }
     fetchUser()
   }, [])
 
-  useEffect(() => {
-    if (user && user.role >= 10) {
-      setMenuItems([
-        { key: '/dashboard', icon: <DashboardOutlined />, label: '控制台' },
-        { key: '/market', icon: <ShopOutlined />, label: '模型市场' },
-        { key: '/topup', icon: <PlusSquareOutlined />, label: '充值' },
-        { key: '/keys', icon: <KeyOutlined />, label: 'API Keys' },
-        { key: '/usage', icon: <HistoryOutlined />, label: '用量明细' },
-        { key: '/invoices', icon: <FileTextOutlined />, label: '发票管理' },
-        { key: '/ops', icon: <SettingOutlined />, label: '运营管理' },
-        { key: '/teams', icon: <TeamOutlined />, label: '团队管理' },
-      ])
-    }
-  }, [user])
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch (e) {}
+    localStorage.removeItem('access_token')
+    setUser(null)
+    message.success('已退出登录')
+    navigate('/login')
+  }
 
-  return (
-    <BrowserRouter>
-      <Layout style={{ minHeight: '100vh' }}>
-        <Header style={{ display: 'flex', alignItems: 'center' }}>
-          <div style={{ color: 'white', fontSize: '20px', fontWeight: 'bold', marginRight: '48px' }}>
-            One API
-          </div>
-          <Menu
-            theme="dark"
-            mode="horizontal"
-            defaultSelectedKeys={['/dashboard']}
-            items={menuItems}
-            style={{ flex: 1, minWidth: 0 }}
-          />
-        </Header>
-        <Content style={{ padding: '24px' }}>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/market" element={<ModelMarket />} />
-            <Route path="/topup" element={<Topup />} />
-            <Route path="/keys" element={<ApiKeys />} />
-            <Route path="/usage" element={<Usage />} />
-            <Route path="/invoices" element={<Invoices />} />
-            <Route path="/ops" element={<OpsDashboard />} />
-            <Route path="/teams" element={<Teams />} />
-          </Routes>
+  const userMenuItems = [
+    { key: 'profile', icon: <UserOutlined />, label: '个人中心' },
+    { type: 'divider' as const },
+    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true }
+  ]
+
+  const onUserMenuClick = ({ key }: { key: string }) => {
+    if (key === 'logout') {
+      Modal.confirm({
+        title: '确认退出',
+        content: '确定要退出登录吗？',
+        onOk: handleLogout
+      })
+    }
+  }
+
+  // Common menu items for all users
+  const commonMenuItems = [
+    { key: '/dashboard', icon: <DashboardOutlined />, label: '数据看板' },
+    { key: '/market', icon: <ShopOutlined />, label: '模型广场' },
+    { key: '/keys', icon: <KeyOutlined />, label: 'API Keys' },
+    { key: '/usage', icon: <HistoryOutlined />, label: '用量明细' },
+    { key: '/topup', icon: <PlusSquareOutlined />, label: '充值中心' },
+    { key: '/invoices', icon: <FileTextOutlined />, label: '发票管理' },
+  ]
+
+  // Admin menu items
+  const adminMenuItems = [
+    { key: '/ops', icon: <SettingOutlined />, label: '运营管理' },
+    { key: '/teams', icon: <TeamOutlined />, label: '团队管理' },
+  ]
+
+  if (!user) {
+    return (
+      <Layout style={{ minHeight: '100vh', background: '#f5f7fa' }}>
+        <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Navigate to="/login" replace />
         </Content>
       </Layout>
+    )
+  }
+
+  const menuItems = (user.role ?? 0) >= 10
+    ? [...commonMenuItems, ...adminMenuItems]
+    : commonMenuItems
+
+  // Get greeting based on time
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 6) return '凌晨好'
+    if (hour < 9) return '早上好'
+    if (hour < 12) return '上午好'
+    if (hour < 14) return '中午好'
+    if (hour < 18) return '下午好'
+    if (hour < 22) return '晚上好'
+    return '夜里好'
+  }
+
+  // Show loading
+  if (loading) {
+    return (
+      <Layout style={{ minHeight: '100vh', background: '#f5f7fa' }}>
+        <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          加载中...
+        </Content>
+      </Layout>
+    )
+  }
+
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      <Layout.Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
+        width={220}
+        style={{
+          background: '#fff',
+          boxShadow: '2px 0 8px rgba(0,0,0,0.06)',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 100,
+          overflow: 'auto'
+        }}
+      >
+        <div style={{
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: collapsed ? 0 : '0 20px',
+          borderBottom: '1px solid #f0f0f0'
+        }}>
+          {collapsed ? (
+            <div style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: 14
+            }}>1</div>
+          ) : (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10
+            }}>
+              <div style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 14
+              }}>1</div>
+              <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>One API</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '16px 12px' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            borderRadius: 10,
+            padding: '12px 16px',
+            marginBottom: 16
+          }}>
+            <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginBottom: 4 }}>账户余额</div>
+            <div style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>
+              ¥{(user.quota / 7200).toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        <Menu
+          mode="inline"
+          selectedKeys={[location.pathname]}
+          items={menuItems}
+          onClick={({ key }) => navigate(key)}
+          style={{
+            border: 'none',
+            padding: '0 8px'
+          }}
+        />
+      </Layout.Sider>
+
+      <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin-left 0.2s' }}>
+        <Layout.Header style={{
+          background: '#fff',
+          padding: '0 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 99,
+          height: 64,
+          lineHeight: '64px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Button
+              type="text"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setCollapsed(!collapsed)}
+              style={{ fontSize: 16 }}
+            />
+            <span style={{ color: '#333', fontWeight: 500 }}>
+              {getGreeting()}，{user.display_name || user.username}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Badge count={99} size="small">
+              <Button type="text" icon={<BellOutlined />} style={{ fontSize: 16 }} />
+            </Badge>
+            <Button type="text" icon={<GlobalOutlined />} style={{ fontSize: 16 }} />
+
+            <Dropdown
+              menu={{ items: userMenuItems, onClick: onUserMenuClick }}
+              placement="bottomRight"
+              trigger={['click']}
+            >
+              <Avatar
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', cursor: 'pointer' }}
+              >
+                {user.display_name?.[0] || user.username?.[0]?.toUpperCase()}
+              </Avatar>
+            </Dropdown>
+          </div>
+        </Layout.Header>
+
+        <Content style={{
+          margin: 24,
+          minHeight: 'calc(100vh - 64px - 48px)',
+          background: '#f5f7fa'
+        }}>
+          {children}
+        </Content>
+      </Layout>
+    </Layout>
+  )
+}
+
+// Simple page wrapper with auth check
+const ProtectedPage: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const token = localStorage.getItem('access_token')
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
+  return <AppLayout>{children}</AppLayout>
+}
+
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<ProtectedPage><Dashboard /></ProtectedPage>} />
+        <Route path="/market" element={<ProtectedPage><ModelMarket /></ProtectedPage>} />
+        <Route path="/keys" element={<ProtectedPage><ApiKeys /></ProtectedPage>} />
+        <Route path="/topup" element={<ProtectedPage><Topup /></ProtectedPage>} />
+        <Route path="/usage" element={<ProtectedPage><Usage /></ProtectedPage>} />
+        <Route path="/invoices" element={<ProtectedPage><Invoices /></ProtectedPage>} />
+        <Route path="/ops" element={<ProtectedPage><OpsDashboard /></ProtectedPage>} />
+        <Route path="/teams" element={<ProtectedPage><Teams /></ProtectedPage>} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
     </BrowserRouter>
   )
 }

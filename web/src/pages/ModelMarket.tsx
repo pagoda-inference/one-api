@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Input, Select, Tag, Button, Drawer, Descriptions, Statistic, message, Tabs } from 'antd'
-import { SearchOutlined, CheckCircleOutlined, RobotOutlined, SyncOutlined, ExperimentOutlined, CrownOutlined } from '@ant-design/icons'
+import { Row, Col, Card, Input, Select, Tag, Button, Drawer, Descriptions, Statistic, message, Tabs, Badge, Empty, Segmented } from 'antd'
+import {
+  SearchOutlined, CheckCircleOutlined, RobotOutlined, SyncOutlined,
+  ExperimentOutlined, CrownOutlined, AppstoreOutlined, BarsOutlined,
+  ThunderboltOutlined, PictureOutlined, AudioOutlined, FileTextOutlined
+} from '@ant-design/icons'
 import { getMarketModels, getMarketStats, getMarketGroups, getModelTrial, startModelTrial, calculatePrice, Model, ModelGroup, MarketStats } from '../services/api'
 
 const { Search } = Input
-const { TabPane } = Tabs
 
 const ModelMarket: React.FC = () => {
   const [models, setModels] = useState<Model[]>([])
@@ -18,6 +21,7 @@ const ModelMarket: React.FC = () => {
   const [priceCalc, setPriceCalc] = useState<{ prompt_tokens: number; completion_tokens: number; quota_cost: number } | null>(null)
   const [trialInfo, setTrialInfo] = useState<any>(null)
   const [trialLoading, setTrialLoading] = useState(false)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   useEffect(() => {
     loadData()
@@ -67,7 +71,6 @@ const ModelMarket: React.FC = () => {
     setPriceCalc(null)
     setTrialInfo(null)
 
-    // Load trial info
     try {
       const res = await getModelTrial(model.id)
       setTrialInfo(res.data.data)
@@ -108,15 +111,49 @@ const ModelMarket: React.FC = () => {
   const getModelIcon = (modelType: string) => {
     switch (modelType) {
       case 'chat': return <RobotOutlined />
-      case 'embedding': return <CheckCircleOutlined />
+      case 'embedding': return <FileTextOutlined />
+      case 'image': return <PictureOutlined />
+      case 'audio': return <AudioOutlined />
+      case 'vlm': return <ExperimentOutlined />
       default: return <RobotOutlined />
     }
+  }
+
+  // Low saturation candy colors for capability tags (n1n style)
+  const getCapabilityTagStyle = (cap: string): { bg: string; color: string } => {
+    const styles: Record<string, { bg: string; color: string }> = {
+      'chat': { bg: '#e8f4ff', color: '#1890ff' },
+      'vision': { bg: '#fff7e6', color: '#fa8c16' },
+      'function_call': { bg: '#f6ffed', color: '#52c41a' },
+      'embedding': { bg: '#f9f0ff', color: '#722ed1' },
+      'reranker': { bg: '#fff1f0', color: '#ff4d4f' },
+      'ocr': { bg: '#f0f5ff', color: '#597ef7' },
+      'reasoning': { bg: '#fff0f5', color: '#eb2f96' },
+      'audio': { bg: '#e6fffb', color: '#13c2c2' }
+    }
+    return styles[cap] || { bg: '#f5f5f5', color: '#8c8c8c' }
   }
 
   const getCapabilityTags = (capabilities: string) => {
     try {
       const caps = JSON.parse(capabilities) as string[]
-      return caps.map(cap => <Tag key={cap} color="blue">{cap}</Tag>)
+      return caps.map(cap => {
+        const style = getCapabilityTagStyle(cap)
+        return (
+          <Tag
+            key={cap}
+            style={{
+              background: style.bg,
+              color: style.color,
+              border: 'none',
+              borderRadius: 4,
+              fontSize: 11
+            }}
+          >
+            {cap}
+          </Tag>
+        )
+      })
     } catch {
       return null
     }
@@ -135,181 +172,392 @@ const ModelMarket: React.FC = () => {
 
   const getSLAColor = (sla: string) => {
     switch (sla) {
-      case 'enterprise': return 'red'
-      case 'premium': return 'gold'
-      default: return 'green'
+      case 'enterprise': return '#ff4d4f'
+      case 'premium': return '#faad14'
+      default: return '#52c41a'
     }
   }
 
-  const getSLAIcon = (sla: string) => {
-    if (sla === 'enterprise') return <CrownOutlined />
-    return null
-  }
+  // Model type options with icons
+  const typeOptions = [
+    { value: '', label: '全部类型' },
+    { value: 'chat', label: '对话', icon: <RobotOutlined /> },
+    { value: 'vlm', label: '多模态', icon: <ExperimentOutlined /> },
+    { value: 'embedding', label: '嵌入', icon: <FileTextOutlined /> },
+    { value: 'image', label: '图像', icon: <PictureOutlined /> },
+    { value: 'audio', label: '音频', icon: <AudioOutlined /> }
+  ]
+
+  // Stat card helper
+  const StatCard = ({ title, value, suffix, icon, color }: any) => (
+    <Card
+      style={{
+        borderRadius: 12,
+        border: 'none',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+      }}
+      styles={{ body: { padding: '16px 20px' } }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ color: '#8c8c8c', fontSize: 13, marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#262626' }}>
+            {value}
+            <span style={{ fontSize: 13, color: '#8c8c8c', marginLeft: 4 }}>{suffix}</span>
+          </div>
+        </div>
+        <div style={{
+          width: 40,
+          height: 40,
+          borderRadius: 10,
+          background: `${color}15`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: color,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#fff',
+            fontSize: 14
+          }}>
+            {icon}
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+
+  // Model Card Component
+  const ModelCard = ({ model }: { model: Model }) => (
+    <Card
+      hoverable
+      onClick={() => showModelDetail(model)}
+      style={{
+        borderRadius: 12,
+        border: 'none',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        overflow: 'hidden',
+        transition: 'all 0.3s'
+      }}
+      styles={{ body: { padding: 16 } }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{
+          width: 44,
+          height: 44,
+          borderRadius: 10,
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontSize: 18,
+          flexShrink: 0
+        }}>
+          {getModelIcon(model.model_type)}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ fontWeight: 600, fontSize: 14, color: '#262626' }}>{model.name}</span>
+            {model.is_trial && (
+              <Tag
+                style={{
+                  background: '#f6ffed',
+                  color: '#52c41a',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  padding: '0 4px'
+                }}
+              >
+                试用
+              </Tag>
+            )}
+          </div>
+
+          <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8 }}>
+            {model.provider}
+          </div>
+
+          <div style={{ fontSize: 12, color: '#595959', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {model.description}
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+            {getCapabilityTags(model.capabilities)?.slice(0, 3)}
+          </div>
+
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingTop: 8,
+            borderTop: '1px solid #f0f0f0'
+          }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <span style={{ fontSize: 11, color: '#8c8c8c' }}>输入</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: '#667eea' }}>
+                {formatPrice(model.input_price)}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <span style={{ fontSize: 11, color: '#8c8c8c' }}>输出</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: '#764ba2' }}>
+                {formatPrice(model.output_price)}
+              </span>
+            </div>
+          </div>
+
+          {model.sla === 'enterprise' && (
+            <div style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              background: '#ff4d4f15',
+              color: '#ff4d4f',
+              fontSize: 10,
+              padding: '2px 6px',
+              borderRadius: 4,
+              fontWeight: 500
+            }}>
+              企业专属
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  )
+
+  // List View
+  const ModelListItem = ({ model }: { model: Model }) => (
+    <Card
+      hoverable
+      onClick={() => showModelDetail(model)}
+      style={{
+        borderRadius: 12,
+        border: 'none',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        marginBottom: 8
+      }}
+      styles={{ body: { padding: '12px 16px' } }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: 8,
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#fff',
+          fontSize: 16
+        }}>
+          {getModelIcon(model.model_type)}
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{model.name}</span>
+            {model.is_trial && (
+              <Tag style={{ background: '#f6ffed', color: '#52c41a', border: 'none', borderRadius: 4, fontSize: 10 }}>试用</Tag>
+            )}
+            <span style={{ fontSize: 12, color: '#8c8c8c' }}>{model.provider}</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#8c8c8c' }}>输入</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#667eea' }}>{formatPrice(model.input_price)}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: '#8c8c8c' }}>输出</div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#764ba2' }}>{formatPrice(model.output_price)}</div>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
 
   return (
     <div>
+      {/* Stats Row */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
-          <Card>
-            <Statistic title="可用模型" value={stats?.total_models || 0} suffix="个" />
-          </Card>
+          <StatCard
+            title="可用模型"
+            value={stats?.total_models || 0}
+            suffix="个"
+            icon={<RobotOutlined />}
+            color="#667eea"
+          />
         </Col>
         <Col xs={24} sm={8}>
-          <Card>
-            <Statistic title="模型分组" value={stats?.total_groups || 0} />
-          </Card>
+          <StatCard
+            title="模型分组"
+            value={stats?.total_groups || 0}
+            suffix="个"
+            icon={<BarsOutlined />}
+            color="#52c41a"
+          />
         </Col>
         <Col xs={24} sm={8}>
-          <Card>
-            <Statistic
-              title="支持试用模型"
-              value={stats?.trial_models || 0}
-              prefix={<ExperimentOutlined />}
-            />
-          </Card>
+          <StatCard
+            title="支持试用"
+            value={stats?.trial_models || 0}
+            suffix="个"
+            icon={<ThunderboltOutlined />}
+            color="#faad14"
+          />
         </Col>
       </Row>
 
-      <Card style={{ marginBottom: 16 }}>
+      {/* Filters */}
+      <Card
+        style={{ marginBottom: 16, borderRadius: 12, border: 'none' }}
+        styles={{ body: { padding: '16px 20px' } }}
+      >
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} sm={12} md={8}>
             <Search
-              placeholder="搜索模型名称或ID"
+              placeholder="搜索模型名称、ID或提供商"
               allowClear
               onSearch={handleSearch}
-              prefix={<SearchOutlined />}
+              prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+              style={{ width: '100%' }}
             />
           </Col>
           <Col xs={12} sm={6} md={4}>
             <Select
-              placeholder="模型类型"
-              allowClear
-              style={{ width: '100%' }}
+              style={{ width: '100%', borderRadius: 8 }}
               value={typeFilter || undefined}
               onChange={setTypeFilter}
-            >
-              <Select.Option value="chat">Chat</Select.Option>
-              <Select.Option value="embedding">Embedding</Select.Option>
-              <Select.Option value="image">Image</Select.Option>
-              <Select.Option value="audio">Audio</Select.Option>
-            </Select>
+              options={typeOptions}
+            />
           </Col>
           <Col xs={12} sm={6} md={4}>
             <Select
               placeholder="选择分组"
               allowClear
-              style={{ width: '100%' }}
+              style={{ width: '100%', borderRadius: 8 }}
               value={groupFilter || undefined}
               onChange={(v) => setGroupFilter(v || null)}
-            >
-              {groups.map(g => (
-                <Select.Option key={g.id} value={g.id}>{g.name}</Select.Option>
-              ))}
-            </Select>
+              options={groups.map(g => ({ value: g.id, label: g.name }))}
+            />
           </Col>
-          <Col xs={24} md={8} style={{ textAlign: 'right' }}>
+          <Col xs={24} md={8} style={{ textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <Segmented
+              value={viewMode}
+              onChange={(v) => setViewMode(v as 'grid' | 'list')}
+              options={[
+                { value: 'grid', icon: <AppstoreOutlined /> },
+                { value: 'list', icon: <BarsOutlined /> }
+              ]}
+            />
             <Button icon={<SyncOutlined />} onClick={loadData}>刷新</Button>
           </Col>
         </Row>
       </Card>
 
-      <Tabs defaultActiveKey="1">
-        <TabPane tab={`全部模型 (${models.length})`} key="1">
-          <Row gutter={[16, 16]}>
-            {models.map(model => (
-              <Col xs={24} sm={12} lg={8} xl={6} key={model.id}>
-                <Card
-                  hoverable
-                  className="model-card"
-                  onClick={() => showModelDetail(model)}
-                  cover={
-                    <div style={{
-                      height: 100,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      color: 'white',
-                      fontSize: 36
-                    }}>
-                      {getModelIcon(model.model_type)}
-                    </div>
-                  }
-                >
-                  <Card.Meta
-                    title={
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span>{model.name}</span>
-                        {model.is_trial && <Tag color="green" icon={<ExperimentOutlined />}>试用</Tag>}
-                        {model.sla === 'enterprise' && <Tag color="red" icon={<CrownOutlined />}>企业</Tag>}
+      {/* Model List */}
+      <Tabs
+        defaultActiveKey="all"
+        items={[
+          {
+            key: 'all',
+            label: `全部模型 (${models.length})`,
+            children: viewMode === 'grid' ? (
+              <Row gutter={[16, 16]}>
+                {models.map(model => (
+                  <Col xs={24} sm={12} lg={8} xl={6} key={model.id}>
+                    <ModelCard model={model} />
+                  </Col>
+                ))}
+              </Row>
+            ) : (
+              <div>
+                {models.map(model => (
+                  <ModelListItem key={model.id} model={model} />
+                ))}
+              </div>
+            )
+          },
+          {
+            key: 'groups',
+            label: '分组浏览',
+            children: (
+              <Row gutter={[16, 16]}>
+                {groups.map(group => (
+                  <Col xs={24} sm={12} lg={8} key={group.id}>
+                    <Card
+                      hoverable
+                      onClick={() => { setGroupFilter(group.id) }}
+                      style={{
+                        borderRadius: 12,
+                        border: 'none',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+                      }}
+                      styles={{ body: { padding: 16 } }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 12,
+                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: 20
+                        }}>
+                          <RobotOutlined />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{group.name}</div>
+                          <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{group.description}</div>
+                          <Badge
+                            count={group.model_count}
+                            style={{ backgroundColor: '#667eea' }}
+                            showZero
+                            overflowCount={999}
+                          />
+                        </div>
                       </div>
-                    }
-                    description={
-                      <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>
-                        {model.provider} · {model.id}
-                      </div>
-                    }
-                  />
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#666', height: 36, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {model.description}
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
-                    {getCapabilityTags(model.capabilities)?.slice(0, 2)}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
-                    <span style={{ fontSize: 11, color: '#999' }}>输入</span>
-                    <span style={{ fontSize: 13, color: '#1890ff', fontWeight: 500 }}>
-                      {formatPrice(model.input_price)}
-                    </span>
-                  </div>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        </TabPane>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            )
+          }
+        ]}
+      />
 
-        <TabPane tab="分组浏览" key="2">
-          <Row gutter={[16, 16]}>
-            {groups.map(group => (
-              <Col xs={24} sm={12} lg={8} key={group.id}>
-                <Card
-                  hoverable
-                  onClick={() => { setGroupFilter(group.id); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 8,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontSize: 24
-                    }}>
-                      <RobotOutlined />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600 }}>{group.name}</div>
-                      <div style={{ fontSize: 12, color: '#999' }}>{group.description}</div>
-                      <div style={{ fontSize: 12, color: '#1890ff' }}>{group.model_count} 个模型</div>
-                    </div>
-                  </div>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-        </TabPane>
-      </Tabs>
-
+      {/* Detail Drawer */}
       <Drawer
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>{selectedModel?.name}</span>
-            {selectedModel?.is_trial && <Tag color="green">支持试用</Tag>}
+            <span style={{ fontWeight: 600 }}>{selectedModel?.name}</span>
+            {selectedModel?.is_trial && (
+              <Tag style={{ background: '#f6ffed', color: '#52c41a', border: 'none', borderRadius: 4 }}>支持试用</Tag>
+            )}
             {selectedModel?.sla && (
-              <Tag color={getSLAColor(selectedModel.sla)} icon={getSLAIcon(selectedModel.sla)}>
+              <Tag
+                style={{
+                  background: `${getSLAColor(selectedModel.sla)}15`,
+                  color: getSLAColor(selectedModel.sla),
+                  border: 'none',
+                  borderRadius: 4
+                }}
+              >
                 {selectedModel.sla === 'enterprise' ? '企业版' : selectedModel.sla === 'premium' ? '高级版' : '标准版'}
               </Tag>
             )}
@@ -322,20 +570,35 @@ const ModelMarket: React.FC = () => {
       >
         {selectedModel && (
           <div>
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="模型ID">{selectedModel.id}</Descriptions.Item>
+            <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="模型ID">
+                <code style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>{selectedModel.id}</code>
+              </Descriptions.Item>
               <Descriptions.Item label="提供商">{selectedModel.provider}</Descriptions.Item>
-              <Descriptions.Item label="类型">{selectedModel.model_type}</Descriptions.Item>
+              <Descriptions.Item label="类型">
+                <Tag style={{ borderRadius: 4 }}>{selectedModel.model_type}</Tag>
+              </Descriptions.Item>
               <Descriptions.Item label="上下文长度">{selectedModel.context_len.toLocaleString()} tokens</Descriptions.Item>
-              <Descriptions.Item label="输入价格">{formatPrice(selectedModel.input_price)}</Descriptions.Item>
-              <Descriptions.Item label="输出价格">{formatPrice(selectedModel.output_price)}</Descriptions.Item>
-              {selectedModel.is_trial && selectedModel.trial_quota && (
-                <Descriptions.Item label="试用额度">{formatQuota(selectedModel.trial_quota)} tokens</Descriptions.Item>
-              )}
+              <Descriptions.Item label="输入价格">
+                <span style={{ color: '#667eea', fontWeight: 500 }}>{formatPrice(selectedModel.input_price)}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="输出价格">
+                <span style={{ color: '#764ba2', fontWeight: 500 }}>{formatPrice(selectedModel.output_price)}</span>
+              </Descriptions.Item>
             </Descriptions>
 
+            <Card title="能力" style={{ marginBottom: 16, borderRadius: 12 }} styles={{ body: { padding: 12 } }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {getCapabilityTags(selectedModel.capabilities)}
+              </div>
+            </Card>
+
             {selectedModel.is_trial && (
-              <Card title="试用功能" style={{ marginTop: 16 }}>
+              <Card
+                title="试用功能"
+                style={{ marginBottom: 16, borderRadius: 12 }}
+                styles={{ header: { borderRadius: '12px 12px 0 0' } }}
+              >
                 {trialInfo ? (
                   trialInfo.available ? (
                     <div>
@@ -343,14 +606,15 @@ const ModelMarket: React.FC = () => {
                         title="剩余试用额度"
                         value={formatQuota(trialInfo.quota_limit - trialInfo.quota_used)}
                         suffix="tokens"
+                        valueStyle={{ color: '#52c41a' }}
                       />
-                      <div style={{ marginTop: 16 }}>
-                        <Button type="primary" disabled>已开启试用</Button>
-                      </div>
+                      <Button type="primary" disabled style={{ marginTop: 16, borderRadius: 8 }}>
+                        已开启试用
+                      </Button>
                     </div>
                   ) : (
                     <div>
-                      <p style={{ color: '#666' }}>试用状态: {trialInfo.reason}</p>
+                      <p style={{ color: '#8c8c8c', marginBottom: 12 }}>试用状态: {trialInfo.reason}</p>
                       {trialInfo.quota_used > 0 && (
                         <Statistic
                           title="已使用"
@@ -362,10 +626,15 @@ const ModelMarket: React.FC = () => {
                   )
                 ) : (
                   <div>
-                    <p style={{ color: '#666', marginBottom: 16 }}>
-                      该模型支持试用，您将获得 {formatQuota(selectedModel.trial_quota || 0)} tokens 的免费试用额度。
+                    <p style={{ color: '#595959', marginBottom: 16 }}>
+                      该模型支持试用，您将获得 <strong>{formatQuota(selectedModel.trial_quota || 0)} tokens</strong> 的免费试用额度。
                     </p>
-                    <Button type="primary" loading={trialLoading} onClick={handleStartTrial}>
+                    <Button
+                      type="primary"
+                      loading={trialLoading}
+                      onClick={handleStartTrial}
+                      style={{ borderRadius: 8, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}
+                    >
                       开启试用
                     </Button>
                   </div>
@@ -373,41 +642,55 @@ const ModelMarket: React.FC = () => {
               </Card>
             )}
 
-            <Card title="能力标签" style={{ marginTop: 16 }}>
-              {getCapabilityTags(selectedModel.capabilities) || '无'}
-            </Card>
-
-            <Card title="价格计算器" style={{ marginTop: 16 }}>
-              <div style={{ display: 'flex', gap: 16 }}>
+            <Card
+              title="价格计算器"
+              style={{ marginBottom: 16, borderRadius: 12 }}
+              styles={{ header: { borderRadius: '12px 12px 0 0' } }}
+            >
+              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: 8, color: '#666' }}>输入Token数</div>
+                  <div style={{ marginBottom: 6, color: '#8c8c8c', fontSize: 12 }}>输入Token数</div>
                   <Input
                     type="number"
                     placeholder="如: 1000"
+                    style={{ borderRadius: 8 }}
                     onChange={(e) => calcPrice(Number(e.target.value), priceCalc?.completion_tokens || 0)}
                   />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: 8, color: '#666' }}>输出Token数</div>
+                  <div style={{ marginBottom: 6, color: '#8c8c8c', fontSize: 12 }}>输出Token数</div>
                   <Input
                     type="number"
                     placeholder="如: 500"
+                    style={{ borderRadius: 8 }}
                     onChange={(e) => calcPrice(priceCalc?.prompt_tokens || 0, Number(e.target.value))}
                   />
                 </div>
               </div>
               {priceCalc && (
-                <div style={{ marginTop: 16, textAlign: 'center' }}>
-                  <div style={{ fontSize: 14, color: '#666' }}>预计消耗额度</div>
-                  <div style={{ fontSize: 32, fontWeight: 600, color: '#1890ff' }}>
+                <div style={{ textAlign: 'center', padding: '16px 0', background: '#f9f0ff', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>预计消耗额度</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#722ed1' }}>
                     {priceCalc.quota_cost.toLocaleString()}
                   </div>
                 </div>
               )}
             </Card>
 
-            <Card title="使用说明" style={{ marginTop: 16 }}>
-              <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, fontSize: 12 }}>
+            <Card
+              title="使用示例"
+              style={{ borderRadius: 12 }}
+              styles={{ header: { borderRadius: '12px 12px 0 0' } }}
+            >
+              <pre style={{
+                background: '#1a1a2e',
+                color: '#e0e0e0',
+                padding: 16,
+                borderRadius: 8,
+                fontSize: 12,
+                fontFamily: 'Monaco, Consolas, monospace',
+                overflow: 'auto'
+              }}>
 {`import openai
 openai.api_key = "your-api-key"
 openai.api_base = "https://your-domain.com/v1"

@@ -95,6 +95,8 @@ export interface TopupOrder {
   pay_method: string
   created_at: number
   paid_at?: number
+  payment_url?: string
+  expired_at?: number
 }
 
 export interface Invoice {
@@ -296,8 +298,24 @@ export const getUserInfo = () =>
 export const login = (data: { username: string; password: string }) =>
   api.post('/user/login', data)
 
+export const register = (data: {
+  username: string
+  email: string
+  password: string
+  email_code?: string
+  invitation_code?: string
+}) => api.post('/user/register', data)
+
 export const logout = () =>
   api.get('/user/logout')
+
+export const sendEmailCode = (email: string, type: 'register' | 'reset' = 'register') => {
+  const endpoint = type === 'register' ? '/verification' : '/reset_password'
+  return api.get(endpoint, { params: { email } })
+}
+
+export const resetPassword = (data: { email: string; code: string; password: string }) =>
+  api.post('/user/reset', data)
 
 // Ops API functions
 export const getOpsStats = () =>

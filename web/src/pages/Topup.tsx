@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, InputNumber, Select, Button, Table, Tag, Modal, message, Spin, Result } from 'antd'
-import { YuanOutlined, WechatOutlined, AlipayOutlined, CreditCardOutlined } from '@antdesign/icons'
+import { Row, Col, Card, InputNumber, Select, Button, Table, Tag, Modal, message, Result } from 'antd'
+import { WechatOutlined, AlipayOutlined, CreditCardOutlined } from '@ant-design/icons'
 import { getTopupOrders, createTopupOrder, cancelTopupOrder, TopupOrder } from '../services/api'
 
 const { Option } = Select
@@ -148,7 +148,7 @@ const Topup: React.FC = () => {
                 max={100000}
                 value={amount}
                 onChange={(v) => setAmount(v || 0)}
-                prefix={<YuanOutlined />}
+                prefix="¥"
                 formatter={(value) => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                 parser={(value) => value!.replace(/¥\s?|(,*)/g, '') as any}
               />
@@ -244,7 +244,7 @@ const Topup: React.FC = () => {
             extra={[
               <p key="amount">充值金额: <strong>¥{createdOrder.amount}</strong></p>,
               <p key="quota">获得额度: <strong>{createdOrder.quota.toLocaleString()} quota</strong></p>,
-              <p key="expire">请在 {new Date(createdOrder.expired_at * 1000).toLocaleString()} 前完成支付</p>
+              <p key="expire">请在 {createdOrder.expired_at ? new Date(createdOrder.expired_at * 1000).toLocaleString() : '24小时内'} 前完成支付</p>
             ]}
           />
         )}
