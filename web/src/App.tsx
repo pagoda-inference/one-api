@@ -152,14 +152,16 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           borderBottom: '1px solid #f0f0f0'
         }}>
           {collapsed ? (
-            <Logo />
+            <div style={{ width: 32, height: 32, overflow: 'hidden', borderRadius: 6 }}>
+              <Logo width={90} height={32} />
+            </div>
           ) : (
             <div style={{
               display: 'flex',
               alignItems: 'center',
               gap: 10
             }}>
-              <Logo />
+              <Logo width={100} height={28} />
               <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>BEDI 宝塔</span>
             </div>
           )}
