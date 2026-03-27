@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: one-api-ingress
+  namespace: baota
+  labels:
+    app: one-api
+    skyview/ic-name: one-api-ingress-controller
+    skyview/ic-type: nginx-ingress-controller
+  annotations:
+    kubernetes.io/ingress.class: nginx-ingress-controller
+    nginx.ingress.harmonycloud.cn/rewrite-params: '{"isOpen":false,"url":null,"regular":null}'
+spec:
+  rules:
+    # 修改为你的域名
+    - host: one-api.your-domain.com
+      http:
+        paths:
+          - backend:
+              service:
+                name: one-api
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+status:
+  loadBalancer:
+    ingress:
+      - ip: 10.1.112.237

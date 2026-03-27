@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: one-api-config
+  namespace: baota
+data:
+  # Server
+  PORT: "3000"
+  GIN_MODE: "release"
+  TZ: "Asia/Shanghai"
+
+  # Database (PostgreSQL) - 密码从 Secret 注入
+  SQL_DSN: "host=10.1.112.239 port=34001 user=postgres password=${ONEAPI_DB_PASSWORD} dbname=baota-one-api-sql sslmode=disable"
+
+  # Redis - 密码从 Secret 注入
+  REDIS_CONN_STRING: "redis://:${ONEAPI_REDIS_PASSWORD}@10.1.112.239:34000"
+  MEMORY_CACHE_ENABLED: "true"
+
+  # Session
+  SESSION_SECRET: "ONEAPI_SESSION_SECRET"
+
+  # OAuth - Feishu
+  LarkClientId: "cli_a94c9bd14ef95bd2"
+  # LarkClientSecret is in Secret
+
+  # Security - 关闭密码登录，仅使用飞书SSO
+  PasswordLoginEnabled: "false"
+  PasswordRegisterEnabled: "false"
+  RegisterEnabled: "false"
+  EmailVerificationEnabled: "false"
+
+  # Theme
+  THEME: "default"
+
+  # Rate Limit
+  GLOBAL_API_RATE_LIMIT: "480"
+  GLOBAL_WEB_RATE_LIMIT: "240"

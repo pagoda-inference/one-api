@@ -1,0 +1,65 @@
+# One API K8s 部署配置
+# =====================
+
+# 镜像配置
+image:
+  repository: registry.your-company.com/one-api
+  tag: latest
+  pullPolicy: Always
+
+# 副本数
+replicaCount: 2
+
+# 服务配置
+service:
+  type: ClusterIP  # 或 LoadBalancer
+  port: 80
+
+# Ingress 配置
+ingress:
+  enabled: true
+  className: nginx
+  host: one-api.your-domain.com
+  # tls: true  # 启用 TLS (需要 cert-manager)
+
+# 数据库配置 (使用外部 RDS 时填写)
+externalDatabase:
+  enabled: true
+  # host: rm-xxxxx.mysql.rds.aliyuncs.com
+  # port: 3306
+
+# Redis 配置 (使用外部 Redis 时填写)
+externalRedis:
+  enabled: true
+  # host: redis-xxxxx.redis.rds.aliyuncs.com
+  # port: 6379
+
+# 飞书 OAuth 配置
+feishu:
+  enabled: true
+  # clientId: cli_xxxxx
+  # clientSecret: (使用 Secret)
+
+# 资源配置
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+# 健康检查
+livenessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 5
+
+# 持久化存储
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: ""  # 使用默认 StorageClass

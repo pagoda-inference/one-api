@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: one-api
+  namespace: baota
+  labels:
+    app: one-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: one-api
+  template:
+    metadata:
+      labels:
+        app: one-api
+    spec:
+      # 不要指定imagePullSecrets！此处有默认secret
+      containers:
+        - name: one-api
+          # 镜像地址 - 修改为你的镜像tag
+          image: 10.1.112.238:8443/baota/one-api:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: one-api-config
+            - secretRef:
+                name: one-api-secret
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: one-api-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: one-api
+  namespace: baota
+  labels:
+    app: one-api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 3000
+      name: http
+  selector:
+    app: one-api
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: one-api-data
+  namespace: baota
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

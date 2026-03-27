@@ -131,24 +131,30 @@ const ModelMarket: React.FC = () => {
     }
   }
 
-  const getModelLogo = (modelName: string, provider?: string) => {
+  const getModelLogo = (model: Model) => {
+    // 优先使用模型配置的 icon_url
+    if (model.icon_url) {
+      return model.icon_url.startsWith('http') ? model.icon_url : model.icon_url
+    }
+
+    // Fallback to logos.json matching
     if (!logoConfig) return null
 
     // 先尝试精确匹配模型名
-    if (logoConfig.models[modelName]) {
-      return `/logos/${logoConfig.models[modelName]}`
+    if (logoConfig.models[model.name]) {
+      return `/logos/${logoConfig.models[model.name]}`
     }
 
     // 再尝试模糊匹配（包含关系）
     for (const [key, value] of Object.entries(logoConfig.models)) {
-      if (modelName.includes(key) || key.includes(modelName)) {
+      if (model.name.includes(key) || key.includes(model.name)) {
         return `/logos/${value}`
       }
     }
 
     // 用 provider 的 logo
-    if (provider && logoConfig._providers[provider]) {
-      return `/logos/${logoConfig._providers[provider]}`
+    if (model.provider && logoConfig._providers[model.provider]) {
+      return `/logos/${logoConfig._providers[model.provider]}`
     }
 
     return null
@@ -283,9 +289,9 @@ const ModelMarket: React.FC = () => {
       styles={{ body: { padding: 16 } }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        {getModelLogo(model.name, model.provider) ? (
+        {getModelLogo(model) ? (
           <img
-            src={getModelLogo(model.name, model.provider)!}
+            src={getModelLogo(model)!}
             alt={model.name}
             style={{
               width: 44,
@@ -314,8 +320,8 @@ const ModelMarket: React.FC = () => {
           color: '#fff',
           fontSize: 18,
           flexShrink: 0,
-          ...(getModelLogo(model.name, model.provider) ? { display: 'none' } : {})
-        }} className={getModelLogo(model.name, model.provider) ? 'hidden' : ''}>
+          ...(getModelLogo(model) ? { display: 'none' } : {})
+        }} className={getModelLogo(model) ? 'hidden' : ''}>
           {getModelIcon(model.model_type)}
         </div>
 
@@ -405,9 +411,9 @@ const ModelMarket: React.FC = () => {
       styles={{ body: { padding: '12px 16px' } }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        {getModelLogo(model.name, model.provider) ? (
+        {getModelLogo(model) ? (
           <img
-            src={getModelLogo(model.name, model.provider)!}
+            src={getModelLogo(model)!}
             alt={model.name}
             style={{
               width: 36,
@@ -433,8 +439,8 @@ const ModelMarket: React.FC = () => {
           justifyContent: 'center',
           color: '#fff',
           fontSize: 16,
-          ...(getModelLogo(model.name, model.provider) ? { display: 'none' } : {})
-        }} className={getModelLogo(model.name, model.provider) ? 'hidden' : ''}>
+          ...(getModelLogo(model) ? { display: 'none' } : {})
+        }} className={getModelLogo(model) ? 'hidden' : ''}>
           {getModelIcon(model.model_type)}
         </div>
 
