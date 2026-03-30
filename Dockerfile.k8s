@@ -32,9 +32,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-COPY --from=frontend /app/dist ./web/build
+# Vite outputs to dist/, but main.go embeds web/build/*
+RUN cp -r /app/dist ./web/build
 
-# Embed frontend build into binary
+# Build Go binary
 RUN go build -trimpath -ldflags "\
     -s -w \
     -X 'github.com/pagoda-inference/one-api/common.Version=dev' \
