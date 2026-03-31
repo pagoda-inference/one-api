@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pagoda-inference/one-api/common"
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
 	"github.com/pagoda-inference/one-api/middleware"
@@ -226,7 +227,7 @@ func GetOpsUsage(c *gin.Context) {
 	}
 
 	// Get all users with usage
-	users, _ := model.GetAllUsers(1000, 0)
+	users, _ := model.GetAllUsers(0, 1000, "")
 	userUsageMap := make(map[int]*UserUsage)
 
 	for _, u := range users {
@@ -237,9 +238,7 @@ func GetOpsUsage(c *gin.Context) {
 	}
 
 	// Aggregate usage
-	for _, m := range modelStats {
-		// This is a simplified version - in production you'd want proper aggregation
-	}
+	_ = modelStats // Avoid unused variable warning
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -284,10 +283,10 @@ func GetChannelHealth(c *gin.Context) {
 		info := &ChannelHealthInfo{
 			Id:         ch.Id,
 			Name:       ch.Name,
-			Status:     ch.Status,
+			Status:     strconv.Itoa(ch.Status),
 			Type:       ch.Type,
 			BaseURL:    ch.GetBaseURL(),
-			Priority:   ch.Priority,
+			Priority:   int(ch.GetPriority()),
 			IsEnabled:  ch.Status == model.ChannelStatusEnabled,
 		}
 
@@ -345,7 +344,7 @@ func GetOpsUsers(c *gin.Context) {
 		offset = 0
 	}
 
-	users, err := model.GetAllUsers(limit, offset)
+	users, err := model.GetAllUsers(limit, offset, "")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to get users"})
 		return
@@ -445,7 +444,7 @@ func GetSystemHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"uptime":        time.Since(startTime).Seconds(),
+			"uptime":        time.Since(time.Unix(common.StartTime, 0)).Seconds(),
 			"queue":         queueStats,
 			"channels":      channelStats,
 			"circuit_breakers": cbStats,

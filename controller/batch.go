@@ -880,7 +880,7 @@ func processBatchLine(ctx context.Context, line string, lineNum int, batch *mode
 	}
 
 	// Get token for authentication
-	token, err := model.GetTokenById(batch.TokenId)
+	_, err := model.GetTokenById(batch.TokenId)
 	if err != nil {
 		return "", fmt.Errorf("token not found: %v", err)
 	}

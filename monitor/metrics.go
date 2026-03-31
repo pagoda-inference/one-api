@@ -8,7 +8,6 @@ import (
 
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/middleware"
-	"github.com/pagoda-inference/one-api/model"
 )
 
 // MetricType represents the type of metric

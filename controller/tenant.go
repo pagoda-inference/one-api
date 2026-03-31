@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
-	"github.com/pagoda-inference/one-api/common/helper"
 	"github.com/pagoda-inference/one-api/model"
 )
 
@@ -386,8 +385,8 @@ func AllocateUserQuotaAPI(c *gin.Context) {
 	}
 
 	// Update tenant used quota
-	model.DB().Model(&model.Tenant{}).Where("id = ?", tenantId).
-		Update("quota_used", model.DB().Raw("quota_used + ?", req.Quota))
+	model.DB.Model(&model.Tenant{}).Where("id = ?", tenantId).
+		Update("quota_used", model.DB.Raw("quota_used + ?", req.Quota))
 
 	// Record audit log
 	model.RecordAuditLog(tenantId, userId, ActionAllocQuota, "user", req.TargetUserId,

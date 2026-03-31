@@ -427,7 +427,7 @@ func GetUserDashboardV2(c *gin.Context) {
 		return
 	}
 
-	user, err := model.GetUserById(userId)
+	user, err := model.GetUserById(userId, true)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -441,7 +441,7 @@ func GetUserDashboardV2(c *gin.Context) {
 	marketStats, _ := model.GetModelMarketStats()
 
 	// Get recent tokens
-	tokens, _ := model.GetUserTokens(userId, 5, 0)
+	tokens, _ := model.GetAllUserTokens(userId, 0, 5, "")
 
 	// Get recent orders
 	orders, _ := model.GetUserTopupOrders(userId, "", 5, 0)

@@ -31,15 +31,15 @@ func AutoMigrateModel() error {
 	return DB.AutoMigrate(&Model{})
 }
 
-// GetAllModels 获取所有模型
-func GetAllModels() ([]Model, error) {
+// GetAllAdminModels 获取所有模型（管理员用）
+func GetAllAdminModels() ([]Model, error) {
 	var models []Model
 	err := DB.Order("sort_order ASC, created_time DESC").Find(&models).Error
 	return models, err
 }
 
-// GetModelById 根据ID获取模型
-func GetModelById(id string) (*Model, error) {
+// GetAdminModelById 根据ID获取模型（管理员用）
+func GetAdminModelById(id string) (*Model, error) {
 	var model Model
 	err := DB.First(&model, "id = ?", id).Error
 	if err != nil {
@@ -63,16 +63,16 @@ func DeleteModel(id string) error {
 	return DB.Delete(&Model{}, "id = ?", id).Error
 }
 
-// GetModelsByStatus 根据状态获取模型
-func GetModelsByStatus(status string) ([]Model, error) {
+// GetAdminModelsByStatus 根据状态获取模型
+func GetAdminModelsByStatus(status string) ([]Model, error) {
 	var models []Model
 	err := DB.Where("status = ?", status).Order("sort_order ASC").Find(&models).Error
 	return models, err
 }
 
-// GetActiveModels 获取所有上线模型
-func GetActiveModels() ([]Model, error) {
-	return GetModelsByStatus("active")
+// GetAdminActiveModels 获取所有上线模型
+func GetAdminActiveModels() ([]Model, error) {
+	return GetAdminModelsByStatus("active")
 }
 
 // UpdateModelStatus 更新模型状态

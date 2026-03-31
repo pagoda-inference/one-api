@@ -232,8 +232,8 @@ func AdminGetUsageSummary(c *gin.Context) {
 
 // AdminGetUsageByUser handles GET /api/admin/usage/by-user (admin only)
 func AdminGetUsageByUser(c *gin.Context) {
-	startTimestamp := parseTimestamp(c.Query("start"))
-	endTimestamp := parseTimestamp(c.Query("end"))
+	_ = c.Query("start")
+	_ = c.Query("end")
 
 	// This would require a more complex query to group by user
 	// For now, return a placeholder

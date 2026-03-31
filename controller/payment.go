@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
-	"github.com/pagoda-inference/one-api/common/helper"
 	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
 )
@@ -519,13 +518,13 @@ func handlePaymentSuccess(order *model.TopupOrder, payOrderId string) error {
 	}
 
 	// Add quota to user
-	user, err := model.GetUserById(order.UserId)
+	user, err := model.GetUserById(order.UserId, true)
 	if err != nil {
 		return err
 	}
 
 	user.Quota += order.Quota
-	if err := user.Update(); err != nil {
+	if err := user.Update(true); err != nil {
 		return err
 	}
 

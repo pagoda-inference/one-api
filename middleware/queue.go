@@ -100,7 +100,7 @@ func InitRequestQueue() {
 	}
 
 	globalRequestQueue = NewRequestQueue(maxConcurrent, timeout)
-	logger.SysLog("request queue initialized: max_concurrent=%d, timeout=%v", maxConcurrent, timeout)
+	logger.SysLogf("request queue initialized: max_concurrent=%d, timeout=%v", maxConcurrent, timeout)
 }
 
 // GetRequestQueue returns the global request queue instance

@@ -2,6 +2,8 @@ package model
 
 import (
 	"time"
+
+	"github.com/pagoda-inference/one-api/common/helper"
 )
 
 const (

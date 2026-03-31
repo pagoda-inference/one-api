@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/logger"
-	"github.com/pagoda-inference/one-api/controller"
 	"net/http"
 	"os"
 	"strings"

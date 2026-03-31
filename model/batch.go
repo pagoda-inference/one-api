@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pagoda-inference/one-api/common/helper"
+	"github.com/pagoda-inference/one-api/common/random"
 )
 
 // BatchFile represents a file uploaded for batch processing
@@ -161,7 +162,7 @@ func (b *Batch) Create() error {
 
 // GenerateBatchId generates a unique batch ID
 func GenerateBatchId() string {
-	return "batch-" + helper.GetRandomString(24)
+	return "batch-" + random.GetRandomString(24)
 }
 
 // GetBatchById retrieves a batch by ID

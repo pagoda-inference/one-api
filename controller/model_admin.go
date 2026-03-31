@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -33,9 +32,9 @@ type UploadLogoResponse struct {
 	Url string `json:"url"`
 }
 
-// ListModels 获取所有模型
-func ListModels(c *gin.Context) {
-	models, err := model.GetAllModels()
+// AdminListModels 获取所有模型
+func AdminListModels(c *gin.Context) {
+	models, err := model.GetAllAdminModels()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -53,7 +52,7 @@ func ListModels(c *gin.Context) {
 // GetModel 获取单个模型
 func GetModel(c *gin.Context) {
 	id := c.Param("id")
-	m, err := model.GetModelById(id)
+	m, err := model.GetAdminModelById(id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -131,7 +130,7 @@ func UpdateModel(c *gin.Context) {
 		return
 	}
 
-	m, err := model.GetModelById(id)
+	m, err := model.GetAdminModelById(id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

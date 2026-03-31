@@ -15,8 +15,6 @@ import (
 	"github.com/pagoda-inference/one-api/common"
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/logger"
-	"github.com/pagoda-inference/one-api/common/random"
-	"github.com/pagoda-inference/one-api/monitor"
 )
 
 var (
@@ -255,15 +253,7 @@ func CacheGetRandomSatisfiedChannel(group string, model string, ignoreFirstPrior
 		filteredChannels = channels[endIdx:]
 	}
 
-	// Use weighted load balancer if enabled
-	if config.EnableWeightedLoadBalancing {
-		selected := monitor.SelectChannelWithWeight(filteredChannels)
-		if selected != nil {
-			return selected, nil
-		}
-	}
-
-	// Fallback to simple random selection
+	// Use simple random selection
 	idx := rand.Intn(len(filteredChannels))
 	return filteredChannels[idx], nil
 }

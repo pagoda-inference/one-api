@@ -2,9 +2,11 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/pagoda-inference/one-api/common/helper"
+	"github.com/pagoda-inference/one-api/common/random"
 )
 
 // TopupOrder represents a top-up order
@@ -79,7 +81,7 @@ func (Invoice) TableName() string {
 // GenerateOrderId generates a unique order ID
 func GenerateOrderId(prefix string) string {
 	timestamp := time.Now().UnixNano()
-	return prefix + helper.GetRandomString(24-len(prefix)) + helper.FormatInt64(timestamp)[8:]
+	return prefix + random.GetRandomString(24-len(prefix)) + fmt.Sprintf("%d", timestamp)[8:]
 }
 
 // CreateTopupOrder creates a new top-up order

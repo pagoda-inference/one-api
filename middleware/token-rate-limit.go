@@ -229,22 +229,22 @@ func estimateTokensFromRequest(c *gin.Context) int {
 	}
 
 	if err := json.Unmarshal(body, &request); err == nil {
-		totalTokens := 0
+		totalTokens := int64(0)
 
 		// Estimate tokens from messages (roughly 4 chars per token)
 		for _, msg := range request.Messages {
-			totalTokens += len(msg.Content) / 4
+			totalTokens += int64(len(msg.Content) / 4)
 		}
 
 		// Add expected output tokens if specified
 		if request.MaxTokens > 0 {
-			totalTokens += request.MaxTokens
+			totalTokens += int64(request.MaxTokens)
 		} else {
 			// Default output estimate
 			totalTokens += config.PreConsumedQuota
 		}
 
-		return totalTokens
+		return int(totalTokens)
 	}
 
 	// Fallback: estimate based on body length

@@ -33,7 +33,7 @@ RUN go mod download
 
 COPY . .
 # Vite outputs to dist/, but main.go embeds web/build/*
-RUN cp -r /app/dist ./web/build
+COPY --from=frontend /app/dist ./web/build
 
 # Build Go binary
 RUN go build -trimpath -ldflags "\

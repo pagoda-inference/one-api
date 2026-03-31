@@ -2,7 +2,6 @@ package model
 
 import (
 	"errors"
-	"time"
 
 	"github.com/pagoda-inference/one-api/common/helper"
 )
@@ -388,9 +387,8 @@ func UseModelTrial(userId int, modelId string, tenantId int, quota int64) error 
 	if err != nil {
 		// Create new trial record
 		model, _ := GetModelById(modelId)
-		trialQuota := int64(1000000) // Default 1M quota if not specified
 		if model != nil && model.TrialQuota > 0 {
-			trialQuota = model.TrialQuota
+			// Could use model.TrialQuota here if ModelTrial had a Quota field
 		}
 		trial = ModelTrial{
 			UserId:    userId,

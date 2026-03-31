@@ -137,7 +137,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.GET("/reports/export", controller.ExportReport)
 
 			// Model management routes
-			adminRoute.GET("/models", controller.ListModels)
+			adminRoute.GET("/models", controller.AdminListModels)
 			adminRoute.GET("/models/types", controller.GetModelTypes)
 			adminRoute.GET("/models/statuses", controller.GetModelStatuses)
 			adminRoute.GET("/models/:id", controller.GetModel)

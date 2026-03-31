@@ -40,6 +40,14 @@ type Channel struct {
 	SystemPrompt       *string `json:"system_prompt" gorm:"type:text"`
 }
 
+// GetWeight returns the channel weight, defaulting to 1 if not set
+func (c *Channel) GetWeight() int {
+	if c.Weight == nil || *c.Weight == 0 {
+		return 1
+	}
+	return int(*c.Weight)
+}
+
 type ChannelConfig struct {
 	Region            string `json:"region,omitempty"`
 	SK                string `json:"sk,omitempty"`
