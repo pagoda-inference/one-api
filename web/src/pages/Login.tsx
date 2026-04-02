@@ -1,9 +1,24 @@
-import { Button } from 'antd'
+import { Button, message } from 'antd'
 import Logo from '../components/Logo'
 
 const Login: React.FC = () => {
-  const handleFeishuLogin = () => {
-    window.location.href = '/api/oauth/lark'
+  const handleFeishuLogin = async () => {
+    try {
+      // First get OAuth state from server
+      const stateRes = await fetch('/api/oauth/state')
+      const stateData = await stateRes.json()
+      if (!stateData.success || !stateData.data) {
+        message.error(stateData.message || '获取登录状态失败')
+        return
+      }
+      const state = stateData.data
+      // Redirect to Feishu OAuth
+      const redirectUri = `${window.location.origin}/oauth/lark`
+      const larkAuthUrl = `https://accounts.feishu.cn/open-apis/authen/v1/authorize?redirect_uri=${encodeURIComponent(redirectUri)}&client_id=cli_a94c9bd14ef95bd2&state=${state}`
+      window.location.href = larkAuthUrl
+    } catch (err) {
+      message.error('登录失败，请重试')
+    }
   }
 
   return (

@@ -6,7 +6,7 @@ import {
   BellOutlined, GlobalOutlined, LogoutOutlined, UserOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined, DatabaseOutlined
 } from '@ant-design/icons'
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import Logo from './components/Logo'
 
 import Dashboard from './pages/Dashboard'
@@ -19,8 +19,9 @@ import OpsDashboard from './pages/OpsDashboard'
 import ModelManagement from './pages/ModelManagement'
 import Teams from './pages/Teams'
 import Login from './pages/Login'
+import LarkOAuth from './pages/LarkOAuth'
 import ApiDocs from './pages/ApiDocs'
-import { getUserInfo, logout, User } from './services/api'
+import { logout, User } from './services/api'
 
 const { Content } = Layout
 
@@ -28,25 +29,19 @@ const { Content } = Layout
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation()
   const navigate = useNavigate()
-  const [user, setUser] = useState<User | null>(null)
-  const [collapsed, setCollapsed] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      const token = localStorage.getItem('access_token')
-      if (token) {
-        try {
-          const res = await getUserInfo()
-          setUser(res.data.data)
-        } catch (error) {
-          localStorage.removeItem('access_token')
-        }
+  // 同步从 localStorage 初始化，避免首次渲染时 user 为 null
+  const [user, setUser] = useState<User | null>(() => {
+    const userInfoStr = localStorage.getItem('user_info')
+    if (userInfoStr) {
+      try {
+        return JSON.parse(userInfoStr)
+      } catch (error) {
+        localStorage.removeItem('user_info')
       }
-      setLoading(false)
     }
-    fetchUser()
-  }, [])
+    return null
+  })
+  const [collapsed, setCollapsed] = useState(false)
 
   const handleLogout = async () => {
     try {
@@ -116,17 +111,6 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (hour < 18) return '下午好'
     if (hour < 22) return '晚上好'
     return '夜里好'
-  }
-
-  // Show loading
-  if (loading) {
-    return (
-      <Layout style={{ minHeight: '100vh', background: '#f5f7fa' }}>
-        <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          加载中...
-        </Content>
-      </Layout>
-    )
   }
 
   return (
@@ -269,6 +253,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/oauth/lark" element={<LarkOAuth />} />
         <Route path="/dashboard" element={<ProtectedPage><Dashboard /></ProtectedPage>} />
         <Route path="/market" element={<ProtectedPage><ModelMarket /></ProtectedPage>} />
         <Route path="/keys" element={<ProtectedPage><ApiKeys /></ProtectedPage>} />

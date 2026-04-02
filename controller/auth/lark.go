@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -25,6 +26,28 @@ type LarkOAuthResponse struct {
 type LarkUser struct {
 	Name   string `json:"name"`
 	OpenID string `json:"open_id"`
+	UserID string `json:"user_id"`
+	Openid string `json:"openid"`
+}
+
+// LarkUserInfoResponse wraps the user info in a "data" field
+type LarkUserInfoResponse struct {
+	Code int      `json:"code"`
+	Data LarkUser `json:"data"`
+}
+
+// getLarkID returns the actual Lark/OpenID, checking multiple possible field names
+func (u *LarkUser) getLarkID() string {
+	if u.OpenID != "" {
+		return u.OpenID
+	}
+	if u.UserID != "" {
+		return u.UserID
+	}
+	if u.Openid != "" {
+		return u.Openid
+	}
+	return ""
 }
 
 func getLarkUserInfoByCode(code string) (*LarkUser, error) {
@@ -58,25 +81,34 @@ func getLarkUserInfoByCode(code string) (*LarkUser, error) {
 	}
 	defer res.Body.Close()
 	var oAuthResponse LarkOAuthResponse
-	err = json.NewDecoder(res.Body).Decode(&oAuthResponse)
+	tokenBody, _ := io.ReadAll(res.Body)
+	logger.SysLogf("Lark token response: %s", string(tokenBody))
+	err = json.Unmarshal(tokenBody, &oAuthResponse)
 	if err != nil {
 		return nil, err
 	}
-	req, err = http.NewRequest("GET", "https://passport.feishu.cn/suite/passport/oauth/userinfo", nil)
+	if oAuthResponse.AccessToken == "" {
+		return nil, errors.New("飞书返回的 access_token 为空")
+	}
+	req, err = http.NewRequest("GET", fmt.Sprintf("https://open.feishu.cn/open-apis/authen/v1/user_info?access_token=%s", oAuthResponse.AccessToken), nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", oAuthResponse.AccessToken))
 	res2, err := client.Do(req)
 	if err != nil {
 		logger.SysLog(err.Error())
 		return nil, errors.New("无法连接至飞书服务器，请稍后重试！")
 	}
-	var larkUser LarkUser
-	err = json.NewDecoder(res2.Body).Decode(&larkUser)
+	var larkUserResp LarkUserInfoResponse
+	body, _ := io.ReadAll(res2.Body)
+	logger.SysLogf("Lark user info response body: %s", string(body))
+	err = json.Unmarshal(body, &larkUserResp)
 	if err != nil {
+		logger.SysLogf("Lark user info unmarshal error: %v", err)
 		return nil, err
 	}
+	larkUser := larkUserResp.Data
+	logger.SysLogf("Lark user info parsed: name=%s, openid=%s, user_id=%s, open_id=%s", larkUser.Name, larkUser.Openid, larkUser.UserID, larkUser.OpenID)
 	return &larkUser, nil
 }
 
@@ -106,7 +138,7 @@ func LarkOAuth(c *gin.Context) {
 		return
 	}
 	user := model.User{
-		LarkId: larkUser.OpenID,
+		LarkId: larkUser.getLarkID(),
 	}
 	if model.IsLarkIdAlreadyTaken(user.LarkId) {
 		err := user.FillUserByLarkId()
@@ -165,7 +197,7 @@ func LarkBind(c *gin.Context) {
 		return
 	}
 	user := model.User{
-		LarkId: larkUser.OpenID,
+		LarkId: larkUser.getLarkID(),
 	}
 	if model.IsLarkIdAlreadyTaken(user.LarkId) {
 		c.JSON(http.StatusOK, gin.H{
@@ -186,7 +218,7 @@ func LarkBind(c *gin.Context) {
 		})
 		return
 	}
-	user.LarkId = larkUser.OpenID
+	user.LarkId = larkUser.getLarkID()
 	err = user.Update(false)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

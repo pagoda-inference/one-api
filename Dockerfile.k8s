@@ -15,16 +15,14 @@ RUN npm run build
 FROM golang:alpine AS backend
 
 RUN apk add --no-cache \
-    gcc \
-    musl-dev \
-    sqlite-dev \
-    build-base \
     ca-certificates \
     tzdata
 
 ENV GO111MODULE=on \
-    CGO_ENABLED=1 \
-    GOOS=linux
+    CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64 \
+    GOPROXY=https://goproxy.cn,direct
 
 WORKDIR /build
 
@@ -32,15 +30,13 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-# Vite outputs to dist/, but main.go embeds web/build/*
-COPY --from=frontend /app/dist ./web/build
+# Copy pre-built frontend from frontend stage
+COPY --from=frontend /app/build/default ./web/build/default
 
 # Build Go binary
 RUN go build -trimpath -ldflags "\
     -s -w \
-    -X 'github.com/pagoda-inference/one-api/common.Version=dev' \
-    -linkmode external \
-    -extldflags '-static'" \
+    -X 'github.com/pagoda-inference/one-api/common.Version=dev'" \
     -o one-api
 
 # Stage 3: Final image

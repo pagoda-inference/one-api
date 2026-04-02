@@ -3,12 +3,14 @@ import axios from 'axios'
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
+  withCredentials: true,
 })
 
 // Add auth token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
-  if (token) {
+  // Only add Bearer token for real API keys (sk-), not for OAuth session tokens
+  if (token && token.startsWith('sk-')) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
@@ -19,8 +21,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token')
-      window.location.href = '/login'
+      const token = localStorage.getItem('access_token')
+      // Only clear and redirect for real API keys (sk-)
+      // OAuth session users rely on session cookie, not Bearer token
+      if (token && token.startsWith('sk-')) {
+        localStorage.removeItem('access_token')
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
