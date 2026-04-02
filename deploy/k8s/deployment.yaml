@@ -6,7 +6,7 @@ metadata:
   labels:
     app: one-api
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: one-api
@@ -27,8 +27,33 @@ spec:
           envFrom:
             - configMapRef:
                 name: one-api-config
-            - secretRef:
-                name: one-api-secret
+          env:
+            - name: SQL_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: one-api-secret
+                  key: SQL_DSN
+                  optional: false
+            - name: REDIS_CONN_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: one-api-secret
+                  key: REDIS_CONN_STRING
+                  optional: false
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: one-api-secret
+                  key: SESSION_SECRET
+                  optional: false
+            - name: LarkClientSecret
+              valueFrom:
+                secretKeyRef:
+                  name: one-api-secret
+                  key: LarkClientSecret
+                  optional: false
+            - name: TIKTOKEN_CACHE_DIR
+              value: "/data/tiktoken_cache"
           resources:
             requests:
               cpu: "100m"
@@ -40,14 +65,16 @@ spec:
             httpGet:
               path: /api/status
               port: 3000
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /api/status
               port: 3000
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 5
+            failureThreshold: 20
           volumeMounts:
             - name: data
               mountPath: /data
@@ -80,6 +107,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: nexdata-block
   resources:
     requests:
       storage: 5Gi

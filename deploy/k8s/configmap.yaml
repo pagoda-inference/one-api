@@ -6,18 +6,20 @@ metadata:
 data:
   # Server
   PORT: "3000"
+  SERVER_ADDRESS: "https://baotaAI.bedicloud.net"
   GIN_MODE: "release"
   TZ: "Asia/Shanghai"
 
-  # Database (PostgreSQL) - 密码从 Secret 注入
-  SQL_DSN: "host=10.1.112.239 port=34001 user=postgres password=${ONEAPI_DB_PASSWORD} dbname=baota-one-api-sql sslmode=disable"
+  # Database (PostgreSQL) - 使用占位符，会通过env注入
+  # 注意：DSN 必须以 postgres:// 开头才会被识别为 PostgreSQL
+  SQL_DSN: "postgres://postgres:PLACEHOLDER@10.1.112.239:34001/postgres?sslmode=require"
 
-  # Redis - 密码从 Secret 注入
-  REDIS_CONN_STRING: "redis://:${ONEAPI_REDIS_PASSWORD}@10.1.112.239:34000"
+  # Redis
+  REDIS_CONN_STRING: "redis://:PLACEHOLDER@10.1.112.239:34000"
   MEMORY_CACHE_ENABLED: "true"
 
-  # Session
-  SESSION_SECRET: "ONEAPI_SESSION_SECRET"
+  # Session - 使用占位符，会通过env注入
+  SESSION_SECRET: "PLACEHOLDER"
 
   # OAuth - Feishu
   LarkClientId: "cli_a94c9bd14ef95bd2"

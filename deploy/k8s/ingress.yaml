@@ -13,7 +13,7 @@ metadata:
 spec:
   rules:
     # 修改为你的域名
-    - host: one-api.your-domain.com
+    - host: baotaai.bedicloud.net
       http:
         paths:
           - backend:
