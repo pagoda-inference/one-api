@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Row, Col, Card, Table, Tabs, Badge, Button, Spin, Empty } from 'antd'
 import {
   DollarOutlined, ApiOutlined, RiseOutlined, TrophyOutlined,
@@ -9,6 +10,7 @@ import ReactECharts from 'echarts-for-react'
 import { getDashboard, getUsageByDay, getUsageByModel, getTokens, getMarketStats } from '../services/api'
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [usageData, setUsageData] = useState<any[]>([])
@@ -399,16 +401,16 @@ const Dashboard: React.FC = () => {
             styles={{ body: { padding: 16 } }}
           >
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-              <Button icon={<WalletOutlined />} block style={{ borderRadius: 8, height: 44 }}>
+              <Button icon={<WalletOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/topup')}>
                 充值
               </Button>
-              <Button icon={<LineChartOutlined />} block style={{ borderRadius: 8, height: 44 }}>
+              <Button icon={<LineChartOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/usage')}>
                 用量明细
               </Button>
-              <Button icon={<ThunderboltOutlined />} block style={{ borderRadius: 8, height: 44 }}>
+              <Button icon={<ThunderboltOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/keys')}>
                 创建Key
               </Button>
-              <Button icon={<ExperimentOutlined />} block style={{ borderRadius: 8, height: 44 }}>
+              <Button icon={<ExperimentOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/market')}>
                 模型试用
               </Button>
             </div>

@@ -291,13 +291,13 @@ export const createInvoice = (data: {
 }) => api.post('/invoice', data)
 
 export const getTokens = (params?: { limit?: number; offset?: number }) =>
-  api.get('/user/token', { params })
+  api.get('/token', { params })
 
 export const createToken = (data: { name: string; models?: string }) =>
-  api.post('/user/token', data)
+  api.post('/token', data)
 
 export const deleteToken = (id: number) =>
-  api.delete(`/user/token/${id}`)
+  api.delete(`/token/${id}`)
 
 export const getUserInfo = () =>
   api.get('/user/self')

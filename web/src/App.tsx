@@ -208,10 +208,12 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <Badge count={99} size="small">
+            {/* TODO: 接通通知接口 */}
+            <Badge count={0} size="small">
               <Button type="text" icon={<BellOutlined />} style={{ fontSize: 16 }} />
             </Badge>
-            <Button type="text" icon={<GlobalOutlined />} style={{ fontSize: 16 }} />
+            {/* TODO: 后续支持多语言 */}
+            <Button type="text" icon={<GlobalOutlined />} style={{ fontSize: 16 }} disabled />
 
             <Dropdown
               menu={{ items: userMenuItems, onClick: onUserMenuClick }}
