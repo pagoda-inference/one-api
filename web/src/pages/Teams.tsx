@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Table, Button, Modal, Form, Input, Select, Tag, Space, message, Popconfirm, Tabs, Statistic } from 'antd'
+import { Row, Col, Card, Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, message, Popconfirm, Tabs, Statistic } from 'antd'
 import { TeamOutlined, UserOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, AuditOutlined } from '@ant-design/icons'
-import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, Tenant, TenantUser, AuditLog } from '../services/api'
+import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, getOpsUsers, Tenant, TenantUser, AuditLog, getAllCompanies, getDepartments, createCompany, createDepartment, Company, Department } from '../services/api'
 
 const { Option } = Select
 const { TabPane } = Tabs
@@ -13,16 +13,65 @@ const Teams: React.FC = () => {
   const [users, setUsers] = useState<TenantUser[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [createModalVisible, setCreateModalVisible] = useState(false)
+  const [createCompanyModalVisible, setCreateCompanyModalVisible] = useState(false)
+  const [createDeptModalVisible, setCreateDeptModalVisible] = useState(false)
   const [inviteModalVisible, setInviteModalVisible] = useState(false)
   const [quotaModalVisible, setQuotaModalVisible] = useState(false)
   const [currentRole, setCurrentRole] = useState<number>(2)
   const [createForm] = Form.useForm()
+  const [createCompanyForm] = Form.useForm()
+  const [createDeptForm] = Form.useForm()
   const [inviteForm] = Form.useForm()
   const [quotaForm] = Form.useForm()
+  const [allUsers, setAllUsers] = useState<any[]>([])
+  const [userSearchLoading, setUserSearchLoading] = useState(false)
+  // Company/Department hierarchy
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
+  const [isRoot, setIsRoot] = useState(false)
 
   useEffect(() => {
     loadTenants()
+    loadCompanies()
   }, [])
+
+  const loadCompanies = async () => {
+    try {
+      const res = await getAllCompanies()
+      if (res.data.success) {
+        setCompanies(res.data.data || [])
+        // Root user can see company management even if no companies exist yet
+        setIsRoot(true)
+        if (res.data.data && res.data.data.length > 0) {
+          setSelectedCompanyId(res.data.data[0].id)
+          loadDepartments(res.data.data[0].id)
+        }
+      } else {
+        // API returned success:false, user is not root
+        setIsRoot(false)
+      }
+    } catch (error) {
+      console.error('Failed to load companies:', error)
+      setIsRoot(false)
+    }
+  }
+
+  const loadDepartments = async (companyId: number) => {
+    try {
+      const res = await getDepartments(companyId)
+      if (res.data.success) {
+        setDepartments(res.data.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to load departments:', error)
+    }
+  }
+
+  const handleCompanyChange = (companyId: number) => {
+    setSelectedCompanyId(companyId)
+    loadDepartments(companyId)
+  }
 
   const loadTenants = async () => {
     try {
@@ -68,28 +117,91 @@ const Teams: React.FC = () => {
     }
   }
 
-  const handleCreateTenant = async (values: { name: string; code: string }) => {
+  const handleCreateTenant = async (values: { name: string; code: string; company_id?: number; department_id?: number }) => {
     try {
-      await createTenant(values)
-      message.success('团队创建成功')
-      setCreateModalVisible(false)
-      createForm.resetFields()
-      loadTenants()
+      const res = await createTenant(values)
+      if (res.data.success) {
+        message.success('团队创建成功')
+        setCreateModalVisible(false)
+        createForm.resetFields()
+        loadTenants()
+      } else {
+        message.error(res.data.message || '创建失败')
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '创建失败')
+    }
+  }
+
+  const handleCreateCompany = async (values: { name: string; code: string; description?: string }) => {
+    try {
+      const res = await createCompany(values)
+      if (res.data.success) {
+        message.success('公司创建成功')
+        setCreateCompanyModalVisible(false)
+        loadCompanies()
+      } else {
+        message.error(res.data.message || '创建失败')
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '创建失败')
+    }
+  }
+
+  const handleCreateDepartment = async (values: { name: string; code?: string; description?: string }) => {
+    if (!selectedCompanyId) return
+    try {
+      const res = await createDepartment(selectedCompanyId, values)
+      if (res.data.success) {
+        message.success('部门创建成功')
+        setCreateDeptModalVisible(false)
+        loadDepartments(selectedCompanyId)
+      } else {
+        message.error(res.data.message || '创建失败')
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '创建失败')
+    }
+  }
+
+  const searchUsers = async (keyword: string) => {
+    try {
+      setUserSearchLoading(true)
+      const res = await getOpsUsers({ limit: 50, offset: 0 })
+      if (res.data.success) {
+        const users = res.data.data.users || []
+        if (keyword) {
+          const kw = keyword.toLowerCase()
+          setAllUsers(users.filter((u: any) =>
+            u.username?.toLowerCase().includes(kw) ||
+            u.email?.toLowerCase().includes(kw) ||
+            u.display_name?.toLowerCase().includes(kw)
+          ))
+        } else {
+          setAllUsers(users)
+        }
+      }
     } catch (error) {
-      message.error('创建失败')
+      console.error('Failed to search users:', error)
+    } finally {
+      setUserSearchLoading(false)
     }
   }
 
   const handleInviteUser = async (values: { user_id: number; role: number; quota?: number }) => {
     if (!currentTenant) return
     try {
-      await inviteUser(currentTenant.id, values)
-      message.success('邀请成功')
-      setInviteModalVisible(false)
-      inviteForm.resetFields()
-      loadTenantUsers(currentTenant.id)
-    } catch (error) {
-      message.error('邀请失败')
+      const res = await inviteUser(currentTenant.id, values)
+      if (res.data.success) {
+        message.success('邀请成功')
+        setInviteModalVisible(false)
+        inviteForm.resetFields()
+        loadTenantUsers(currentTenant.id)
+      } else {
+        message.error(res.data.message || '邀请失败')
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '邀请失败')
     }
   }
 
@@ -172,7 +284,7 @@ const Teams: React.FC = () => {
     { title: '已用额度', dataIndex: 'used_quota', key: 'used_quota', render: (v: number) => formatQuota(v) },
     { title: '操作', key: 'action', render: (_: any, r: TenantUser) => (
       <Space>
-        {currentRole <= 1 && r.role > 0 && (
+        {(currentRole <= 1 || isRoot) && r.role > 0 && (
           <>
             <Button size="small" onClick={() => {
               quotaForm.setFieldsValue({ target_user_id: r.id })
@@ -211,12 +323,65 @@ const Teams: React.FC = () => {
     <div>
       <Row gutter={16}>
         <Col xs={24} lg={8}>
-          <Card title="我的团队" extra={
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)}>
-              创建团队
-            </Button>
+          <Card title={isRoot ? "公司/团队" : "我的团队"} extra={
+            isRoot ? (
+              <>
+                {companies.length === 0 ? (
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateCompanyModalVisible(true)}>
+                    创建公司
+                  </Button>
+                ) : (
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)}>
+                    创建团队
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)}>
+                创建团队
+              </Button>
+            )
           }>
-            {tenants.map(t => (
+            {isRoot && companies.length > 0 && (
+              <>
+                <div style={{ marginBottom: 12 }}>
+                  <Select
+                    value={selectedCompanyId}
+                    onChange={handleCompanyChange}
+                    style={{ width: '100%' }}
+                    placeholder="选择公司"
+                    options={companies.map(c => ({ value: c.id, label: c.name }))}
+                  />
+                </div>
+                {departments.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 20 }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateDeptModalVisible(true)}>
+                      创建部门
+                    </Button>
+                  </div>
+                ) : (
+                  departments.map(d => (
+                    <div key={d.id}>
+                      <div style={{ fontWeight: 600, color: '#666', padding: '4px 0', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{d.name}</span>
+                        <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setCreateDeptModalVisible(true)} />
+                      </div>
+                      {tenants.filter(t => t.department_id === d.id).map(t => (
+                        <Card key={t.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === t.id ? '#e6f7ff' : '#fafafa' }}
+                          onClick={() => selectTenant(t.id)}>
+                          <Space>
+                            <TeamOutlined />
+                            <span style={{ fontWeight: currentTenant?.id === t.id ? 'bold' : 'normal' }}>{t.name}</span>
+                            <Tag>{t.code}</Tag>
+                          </Space>
+                        </Card>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </>
+            )}
+            {!isRoot && tenants.map(t => (
               <Card key={t.id} size="small" style={{ marginBottom: 8, cursor: 'pointer', background: currentTenant?.id === t.id ? '#f0f0f0' : '#fff' }}
                 onClick={() => selectTenant(t.id)}>
                 <Space>
@@ -226,7 +391,7 @@ const Teams: React.FC = () => {
                 </Space>
               </Card>
             ))}
-            {tenants.length === 0 && (
+            {!isRoot && tenants.length === 0 && (
               <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
                 暂未加入任何团队
               </div>
@@ -239,7 +404,7 @@ const Teams: React.FC = () => {
             <Tabs defaultActiveKey="1" onChange={(k) => k === '3' && loadAuditLogs(currentTenant.id)}>
               <TabPane tab={<span><UserOutlined /> 成员管理</span>} key="1">
                 <Card title={`${currentTenant.name} - 成员管理`} extra={
-                  currentRole <= 1 && (
+                  (currentRole <= 1 || isRoot) && (
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => setInviteModalVisible(true)}>
                       邀请成员
                     </Button>
@@ -275,6 +440,23 @@ const Teams: React.FC = () => {
                     <Form.Item name="max_channels" label="最大渠道数">
                       <Input type="number" />
                     </Form.Item>
+                    <Row gutter={16}>
+                      <Col span={8}>
+                        <Form.Item name="rate_limit_rpm" label="RPM (请求/分钟)">
+                          <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+                        </Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item name="rate_limit_tpm" label="TPM (Token/分钟)">
+                          <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+                        </Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item name="rate_limit_concurrent" label="并发数">
+                          <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+                        </Form.Item>
+                      </Col>
+                    </Row>
                     <Form.Item>
                       <Button type="primary" htmlType="submit">保存设置</Button>
                     </Form.Item>
@@ -309,6 +491,20 @@ const Teams: React.FC = () => {
 
       <Modal title="创建团队" open={createModalVisible} onCancel={() => setCreateModalVisible(false)} footer={null}>
         <Form form={createForm} onFinish={handleCreateTenant} layout="vertical">
+          {isRoot && (
+            <>
+              <Form.Item name="company_id" label="所属公司" rules={[{ required: true, message: '请选择公司' }]}>
+                <Select placeholder="选择公司" onChange={handleCompanyChange}>
+                  {companies.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
+                </Select>
+              </Form.Item>
+              <Form.Item name="department_id" label="所属部门" rules={[{ required: true, message: '请选择部门' }]}>
+                <Select placeholder="选择部门">
+                  {departments.map(d => <Option key={d.id} value={d.id}>{d.name}</Option>)}
+                </Select>
+              </Form.Item>
+            </>
+          )}
           <Form.Item name="name" label="团队名称" rules={[{ required: true, message: '请输入团队名称' }]}>
             <Input placeholder="如：产品研发部" />
           </Form.Item>
@@ -321,10 +517,57 @@ const Teams: React.FC = () => {
         </Form>
       </Modal>
 
-      <Modal title="邀请成员" open={inviteModalVisible} onCancel={() => setInviteModalVisible(false)} footer={null}>
+      <Modal title="创建公司" open={createCompanyModalVisible} onCancel={() => setCreateCompanyModalVisible(false)} footer={null}>
+        <Form form={createCompanyForm} onFinish={handleCreateCompany} layout="vertical">
+          <Form.Item name="name" label="公司名称" rules={[{ required: true, message: '请输入公司名称' }]}>
+            <Input placeholder="如：北电数智" />
+          </Form.Item>
+          <Form.Item name="code" label="公司代码" rules={[{ required: true, message: '请输入公司代码' }]}>
+            <Input placeholder="唯一标识，如：bedi" />
+          </Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input.TextArea placeholder="公司描述（可选）" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit">创建</Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal title="创建部门" open={createDeptModalVisible} onCancel={() => setCreateDeptModalVisible(false)} footer={null}>
+        <Form form={createDeptForm} onFinish={handleCreateDepartment} layout="vertical">
+          <Form.Item name="name" label="部门名称" rules={[{ required: true, message: '请输入部门名称' }]}>
+            <Input placeholder="如：产研中心" />
+          </Form.Item>
+          <Form.Item name="code" label="部门代码">
+            <Input placeholder="唯一标识（可选），如：rd" />
+          </Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input.TextArea placeholder="部门描述（可选）" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit">创建</Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal title="邀请成员" open={inviteModalVisible} onCancel={() => { setInviteModalVisible(false); setAllUsers([]) }} footer={null}>
         <Form form={inviteForm} onFinish={handleInviteUser} layout="vertical">
-          <Form.Item name="user_id" label="用户ID" rules={[{ required: true, message: '请输入用户ID' }]}>
-            <Input type="number" placeholder="请输入要邀请的用户ID" />
+          <Form.Item name="user_id" label="选择用户" rules={[{ required: true, message: '请选择用户' }]}>
+            <Select
+              showSearch
+              placeholder="搜索用户名、邮箱或昵称"
+              filterOption={false}
+              onSearch={searchUsers}
+              loading={userSearchLoading}
+              onFocus={() => searchUsers('')}
+            >
+              {allUsers.map((u: any) => (
+                <Option key={u.id} value={u.id}>
+                  {u.display_name || u.username} ({u.email || u.username})
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
           <Form.Item name="role" label="角色" rules={[{ required: true, message: '请选择角色' }]}>
             <Select placeholder="选择角色">

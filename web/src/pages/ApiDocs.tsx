@@ -215,6 +215,10 @@ const ApiDocs: React.FC = () => {
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editingContent, setEditingContent] = useState('')
 
+  // Get current user role from localStorage
+  const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}')
+  const isAdmin = (userInfo.role || 0) >= 10
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     message.success('已复制到剪贴板')
@@ -256,9 +260,11 @@ const ApiDocs: React.FC = () => {
               版本 {apiDocsConfig.version} · 最后更新 {apiDocsConfig.lastUpdated}
             </p>
           </div>
-          <Button icon={<EditOutlined />} onClick={() => handleEdit(JSON.stringify(apiDocsConfig, null, 2))}>
-            编辑文档
-          </Button>
+          {isAdmin && (
+            <Button icon={<EditOutlined />} onClick={() => handleEdit(JSON.stringify(apiDocsConfig, null, 2))}>
+              编辑文档
+            </Button>
+          )}
         </div>
       </Card>
 

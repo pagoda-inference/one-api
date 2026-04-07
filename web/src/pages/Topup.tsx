@@ -148,7 +148,6 @@ const Topup: React.FC = () => {
                 max={100000}
                 value={amount}
                 onChange={(v) => setAmount(v || 0)}
-                prefix="¥"
                 formatter={(value) => `¥ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                 parser={(value) => value!.replace(/¥\s?|(,*)/g, '') as any}
               />

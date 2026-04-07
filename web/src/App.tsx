@@ -4,7 +4,8 @@ import {
   DashboardOutlined, ShopOutlined, KeyOutlined, PlusSquareOutlined,
   HistoryOutlined, FileTextOutlined, SettingOutlined, TeamOutlined,
   BellOutlined, GlobalOutlined, LogoutOutlined, UserOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined, DatabaseOutlined
+  MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined, DatabaseOutlined,
+  CloudServerOutlined
 } from '@ant-design/icons'
 import React, { useState } from 'react'
 import Logo from './components/Logo'
@@ -17,6 +18,7 @@ import Usage from './pages/Usage'
 import Invoices from './pages/Invoices'
 import OpsDashboard from './pages/OpsDashboard'
 import ModelManagement from './pages/ModelManagement'
+import ProviderManagement from './pages/ProviderManagement'
 import Teams from './pages/Teams'
 import Login from './pages/Login'
 import LarkOAuth from './pages/LarkOAuth'
@@ -84,6 +86,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const adminMenuItems = [
     { key: '/ops', icon: <SettingOutlined />, label: '运营管理' },
     { key: '/ops/models', icon: <DatabaseOutlined />, label: '模型管理' },
+    { key: '/ops/providers', icon: <CloudServerOutlined />, label: 'Provider 管理' },
     { key: '/teams', icon: <TeamOutlined />, label: '团队管理' },
   ]
 
@@ -140,34 +143,34 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           borderBottom: '1px solid #f0f0f0'
         }}>
           {collapsed ? (
-            <div style={{ width: 32, height: 32, overflow: 'hidden', borderRadius: 6 }}>
-              <Logo width={90} height={32} />
-            </div>
+            <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>宝塔</span>
           ) : (
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 10
+              gap: 8
             }}>
-              <Logo width={100} height={28} />
-              <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>BEDI 宝塔</span>
+              <Logo width={90} height={26} />
+              <span style={{ fontWeight: 700, fontSize: 15, color: '#333', whiteSpace: 'nowrap' }}>BEDI 宝塔</span>
             </div>
           )}
         </div>
 
-        <div style={{ padding: '16px 12px' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: 10,
-            padding: '12px 16px',
-            marginBottom: 16
-          }}>
-            <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginBottom: 4 }}>账户余额</div>
-            <div style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>
-              ¥{(user.quota / 7200).toFixed(2)}
+        {!collapsed && (
+          <div style={{ padding: '16px 12px' }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              borderRadius: 10,
+              padding: '12px 16px',
+              marginBottom: 16
+            }}>
+              <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginBottom: 4 }}>账户余额</div>
+              <div style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>
+                ¥{(user.quota / 7200).toFixed(2)}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <Menu
           mode="inline"
@@ -264,6 +267,7 @@ const App: React.FC = () => {
         <Route path="/invoices" element={<ProtectedPage><Invoices /></ProtectedPage>} />
         <Route path="/ops" element={<ProtectedPage><OpsDashboard /></ProtectedPage>} />
         <Route path="/ops/models" element={<ProtectedPage><ModelManagement /></ProtectedPage>} />
+        <Route path="/ops/providers" element={<ProtectedPage><ProviderManagement /></ProtectedPage>} />
         <Route path="/teams" element={<ProtectedPage><Teams /></ProtectedPage>} />
         <Route path="/docs" element={<ProtectedPage><ApiDocs /></ProtectedPage>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

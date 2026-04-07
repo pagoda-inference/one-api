@@ -15,29 +15,17 @@ const ModelMarket: React.FC = () => {
   const [stats, setStats] = useState<MarketStats | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('')
-  const [groupFilter, setGroupFilter] = useState<number | null>(null)
+  const [groupFilter, setGroupFilter] = useState<string | null>(null)
   const [selectedModel, setSelectedModel] = useState<Model | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [priceCalc, setPriceCalc] = useState<{ prompt_tokens: number; completion_tokens: number; quota_cost: number } | null>(null)
   const [trialInfo, setTrialInfo] = useState<any>(null)
   const [trialLoading, setTrialLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [logoConfig, setLogoConfig] = useState<{ models: Record<string, string>; _default: string; _providers: Record<string, string> } | null>(null)
-
+  const [activeTab, setActiveTab] = useState<string>('all')
   useEffect(() => {
     loadData()
-    loadLogoConfig()
   }, [typeFilter, groupFilter])
-
-  const loadLogoConfig = async () => {
-    try {
-      const res = await fetch('/logos/logos.json')
-      const config = await res.json()
-      setLogoConfig(config)
-    } catch (error) {
-      console.error('Failed to load logo config:', error)
-    }
-  }
 
   const loadData = async () => {
     try {
@@ -49,9 +37,9 @@ const ModelMarket: React.FC = () => {
 
       let allModels = modelsRes.data.data.models || []
 
-      // Apply group filter
+      // Apply group filter (filter by provider code, case-insensitive)
       if (groupFilter) {
-        allModels = allModels.filter((m: Model) => m.group_id === groupFilter)
+        allModels = allModels.filter((m: Model) => m.provider.toLowerCase() === groupFilter.toLowerCase())
       }
 
       // Apply search filter
@@ -132,31 +120,10 @@ const ModelMarket: React.FC = () => {
   }
 
   const getModelLogo = (model: Model) => {
-    // 优先使用模型配置的 icon_url
+    // 使用模型配置的 icon_url（用户上传的Logo）
     if (model.icon_url) {
       return model.icon_url.startsWith('http') ? model.icon_url : model.icon_url
     }
-
-    // Fallback to logos.json matching
-    if (!logoConfig) return null
-
-    // 先尝试精确匹配模型名
-    if (logoConfig.models[model.name]) {
-      return `/logos/${logoConfig.models[model.name]}`
-    }
-
-    // 再尝试模糊匹配（包含关系）
-    for (const [key, value] of Object.entries(logoConfig.models)) {
-      if (model.name.includes(key) || key.includes(model.name)) {
-        return `/logos/${value}`
-      }
-    }
-
-    // 用 provider 的 logo
-    if (model.provider && logoConfig._providers[model.provider]) {
-      return `/logos/${logoConfig._providers[model.provider]}`
-    }
-
     return null
   }
 
@@ -327,7 +294,7 @@ const ModelMarket: React.FC = () => {
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ fontWeight: 600, fontSize: 14, color: '#262626' }}>{model.name}</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: model.sla === 'enterprise' ? 140 : '100%' }}>{model.name}</span>
             {model.is_trial && (
               <Tag
                 style={{
@@ -342,6 +309,20 @@ const ModelMarket: React.FC = () => {
                 试用
               </Tag>
             )}
+            {model.sla === 'enterprise' && (
+              <Tag
+                style={{
+                  background: '#ff4d4f15',
+                  color: '#ff4d4f',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  padding: '0 4px'
+                }}
+              >
+                企业专属
+              </Tag>
+            )}
           </div>
 
           <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8 }}>
@@ -349,7 +330,7 @@ const ModelMarket: React.FC = () => {
           </div>
 
           <div style={{ fontSize: 12, color: '#595959', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {model.description}
+            {model.description || '暂无描述'}
           </div>
 
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -376,22 +357,6 @@ const ModelMarket: React.FC = () => {
               </span>
             </div>
           </div>
-
-          {model.sla === 'enterprise' && (
-            <div style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              background: '#ff4d4f15',
-              color: '#ff4d4f',
-              fontSize: 10,
-              padding: '2px 6px',
-              borderRadius: 4,
-              fontWeight: 500
-            }}>
-              企业专属
-            </div>
-          )}
         </div>
       </div>
     </Card>
@@ -483,7 +448,7 @@ const ModelMarket: React.FC = () => {
         </Col>
         <Col xs={24} sm={8}>
           <StatCard
-            title="模型分组"
+            title="供应商数量"
             value={stats?.total_groups || 0}
             suffix="个"
             icon={<BarsOutlined />}
@@ -531,7 +496,7 @@ const ModelMarket: React.FC = () => {
               style={{ width: '100%', borderRadius: 8 }}
               value={groupFilter || undefined}
               onChange={(v) => setGroupFilter(v || null)}
-              options={groups.map(g => ({ value: g.id, label: g.name }))}
+              options={groups.map(g => ({ value: g.code, label: g.name }))}
             />
           </Col>
           <Col xs={24} md={8} style={{ textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
@@ -550,7 +515,13 @@ const ModelMarket: React.FC = () => {
 
       {/* Model List */}
       <Tabs
-        defaultActiveKey="all"
+        activeKey={activeTab}
+        onChange={(key) => {
+          setActiveTab(key)
+          if (key === 'groups') {
+            setGroupFilter(null) // Clear group filter when entering groups tab
+          }
+        }}
         items={[
           {
             key: 'all',
@@ -580,7 +551,10 @@ const ModelMarket: React.FC = () => {
                   <Col xs={24} sm={12} lg={8} key={group.id}>
                     <Card
                       hoverable
-                      onClick={() => { setGroupFilter(group.id) }}
+                      onClick={() => {
+                        setGroupFilter(group.code)
+                        setActiveTab('all')
+                      }}
                       style={{
                         borderRadius: 12,
                         border: 'none',
@@ -589,22 +563,32 @@ const ModelMarket: React.FC = () => {
                       styles={{ body: { padding: 16 } }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{
-                          width: 48,
-                          height: 48,
-                          borderRadius: 12,
-                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#fff',
-                          fontSize: 20
-                        }}>
-                          <RobotOutlined />
-                        </div>
+                        {group.icon_url ? (
+                          <img
+                            src={group.icon_url}
+                            alt={group.name}
+                            style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 12 }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none'
+                            }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 12,
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 20
+                          }}>
+                            <RobotOutlined />
+                          </div>
+                        )}
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{group.name}</div>
-                          <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{group.description}</div>
                           <Badge
                             count={group.model_count}
                             style={{ backgroundColor: '#667eea' }}
@@ -666,6 +650,11 @@ const ModelMarket: React.FC = () => {
               <Descriptions.Item label="输出价格">
                 <span style={{ color: '#764ba2', fontWeight: 500 }}>{formatPrice(selectedModel.output_price)}</span>
               </Descriptions.Item>
+              {selectedModel.description && (
+                <Descriptions.Item label="描述">
+                  <span style={{ color: '#595959' }}>{selectedModel.description}</span>
+                </Descriptions.Item>
+              )}
             </Descriptions>
 
             <Card title="能力" style={{ marginBottom: 16, borderRadius: 12 }} styles={{ body: { padding: 12 } }}>
@@ -774,7 +763,7 @@ const ModelMarket: React.FC = () => {
               }}>
 {`import openai
 openai.api_key = "your-api-key"
-openai.api_base = "https://your-domain.com/v1"
+openai.api_base = "https://baotaai.bedicloud.net/v1"
 
 response = openai.ChatCompletion.create(
     model="${selectedModel.id}",

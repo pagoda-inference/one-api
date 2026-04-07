@@ -1,10 +1,37 @@
-import { Button, message } from 'antd'
+import { useState } from 'react'
+import { Button, message, Form, Input } from 'antd'
 import Logo from '../components/Logo'
 
 const Login: React.FC = () => {
+  const [loginType, setLoginType] = useState<'feishu' | 'password'>('feishu')
+  const [loading, setLoading] = useState(false)
+
+  const handlePasswordLogin = async (values: { username: string; password: string }) => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/user/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+        credentials: 'include',
+      })
+      const data = await res.json()
+      if (data.success) {
+        localStorage.setItem('user_info', JSON.stringify(data.data))
+        localStorage.setItem('access_token', `sk-${data.data.id}`)
+        window.location.href = '/dashboard'
+      } else {
+        message.error(data.message || '登录失败')
+      }
+    } catch {
+      message.error('登录失败，请重试')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleFeishuLogin = async () => {
     try {
-      // First get OAuth state from server
       const stateRes = await fetch('/api/oauth/state')
       const stateData = await stateRes.json()
       if (!stateData.success || !stateData.data) {
@@ -12,7 +39,6 @@ const Login: React.FC = () => {
         return
       }
       const state = stateData.data
-      // Redirect to Feishu OAuth
       const redirectUri = `${window.location.origin}/oauth/lark`
       const larkAuthUrl = `https://accounts.feishu.cn/open-apis/authen/v1/authorize?redirect_uri=${encodeURIComponent(redirectUri)}&client_id=cli_a94c9bd14ef95bd2&state=${state}`
       window.location.href = larkAuthUrl
@@ -39,7 +65,6 @@ const Login: React.FC = () => {
         position: 'relative',
         overflow: 'hidden'
       }}>
-        {/* 装饰元素 */}
         <div style={{
           position: 'absolute',
           top: '10%',
@@ -69,7 +94,6 @@ const Login: React.FC = () => {
           transform: 'rotate(15deg)'
         }} />
 
-        {/* Logo */}
         <div style={{
           background: '#fff',
           borderRadius: 16,
@@ -84,7 +108,7 @@ const Login: React.FC = () => {
 
         <h1 style={{
           color: '#fff',
-          fontSize: 32,
+          fontSize: 28,
           fontWeight: 700,
           margin: 0,
           textAlign: 'center',
@@ -106,7 +130,6 @@ const Login: React.FC = () => {
           统一接入 · 灵活路由 · 便捷管理
         </p>
 
-        {/* 装饰性图标 */}
         <div style={{
           display: 'flex',
           gap: 24,
@@ -159,36 +182,80 @@ const Login: React.FC = () => {
           }}>欢迎回来</h2>
           <p style={{
             color: '#666',
-            margin: '0 0 32px',
+            margin: '0 0 24px',
             fontSize: 14
-          }}>请使用公司飞书账号登录</p>
+          }}>
+            {loginType === 'feishu' ? '请使用公司飞书账号登录' : '请输入账号密码登录'}
+          </p>
 
-          {/* 飞书登录按钮 */}
-          <Button
-            type="primary"
-            size="large"
-            block
-            onClick={handleFeishuLogin}
-            style={{
-              height: 56,
-              borderRadius: 12,
-              fontSize: 16,
-              fontWeight: 600,
-              background: 'linear-gradient(135deg, #0075ff 0%, #0052cc 100%)',
-              border: 'none',
-              boxShadow: '0 4px 16px rgba(0, 117, 255, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 12
-            }}
-          >
-            <svg width="24" height="24" viewBox="0 0 36 36" fill="none">
-              <path d="M18 4C10.268 4 4 10.268 4 18s6.268 14 14 14 14-6.268 14-14S25.732 4 18 4z" fill="#fff"/>
-              <path d="M18 8c-5.523 0-10 4.477-10 10s4.477 10 10 10 10-4.477 10-10S23.523 8 18 8zm4.5 14.5h-9v-9h9v9z" fill="#12B7F5"/>
-            </svg>
-            飞书登录 / 注册
-          </Button>
+          {loginType === 'feishu' ? (
+            <>
+              <Button
+                type="primary"
+                size="large"
+                block
+                onClick={handleFeishuLogin}
+                style={{
+                  height: 56,
+                  borderRadius: 12,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  background: 'linear-gradient(135deg, #0075ff 0%, #0052cc 100%)',
+                  border: 'none',
+                  boxShadow: '0 4px 16px rgba(0, 117, 255, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12
+                }}
+              >
+                <svg width="24" height="24" viewBox="0 0 36 36" fill="none">
+                  <path d="M18 4C10.268 4 4 10.268 4 18s6.268 14 14 14 14-6.268 14-14S25.732 4 18 4z" fill="#fff"/>
+                  <path d="M18 8c-5.523 0-10 4.477-10 10s4.477 10 10 10 10-4.477 10-10S23.523 8 18 8zm4.5 14.5h-9v-9h9v9z" fill="#12B7F5"/>
+                </svg>
+                飞书登录 / 注册
+              </Button>
+
+              <div style={{ textAlign: 'center', margin: '24px 0' }}>
+                <a onClick={() => setLoginType('password')} style={{ color: '#667eea', cursor: 'pointer' }}>
+                  使用密码登录
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <Form
+                layout="vertical"
+                onFinish={handlePasswordLogin}
+                size="large"
+              >
+                <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
+                  <Input placeholder="用户名" />
+                </Form.Item>
+                <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
+                  <Input.Password placeholder="密码" />
+                </Form.Item>
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" block loading={loading} style={{
+                    height: 48,
+                    borderRadius: 10,
+                    fontSize: 16,
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none'
+                  }}>
+                    登录
+                  </Button>
+                </Form.Item>
+              </Form>
+
+              <div style={{ textAlign: 'center', margin: '16px 0' }}>
+                <a onClick={() => setLoginType('feishu')} style={{ color: '#667eea', cursor: 'pointer' }}>
+                  使用飞书登录
+                </a>
+              </div>
+            </>
+          )}
 
           <p style={{
             color: '#999',
@@ -199,7 +266,6 @@ const Login: React.FC = () => {
             登录即表示同意我们的服务条款
           </p>
 
-          {/* 底部版权 */}
           <p style={{
             color: '#ccc',
             fontSize: 12,
