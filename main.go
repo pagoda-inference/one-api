@@ -119,6 +119,13 @@ func main() {
 		logger.SysLog("model marketplace initialized with default models")
 	}
 
+	// Initialize default providers
+	if err := model.InitializeDefaultProviders(); err != nil {
+		logger.SysErrorf("failed to initialize default providers: " + err.Error())
+	} else {
+		logger.SysLog("providers initialized with default providers")
+	}
+
 	// Initialize i18n
 	if err := i18n.Init(); err != nil {
 		logger.FatalLog("failed to initialize i18n: " + err.Error())

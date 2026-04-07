@@ -5,53 +5,54 @@
 - 命名空间: `baota`
 - K8s API: 已配置默认 secret
 
-## 部署步骤
+## 快速部署
 
-### 1. 准备数据库
-
-使用宝塔面板创建 PostgreSQL 数据库：
-- 主机: 10.1.112.239:34001
-- 用户: postgres
-- 密码: (设置并记录)
-
-### 2. 准备 Redis
-
-使用宝塔面板创建 Redis：
-- 主机: 10.1.112.239:34000
-- 密码: (设置并记录)
-
-### 3. 配置飞书 OAuth
-
-在飞书开放平台创建应用：
-1. 创建企业自建应用 → 开启「网页登录」
-2. 配置回调地址：`https://你的域名/oauth/lark`
-3. 获取 App ID 和 App Secret
-
-### 4. 构建并推送镜像
+### 1. 设置环境变量
 
 ```bash
-# 登录镜像仓库
+# 数据库密码 (PostgreSQL)
+export ONEAPI_DB_PASSWORD="你的数据库密码"
+
+# Redis 密码
+export ONEAPI_REDIS_PASSWORD="你的Redis密码"
+
+# Session 密钥 (32位随机字符串)
+export ONEAPI_SESSION_SECRET="你的随机字符串"
+
+# 飞书 OAuth App Secret
+export ONEAPI_LARK_CLIENT_SECRET="飞书AppSecret"
+```
+
+### 2. 构建并推送镜像
+
+```bash
+cd deploy/k8s
+
+# 登录镜像仓库 (如果未登录)
 docker login 10.1.112.238:8443
 
 # 构建镜像
-docker build -f Dockerfile.k8s -t 10.1.112.238:8443/baota/one-api:latest .
+docker build -f ../../Dockerfile.k8s -t 10.1.112.238:8443/baota/one-api:latest ../../
 
 # 推送镜像
 docker push 10.1.112.238:8443/baota/one-api:latest
 ```
 
-### 5. 部署服务
-
-#### 5.1 创建 Secret (敏感信息)
+或使用 Makefile:
 
 ```bash
-# 设置环境变量
-export ONEAPI_DB_PASSWORD="你的数据库密码"
-export ONEAPI_REDIS_PASSWORD="你的Redis密码"
-export ONEAPI_SESSION_SECRET="32位随机字符串"
-export ONEAPI_LARK_CLIENT_SECRET="飞书AppSecret"
+cd deploy/k8s
+make login
+make build
+make push
+```
 
-# 创建 Secret
+### 3. 创建 Secret
+
+```bash
+cd deploy/k8s
+
+# 创建 Secret (从环境变量)
 kubectl create secret generic one-api-secret \
   --namespace=baota \
   --from-literal=ONEAPI_DB_PASSWORD=$ONEAPI_DB_PASSWORD \
@@ -61,35 +62,49 @@ kubectl create secret generic one-api-secret \
 ```
 
 或使用 Makefile:
+
 ```bash
 make secret
 ```
 
-#### 5.2 部署其他资源
+### 4. 部署服务
 
 ```bash
 kubectl apply -f namespace.yaml
 kubectl apply -f configmap.yaml
 kubectl apply -f deployment.yaml
 kubectl apply -f ingress.yaml
-
-# 查看状态
-kubectl get pod -n baota
-
-# 查看日志
-kubectl logs -f deployment/one-api -n baota
 ```
 
 或使用 Makefile:
+
 ```bash
 make deploy
 ```
 
-### 6. 配置 DNS
+### 5. 验证部署
 
-联系网络管理员配置 DNS，或在 hosts 添加：
+```bash
+# 查看 Pod 状态
+kubectl get pods -n baota
+
+# 查看日志
+kubectl logs -f deployment/one-api -n baota
+
+# 查看所有资源
+kubectl get all,ingress -n baota
 ```
-10.1.112.237 one-api.your-domain.com
+
+### 6. 重启服务
+
+```bash
+kubectl -n baota rollout restart deployment one-api
+```
+
+或使用 Makefile:
+
+```bash
+make restart
 ```
 
 ## 部署文件说明
@@ -97,23 +112,33 @@ make deploy
 | 文件 | 说明 |
 |------|------|
 | namespace.yaml | 命名空间 baota |
-| configmap.yaml | 应用配置（非敏感） |
-| secret.yaml | Secret 模板（需通过 kubectl create secret 创建） |
+| configmap.yaml | 应用配置（非敏感），包含 Server、Database、Redis、OAuth 等配置 |
+| secret.yaml | Secret 模板（包含占位符，需通过 kubectl create secret 创建） |
 | deployment.yaml | Deployment + Service + PVC |
 | ingress.yaml | Ingress 网关 |
+| Makefile | 自动化部署脚本 |
 
-## 验证
+## 配置说明
 
-```bash
-# 检查所有资源
-kubectl get all,ingress -n baota
+### 环境变量 (Secret)
 
-# 测试 API
-curl http://localhost/api/status
+| 变量 | 说明 |
+|------|------|
+| ONEAPI_DB_PASSWORD | PostgreSQL 数据库密码 |
+| ONEAPI_REDIS_PASSWORD | Redis 密码 |
+| ONEAPI_SESSION_SECRET | Session 加密密钥 |
+| ONEAPI_LARK_CLIENT_SECRET | 飞书 OAuth App Secret |
 
-# 浏览器访问
-# http://one-api.your-domain.com
-```
+### ConfigMap 配置
+
+| 配置项 | 说明 |
+|------|------|
+| PORT | 服务端口 (默认 3000) |
+| SERVER_ADDRESS | 服务器地址 (用于回调) |
+| SQL_DSN | PostgreSQL 连接字符串 |
+| REDIS_CONN_STRING | Redis 连接字符串 |
+| LarkClientId | 飞书 OAuth App ID |
+| THEME | 前端主题 |
 
 ## 故障排除
 
@@ -124,20 +149,22 @@ kubectl logs -n baota -l app=one-api
 # 详细描述
 kubectl describe pod -n baota <pod-name>
 
-# 重启
+# 删除并重新创建 Secret
+kubectl delete secret one-api-secret -n baota
+kubectl create secret generic one-api-secret \
+  --namespace=baota \
+  --from-literal=ONEAPI_DB_PASSWORD=$ONEAPI_DB_PASSWORD \
+  --from-literal=ONEAPI_REDIS_PASSWORD=$ONEAPI_REDIS_PASSWORD \
+  --from-literal=ONEAPI_SESSION_SECRET=$ONEAPI_SESSION_SECRET \
+  --from-literal=ONEAPI_LARK_CLIENT_SECRET=$ONEAPI_LARK_CLIENT_SECRET
+
+# 强制重启
 kubectl rollout restart deployment/one-api -n baota
 ```
 
-## Secret 管理说明
+## 数据库和 Redis
 
-为保证安全，敏感信息（密码、密钥）通过 K8s Secret 管理，不存储在 Git 中。
+- PostgreSQL: `10.1.112.239:34001`
+- Redis: `10.1.112.239:34000`
 
-创建 Secret 的两种方式：
-1. **环境变量方式** (推荐):
-   ```bash
-   export ONEAPI_DB_PASSWORD="xxx"
-   kubectl create secret generic one-api-secret --from-literal=ONEAPI_DB_PASSWORD=$ONEAPI_DB_PASSWORD ...
-   ```
-
-2. **Sealed Secrets** (生产环境推荐):
-   使用 bitnami-labs/sealed-secrets 将 Secret 加密存储在 Git 中。
+使用宝塔面板创建和管理数据库和 Redis 实例。

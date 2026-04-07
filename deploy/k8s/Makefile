@@ -35,11 +35,10 @@ secret:
 		--dry-run=client -o yaml | kubectl apply -f -
 	@echo "Secrets created successfully"
 
-# 部署所有资源
+# 部署所有资源 (注意: 先运行 make secret 创建敏感信息)
 deploy:
 	kubectl apply -f namespace.yaml
 	kubectl apply -f configmap.yaml
-	kubectl apply -f secret.yaml
 	kubectl apply -f deployment.yaml
 	kubectl apply -f ingress.yaml
 

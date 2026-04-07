@@ -13,7 +13,7 @@ import (
 )
 
 var SystemName = "One API"
-var ServerAddress = "http://localhost:3000"
+var ServerAddress = env.String("SERVER_ADDRESS", "https://baotaai.bedicloud.net")
 var Footer = ""
 var Logo = ""
 var TopUpLink = ""
@@ -66,11 +66,11 @@ var SMTPAccount = ""
 var SMTPFrom = ""
 var SMTPToken = ""
 
-var GitHubClientId = ""
-var GitHubClientSecret = ""
+var GitHubClientId = env.String("GitHubClientId", "")
+var GitHubClientSecret = env.String("GitHubClientSecret", "")
 
-var LarkClientId = ""
-var LarkClientSecret = ""
+var LarkClientId = env.String("LarkClientId", "")
+var LarkClientSecret = env.String("LarkClientSecret", "")
 
 var OidcClientId = ""
 var OidcClientSecret = ""

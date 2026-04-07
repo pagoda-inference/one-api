@@ -269,3 +269,185 @@ func (rc *readCloser) Read(p []byte) (n int, err error) {
 func (rc *readCloser) Close() error {
 	return nil
 }
+
+// TenantRateLimiter implements rate limiting per tenant
+type TenantRateLimiter struct {
+	// Concurrency tracking per tenant
+	concurrentRequests map[int]*int32
+}
+
+var globalTenantRateLimiter *TenantRateLimiter
+
+func GetTenantRateLimiter() *TenantRateLimiter {
+	if globalTenantRateLimiter == nil {
+		globalTenantRateLimiter = &TenantRateLimiter{
+			concurrentRequests: make(map[int]*int32),
+		}
+	}
+	return globalTenantRateLimiter
+}
+
+// checkTenantRpm checks RPM limit for a tenant
+func checkTenantRpm(tenantId int, limit int) (bool, int) {
+	if limit <= 0 || !common.RedisEnabled {
+		return true, 0
+	}
+	ctx := context.Background()
+	now := time.Now()
+	minute := now.Unix() / 60
+	key := fmt.Sprintf("ratelimit:tenant:rpm:%d:%d", tenantId, minute)
+
+	count, err := common.RDB.Incr(ctx, key).Result()
+	if err != nil {
+		logger.SysError("Redis Incr error in tenant RPM check: " + err.Error())
+		return true, 0
+	}
+	if count == 1 {
+		common.RDB.Expire(ctx, key, time.Minute*2)
+	}
+	return count <= int64(limit), int(count)
+}
+
+// checkTenantTpm checks TPM limit for a tenant
+func checkTenantTpm(tenantId int, estimatedTokens int, limit int) (bool, int) {
+	if limit <= 0 || !common.RedisEnabled {
+		return true, 0
+	}
+	ctx := context.Background()
+	now := time.Now()
+	minute := now.Unix() / 60
+	key := fmt.Sprintf("ratelimit:tenant:tpm:%d:%d", tenantId, minute)
+
+	count, err := common.RDB.IncrBy(ctx, key, int64(estimatedTokens)).Result()
+	if err != nil {
+		logger.SysError("Redis IncrBy error in tenant TPM check: " + err.Error())
+		return true, 0
+	}
+	if count == int64(estimatedTokens) {
+		common.RDB.Expire(ctx, key, time.Minute*2)
+	}
+	return count <= int64(limit), int(count)
+}
+
+// acquireTenantConcurrency acquires a concurrency slot for a tenant
+func (rl *TenantRateLimiter) acquireTenantConcurrency(tenantId int, limit int) bool {
+	if limit <= 0 {
+		return true
+	}
+	rlPtr, exists := rl.concurrentRequests[tenantId]
+	if !exists {
+		var newCounter int32 = 0
+		rl.concurrentRequests[tenantId] = &newCounter
+		rlPtr = &newCounter
+	}
+	current := atomic.LoadInt32(rlPtr)
+	if current >= int32(limit) {
+		return false
+	}
+	if !atomic.CompareAndSwapInt32(rlPtr, current, current+1) {
+		return false
+	}
+	return true
+}
+
+// releaseTenantConcurrency releases a concurrency slot for a tenant
+func (rl *TenantRateLimiter) releaseTenantConcurrency(tenantId int) {
+	rlPtr, exists := rl.concurrentRequests[tenantId]
+	if !exists {
+		return
+	}
+	atomic.AddInt32(rlPtr, -1)
+}
+
+// TenantRateLimitMiddleware returns a Gin middleware for tenant-based rate limiting
+func TenantRateLimitMiddleware() gin.HandlerFunc {
+	rl := GetTenantRateLimiter()
+	return func(c *gin.Context) {
+		if !common.RedisEnabled {
+			c.Next()
+			return
+		}
+		tokenId := c.GetInt(ctxkey.TokenId)
+		if tokenId == 0 {
+			c.Next()
+			return
+		}
+		userId := c.GetInt(ctxkey.Id)
+		if userId == 0 {
+			c.Next()
+			return
+		}
+		// Get user's tenants
+		roles, err := model.GetUserTenants(userId)
+		if err != nil || len(roles) == 0 {
+			c.Next()
+			return
+		}
+		// Use first active tenant
+		var tenantId int
+		for _, role := range roles {
+			tenant, err := model.GetTenantById(role.TenantId)
+			if err == nil && tenant.Status == model.TenantStatusActive {
+				tenantId = tenant.Id
+				break
+			}
+		}
+		if tenantId == 0 {
+			c.Next()
+			return
+		}
+		// Check tenant rate limits
+		tenant, err := model.GetTenantById(tenantId)
+		if err != nil {
+			c.Next()
+			return
+		}
+		// RPM
+		if tenant.RateLimitRpm > 0 {
+			allowed, current := checkTenantRpm(tenantId, tenant.RateLimitRpm)
+			if !allowed {
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"error": gin.H{
+						"message": fmt.Sprintf("Team rate limit exceeded: %d requests per minute (current: %d)", tenant.RateLimitRpm, current),
+						"type":    "rate_limit_error",
+						"code":    "tenant_rpm_exceeded",
+					},
+				})
+				c.Abort()
+				return
+			}
+		}
+		// TPM
+		if tenant.RateLimitTpm > 0 {
+			estimatedTokens := estimateTokensFromRequest(c)
+			allowed, current := checkTenantTpm(tenantId, estimatedTokens, tenant.RateLimitTpm)
+			if !allowed {
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"error": gin.H{
+						"message": fmt.Sprintf("Team token rate limit exceeded: %d tokens per minute (current: %d)", tenant.RateLimitTpm, current),
+						"type":    "rate_limit_error",
+						"code":    "tenant_tpm_exceeded",
+					},
+				})
+				c.Abort()
+				return
+			}
+		}
+		// Concurrent
+		if tenant.RateLimitConcurrent > 0 {
+			if !rl.acquireTenantConcurrency(tenantId, tenant.RateLimitConcurrent) {
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"error": gin.H{
+						"message": fmt.Sprintf("Team concurrent request limit exceeded: %d concurrent requests", tenant.RateLimitConcurrent),
+						"type":    "rate_limit_error",
+						"code":    "tenant_concurrent_exceeded",
+					},
+				})
+				c.Abort()
+				return
+			}
+			defer rl.releaseTenantConcurrency(tenantId)
+		}
+		c.Next()
+	}
+}
