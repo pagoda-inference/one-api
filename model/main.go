@@ -206,6 +206,10 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&AuditLog{}); err != nil {
 		return err
 	}
+	// Lark OAuth apps table (for multi-org Feishu login)
+	if err = DB.AutoMigrate(&LarkOAuthApp{}); err != nil {
+		return err
+	}
 	return nil
 }
 

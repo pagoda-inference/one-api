@@ -27,6 +27,9 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/oauth/lark", middleware.CriticalRateLimit(), auth.LarkOAuth)
 		apiRouter.GET("/oauth/state", middleware.CriticalRateLimit(), auth.GenerateOAuthCode)
 		apiRouter.GET("/oauth/wechat", middleware.CriticalRateLimit(), auth.WeChatAuth)
+
+		// Public route for Lark OAuth apps (used by login page)
+		apiRouter.GET("/lark-apps", controller.GetEnabledLarkOAuthApps)
 		apiRouter.GET("/oauth/wechat/bind", middleware.CriticalRateLimit(), middleware.UserAuth(), auth.WeChatBind)
 		apiRouter.GET("/oauth/email/bind", middleware.CriticalRateLimit(), middleware.UserAuth(), controller.EmailBind)
 		apiRouter.POST("/topup", middleware.AdminAuth(), controller.AdminTopUp)
@@ -183,6 +186,12 @@ func SetApiRouter(router *gin.Engine) {
 			// Logo management routes
 			adminRoute.GET("/logos", controller.ListLogos)
 			adminRoute.DELETE("/logos", controller.DeleteLogo)
+
+			// Lark OAuth app management routes
+			adminRoute.GET("/lark-apps", controller.GetLarkOAuthApps)
+			adminRoute.POST("/lark-apps", controller.CreateLarkOAuthApp)
+			adminRoute.PUT("/lark-apps/:id", controller.UpdateLarkOAuthApp)
+			adminRoute.DELETE("/lark-apps/:id", controller.DeleteLarkOAuthApp)
 		}
 
 		optionRoute := apiRouter.Group("/option")

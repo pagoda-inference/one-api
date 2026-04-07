@@ -11,6 +11,7 @@ const LarkOAuth: React.FC = () => {
   useEffect(() => {
     const code = searchParams.get('code')
     const state = searchParams.get('state')
+    const appId = searchParams.get('app_id')
 
     if (!code || !state) {
       setStatus('参数错误，正在跳转...')
@@ -18,8 +19,13 @@ const LarkOAuth: React.FC = () => {
       return
     }
 
+    // 构建 API URL，包含 app_id（如果有）
+    const apiUrl = appId
+      ? `/api/oauth/lark?code=${code}&state=${state}&app_id=${appId}`
+      : `/api/oauth/lark?code=${code}&state=${state}`
+
     // 调用后端处理 OAuth 回调
-    fetch(`/api/oauth/lark?code=${code}&state=${state}`, {
+    fetch(apiUrl, {
       credentials: 'include'  // 包含 session cookie
     })
       .then(res => res.json())

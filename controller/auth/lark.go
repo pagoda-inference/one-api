@@ -50,16 +50,43 @@ func (u *LarkUser) getLarkID() string {
 	return ""
 }
 
-func getLarkUserInfoByCode(code string) (*LarkUser, error) {
+func getLarkUserInfoByCode(code string, appId string) (*LarkUser, error) {
 	if code == "" {
 		return nil, errors.New("无效的参数")
 	}
+
+	var clientId, clientSecret string
+	var redirectUri string
+
+	if appId != "" {
+		// Multi-app mode: look up app from database
+		id, err := strconv.Atoi(appId)
+		if err != nil {
+			return nil, errors.New("无效的飞书应用ID")
+		}
+		app, err := model.GetLarkOAuthAppById(id)
+		if err != nil {
+			return nil, errors.New("飞书应用不存在或已禁用")
+		}
+		if !app.Enabled {
+			return nil, errors.New("飞书应用已禁用")
+		}
+		clientId = app.ClientId
+		clientSecret = app.ClientSecret
+		redirectUri = fmt.Sprintf("%s/oauth/lark?app_id=%s", config.ServerAddress, appId)
+	} else {
+		// Legacy single-app mode: use config
+		clientId = config.LarkClientId
+		clientSecret = config.LarkClientSecret
+		redirectUri = fmt.Sprintf("%s/oauth/lark", config.ServerAddress)
+	}
+
 	values := map[string]string{
-		"client_id":     config.LarkClientId,
-		"client_secret": config.LarkClientSecret,
+		"client_id":     clientId,
+		"client_secret": clientSecret,
 		"code":          code,
 		"grant_type":    "authorization_code",
-		"redirect_uri":  fmt.Sprintf("%s/oauth/lark", config.ServerAddress),
+		"redirect_uri":  redirectUri,
 	}
 	jsonData, err := json.Marshal(values)
 	if err != nil {
@@ -129,7 +156,8 @@ func LarkOAuth(c *gin.Context) {
 		return
 	}
 	code := c.Query("code")
-	larkUser, err := getLarkUserInfoByCode(code)
+	appId := c.Query("app_id") // Get app_id from query parameter
+	larkUser, err := getLarkUserInfoByCode(code, appId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -188,7 +216,8 @@ func LarkOAuth(c *gin.Context) {
 
 func LarkBind(c *gin.Context) {
 	code := c.Query("code")
-	larkUser, err := getLarkUserInfoByCode(code)
+	appId := c.Query("app_id") // Get app_id from query parameter
+	larkUser, err := getLarkUserInfoByCode(code, appId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

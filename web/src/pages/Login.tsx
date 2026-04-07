@@ -1,10 +1,40 @@
-import { useState } from 'react'
-import { Button, message, Form, Input } from 'antd'
+import { useState, useEffect } from 'react'
+import { Button, message, Form, Input, Select } from 'antd'
 import Logo from '../components/Logo'
+
+interface LarkApp {
+  id: number
+  name: string
+  client_id: string
+  enabled: boolean
+  sort: number
+}
 
 const Login: React.FC = () => {
   const [loginType, setLoginType] = useState<'feishu' | 'password'>('feishu')
   const [loading, setLoading] = useState(false)
+  const [larkApps, setLarkApps] = useState<LarkApp[]>([])
+  const [selectedAppId, setSelectedAppId] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetchLarkApps()
+  }, [])
+
+  const fetchLarkApps = async () => {
+    try {
+      const res = await fetch('/api/lark-apps')
+      const data = await res.json()
+      if (data.success && data.data && data.data.length > 0) {
+        setLarkApps(data.data)
+        // If only one app, select it by default
+        if (data.data.length === 1) {
+          setSelectedAppId(data.data[0].id)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch Lark apps:', err)
+    }
+  }
 
   const handlePasswordLogin = async (values: { username: string; password: string }) => {
     setLoading(true)
@@ -39,8 +69,24 @@ const Login: React.FC = () => {
         return
       }
       const state = stateData.data
-      const redirectUri = `${window.location.origin}/oauth/lark`
-      const larkAuthUrl = `https://accounts.feishu.cn/open-apis/authen/v1/authorize?redirect_uri=${encodeURIComponent(redirectUri)}&client_id=cli_a94c9bd14ef95bd2&state=${state}`
+
+      // Use selected app's client_id or fall back to legacy behavior
+      let clientId = ''
+      let redirectUri = ''
+
+      if (selectedAppId) {
+        const app = larkApps.find(a => a.id === selectedAppId)
+        if (app) {
+          clientId = app.client_id
+          redirectUri = `${window.location.origin}/oauth/lark?app_id=${selectedAppId}`
+        }
+      } else {
+        // Legacy single-app mode
+        clientId = 'cli_a94c9bd14ef95bd2' // Fallback client_id
+        redirectUri = `${window.location.origin}/oauth/lark`
+      }
+
+      const larkAuthUrl = `https://accounts.feishu.cn/open-apis/authen/v1/authorize?redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}&state=${state}`
       window.location.href = larkAuthUrl
     } catch (err) {
       message.error('登录失败，请重试')
@@ -190,11 +236,31 @@ const Login: React.FC = () => {
 
           {loginType === 'feishu' ? (
             <>
+              {/* 多飞书组织选择下拉 */}
+              {larkApps.length > 1 && (
+                <Form.Item style={{ marginBottom: 16 }}>
+                  <Select
+                    placeholder="选择组织"
+                    value={selectedAppId}
+                    onChange={(value) => setSelectedAppId(value)}
+                    style={{ width: '100%', height: 48 }}
+                    size="large"
+                  >
+                    {larkApps.map(app => (
+                      <Select.Option key={app.id} value={app.id}>
+                        {app.name}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              )}
+
               <Button
                 type="primary"
                 size="large"
                 block
                 onClick={handleFeishuLogin}
+                disabled={larkApps.length > 1 && !selectedAppId}
                 style={{
                   height: 56,
                   borderRadius: 12,
