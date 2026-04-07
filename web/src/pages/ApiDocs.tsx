@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, Tabs, Table, Tag, Button, message, Input, Space, Modal, Form } from 'antd'
 import { ApiOutlined, BookOutlined, RocketOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons'
 
@@ -214,6 +214,48 @@ const ApiDocs: React.FC = () => {
   const [activeExample, setActiveExample] = useState<'curl' | 'python' | 'javascript'>('curl')
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editingContent, setEditingContent] = useState('')
+  const [apiDocsData, setApiDocsData] = useState(apiDocsConfig)
+
+  // Load ApiDocs from server on mount
+  useEffect(() => {
+    fetch('/api/api-docs')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data) {
+          try {
+            const parsed = JSON.parse(data.data)
+            setApiDocsData(parsed)
+          } catch (e) {
+            console.error('Failed to parse ApiDocs:', e)
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load ApiDocs:', err))
+  }, [])
+
+  const handleSaveEdit = () => {
+    // 保存到后端
+    fetch('/api/option', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'ApiDocs', value: editingContent }),
+      credentials: 'include'
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          message.success('文档内容已保存')
+          setApiDocsData(JSON.parse(editingContent))
+        } else {
+          message.error(data.message || '保存失败')
+        }
+      })
+      .catch(err => {
+        console.error('Failed to save ApiDocs:', err)
+        message.error('保存失败')
+      })
+    setEditModalVisible(false)
+  }
 
   // Get current user role from localStorage
   const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}')
@@ -239,12 +281,6 @@ const ApiDocs: React.FC = () => {
     setEditModalVisible(true)
   }
 
-  const handleSaveEdit = () => {
-    // TODO: 保存到后端
-    message.success('文档内容已保存')
-    setEditModalVisible(false)
-  }
-
   return (
     <div style={{ padding: 24 }}>
       <Card
@@ -254,14 +290,14 @@ const ApiDocs: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: '#262626' }}>
-              {apiDocsConfig.title}
+              {apiDocsData.title}
             </h1>
             <p style={{ color: '#8c8c8c', margin: '8px 0 0', fontSize: 14 }}>
-              版本 {apiDocsConfig.version} · 最后更新 {apiDocsConfig.lastUpdated}
+              版本 {apiDocsData.version} · 最后更新 {apiDocsData.lastUpdated}
             </p>
           </div>
           {isAdmin && (
-            <Button icon={<EditOutlined />} onClick={() => handleEdit(JSON.stringify(apiDocsConfig, null, 2))}>
+            <Button icon={<EditOutlined />} onClick={() => handleEdit(JSON.stringify(apiDocsData, null, 2))}>
               编辑文档
             </Button>
           )}
@@ -277,7 +313,7 @@ const ApiDocs: React.FC = () => {
             <div style={{ maxWidth: 800 }}>
               <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 24 }}>快速开始</h2>
 
-              {apiDocsConfig.quickStart.steps.map((step, index) => (
+              {apiDocsData.quickStart?.steps.map((step, index) => (
                 <div key={index} style={{ marginBottom: 32 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
                     <Tag color="blue">{index + 1}</Tag> {step.title}
@@ -315,7 +351,7 @@ const ApiDocs: React.FC = () => {
             <div style={{ maxWidth: 900 }}>
               <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 24 }}>接口列表</h2>
 
-              {apiDocsConfig.endpoints.map((endpoint, index) => (
+              {(apiDocsData.endpoints || []).map((endpoint, index) => (
                 <Card
                   key={index}
                   style={{ marginBottom: 24, borderRadius: 12, border: '1px solid #f0f0f0' }}
@@ -401,7 +437,7 @@ const ApiDocs: React.FC = () => {
               <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 24 }}>模型分类</h2>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                {apiDocsConfig.modelCategories.map((cat, index) => (
+                {(apiDocsData.modelCategories || []).map((cat, index) => (
                   <Card key={index} style={{ borderRadius: 12, borderLeft: `4px solid ${cat.color}` }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                       <span style={{ fontSize: 24 }}>{cat.icon}</span>

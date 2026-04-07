@@ -34,6 +34,26 @@ func GetOptions(c *gin.Context) {
 	return
 }
 
+func GetApiDocs(c *gin.Context) {
+	// Get ApiDocs from OptionMap - no auth required, all users can read
+	config.OptionMapRWMutex.Lock()
+	apiDocsValue, ok := config.OptionMap["ApiDocs"]
+	config.OptionMapRWMutex.Unlock()
+
+	if !ok || apiDocsValue == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    apiDocsValue,
+	})
+}
+
 func UpdateOption(c *gin.Context) {
 	var option model.Option
 	err := json.NewDecoder(c.Request.Body).Decode(&option)
