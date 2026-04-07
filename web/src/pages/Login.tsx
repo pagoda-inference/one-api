@@ -338,7 +338,7 @@ const Login: React.FC = () => {
             marginTop: 48,
             textAlign: 'center'
           }}>
-            © 2024 BEDI 宝塔. 保留所有权利.
+            © 2026 BEDI 宝塔. 保留所有权利.
           </p>
         </div>
       </div>
