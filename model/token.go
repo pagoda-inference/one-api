@@ -233,11 +233,16 @@ func PreConsumeTokenQuota(tokenId int, quota int64) (err error) {
 	if err != nil {
 		return err
 	}
-	if userQuota < quota {
+	// userQuota = -1 means unlimited, skip quota check
+	if userQuota != -1 && userQuota < quota {
 		return errors.New("用户额度不足")
 	}
-	quotaTooLow := userQuota >= config.QuotaRemindThreshold && userQuota-quota < config.QuotaRemindThreshold
-	noMoreQuota := userQuota-quota <= 0
+	// quotaTooLow and noMoreQuota only apply when userQuota != -1 (not unlimited)
+	var quotaTooLow, noMoreQuota bool
+	if userQuota != -1 {
+		quotaTooLow = userQuota >= config.QuotaRemindThreshold && userQuota-quota < config.QuotaRemindThreshold
+		noMoreQuota = userQuota-quota <= 0
+	}
 	if quotaTooLow || noMoreQuota {
 		go func() {
 			email, err := GetUserEmail(token.UserId)
@@ -279,7 +284,9 @@ func PreConsumeTokenQuota(tokenId int, quota int64) (err error) {
 			return err
 		}
 	}
-	err = DecreaseUserQuota(token.UserId, quota)
+	if userQuota != -1 {
+		err = DecreaseUserQuota(token.UserId, quota)
+	}
 	return err
 }
 

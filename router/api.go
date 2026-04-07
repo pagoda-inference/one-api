@@ -94,6 +94,7 @@ func SetApiRouter(router *gin.Engine) {
 		adminMarketRoute.Use(middleware.AdminAuth())
 		{
 			adminMarketRoute.POST("/pricing", controller.SetModelPricing)
+			// ModelGroup CRUD is deprecated - use channels.group for provider concept
 		}
 
 		// Tenant routes (multi-tenancy)
@@ -113,6 +114,29 @@ func SetApiRouter(router *gin.Engine) {
 			tenantRoute.POST("/:id/leave", controller.LeaveTenant)
 		}
 
+		// Company routes (for Platform/Company/Department/Team hierarchy)
+		companyRoute := apiRouter.Group("/company")
+		companyRoute.Use(middleware.UserAuth())
+		{
+			companyRoute.POST("/", controller.CreateCompany)
+			companyRoute.GET("/", controller.GetAllCompanies)
+			companyRoute.GET("/:id", controller.GetCompany)
+			companyRoute.PUT("/:id", controller.UpdateCompany)
+			companyRoute.DELETE("/:id", controller.DeleteCompany)
+			// Department routes under company
+			companyRoute.POST("/:id/departments", controller.CreateDepartment)
+			companyRoute.GET("/:id/departments", controller.GetDepartments)
+		}
+
+		// Department routes (standalone)
+		departmentRoute := apiRouter.Group("/department")
+		departmentRoute.Use(middleware.UserAuth())
+		{
+			departmentRoute.GET("/:id", controller.GetDepartment)
+			departmentRoute.PUT("/:id", controller.UpdateDepartment)
+			departmentRoute.DELETE("/:id", controller.DeleteDepartment)
+		}
+
 		// Admin routes
 		adminRoute := apiRouter.Group("/admin")
 		adminRoute.Use(middleware.AdminAuth())
@@ -122,7 +146,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.GET("/:id", controller.GetUser)
 			adminRoute.POST("/", controller.CreateUser)
 			adminRoute.POST("/manage", controller.ManageUser)
-			adminRoute.PUT("/", controller.UpdateUser)
+			adminRoute.PUT("/:id", controller.UpdateUser)
 			adminRoute.DELETE("/:id", controller.DeleteUser)
 
 			// Ops routes
@@ -140,11 +164,25 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.GET("/models", controller.AdminListModels)
 			adminRoute.GET("/models/types", controller.GetModelTypes)
 			adminRoute.GET("/models/statuses", controller.GetModelStatuses)
-			adminRoute.GET("/models/:id", controller.GetModel)
+			adminRoute.GET("/models/model", controller.GetModel)
 			adminRoute.POST("/models", controller.CreateModel)
-			adminRoute.PUT("/models/:id", controller.UpdateModel)
-			adminRoute.DELETE("/models/:id", controller.DeleteModel)
+			adminRoute.PUT("/models/model", controller.UpdateModel)
+			adminRoute.DELETE("/models/model", controller.DeleteModel)
+			adminRoute.POST("/models/batch-delete", controller.BatchDeleteModels)
 			adminRoute.POST("/models/upload-logo", controller.UploadModelLogo)
+
+			// Provider management routes
+			adminRoute.GET("/providers", controller.GetProviders)
+			adminRoute.GET("/providers/statuses", controller.GetProviderStatuses)
+			adminRoute.GET("/providers/:id", controller.GetProvider)
+			adminRoute.POST("/providers", controller.CreateProvider)
+			adminRoute.PUT("/providers/:id", controller.UpdateProvider)
+			adminRoute.DELETE("/providers/:id", controller.DeleteProvider)
+			adminRoute.POST("/providers/upload-logo", controller.UploadProviderLogo)
+
+			// Logo management routes
+			adminRoute.GET("/logos", controller.ListLogos)
+			adminRoute.DELETE("/logos", controller.DeleteLogo)
 		}
 
 		optionRoute := apiRouter.Group("/option")
@@ -157,6 +195,7 @@ func SetApiRouter(router *gin.Engine) {
 		channelRoute.Use(middleware.AdminAuth())
 		{
 			channelRoute.GET("/", controller.GetAllChannels)
+			channelRoute.GET("/groups", controller.GetDistinctChannelGroups)
 			channelRoute.GET("/search", controller.SearchChannels)
 			channelRoute.GET("/models", controller.ListAllModels)
 			channelRoute.GET("/:id", controller.GetChannel)
@@ -176,7 +215,7 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.GET("/search", controller.SearchTokens)
 			tokenRoute.GET("/:id", controller.GetToken)
 			tokenRoute.POST("/", controller.AddToken)
-			tokenRoute.PUT("/", controller.UpdateToken)
+			tokenRoute.PUT("/:id", controller.UpdateToken)
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 		}
 		redemptionRoute := apiRouter.Group("/redemption")

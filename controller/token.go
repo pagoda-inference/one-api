@@ -232,13 +232,16 @@ func UpdateToken(c *gin.Context) {
 	if statusOnly != "" {
 		cleanToken.Status = token.Status
 	} else {
-		// If you add more fields, please also update token.Update()
+		// If you add more fields, please also update token.Update() and this function
 		cleanToken.Name = token.Name
 		cleanToken.ExpiredTime = token.ExpiredTime
 		cleanToken.RemainQuota = token.RemainQuota
 		cleanToken.UnlimitedQuota = token.UnlimitedQuota
 		cleanToken.Models = token.Models
 		cleanToken.Subnet = token.Subnet
+		cleanToken.RateLimitRpm = token.RateLimitRpm
+		cleanToken.RateLimitTpm = token.RateLimitTpm
+		cleanToken.RateLimitConcurrent = token.RateLimitConcurrent
 	}
 	err = cleanToken.Update()
 	if err != nil {

@@ -103,6 +103,7 @@ func AddChannel(c *gin.Context) {
 		})
 		return
 	}
+	model.InitChannelCache()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -121,6 +122,7 @@ func DeleteChannel(c *gin.Context) {
 		})
 		return
 	}
+	model.InitChannelCache()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -163,10 +165,34 @@ func UpdateChannel(c *gin.Context) {
 		})
 		return
 	}
+	model.InitChannelCache()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    channel,
 	})
 	return
+}
+
+// GetDistinctChannelGroups returns distinct group values from channels table
+func GetDistinctChannelGroups(c *gin.Context) {
+	var groups []string
+	// Note: "group" is a reserved keyword in PostgreSQL, must use quoted identifier
+	groupCol := "\"group\""
+	err := model.DB.Model(&model.Channel{}).
+		Where("status = ? AND "+groupCol+" != ''", 1).
+		Distinct(groupCol).
+		Order(groupCol + " ASC").
+		Pluck(groupCol, &groups).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to get channel groups: " + err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    groups,
+	})
 }

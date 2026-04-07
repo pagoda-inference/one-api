@@ -150,7 +150,7 @@ func (channel *Channel) Insert() error {
 
 func (channel *Channel) Update() error {
 	var err error
-	err = DB.Model(channel).Updates(channel).Error
+	err = DB.Model(channel).Select("name", "type", "base_url", "key", "status", "models", "group", "priority", "model_mapping", "config", "system_prompt", "balance", "used_quota", "other", "weight", "response_time", "test_time").Updates(channel).Error
 	if err != nil {
 		return err
 	}
@@ -235,4 +235,11 @@ func DeleteChannelByStatus(status int64) (int64, error) {
 func DeleteDisabledChannel() (int64, error) {
 	result := DB.Where("status = ? or status = ?", ChannelStatusAutoDisabled, ChannelStatusManuallyDisabled).Delete(&Channel{})
 	return result.RowsAffected, result.Error
+}
+
+// GetChannelsByProviderId retrieves channels by provider code (currently uses Group field)
+func GetChannelsByProviderId(providerCode string) ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.Where("`group` = ?", providerCode).Find(&channels).Error
+	return channels, err
 }

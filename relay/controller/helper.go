@@ -72,6 +72,11 @@ func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIR
 	if err != nil {
 		return preConsumedQuota, openai.ErrorWrapper(err, "get_user_quota_failed", http.StatusInternalServerError)
 	}
+	// quota = -1 means unlimited, skip all quota operations entirely
+	if userQuota == -1 {
+		logger.Info(ctx, fmt.Sprintf("user %d has unlimited quota, skipping pre-consume", meta.UserId))
+		return 0, nil
+	}
 	if userQuota-preConsumedQuota < 0 {
 		return preConsumedQuota, openai.ErrorWrapper(errors.New("user quota is not enough"), "insufficient_user_quota", http.StatusForbidden)
 	}
@@ -113,6 +118,27 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.M
 		// we cannot just return, because we may have to return the pre-consumed quota
 		quota = 0
 	}
+	logContent := fmt.Sprintf("倍率：%.2f × %.2f × %.2f", modelRatio, groupRatio, completionRatio)
+	model.RecordConsumeLog(ctx, &model.Log{
+		UserId:            meta.UserId,
+		ChannelId:         meta.ChannelId,
+		PromptTokens:      promptTokens,
+		CompletionTokens:  completionTokens,
+		ModelName:         meta.OriginModelName,
+		TokenName:         meta.TokenName,
+		Quota:             int(quota),
+		Content:           logContent,
+		IsStream:          meta.IsStream,
+		ElapsedTime:       helper.CalcElapsedTime(meta.StartTime),
+		SystemPromptReset: systemPromptReset,
+	})
+
+	// Skip quota settlement for unlimited users (preConsumedQuota == 0 means user has unlimited quota)
+	if preConsumedQuota == 0 {
+		logger.Info(ctx, fmt.Sprintf("user %d has unlimited quota, skipping quota settlement", meta.UserId))
+		return
+	}
+
 	quotaDelta := quota - preConsumedQuota
 	err := model.PostConsumeTokenQuota(meta.TokenId, quotaDelta)
 	if err != nil {
@@ -122,20 +148,6 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.M
 	if err != nil {
 		logger.Error(ctx, "error update user quota cache: "+err.Error())
 	}
-	logContent := fmt.Sprintf("倍率：%.2f × %.2f × %.2f", modelRatio, groupRatio, completionRatio)
-	model.RecordConsumeLog(ctx, &model.Log{
-		UserId:            meta.UserId,
-		ChannelId:         meta.ChannelId,
-		PromptTokens:      promptTokens,
-		CompletionTokens:  completionTokens,
-		ModelName:         textRequest.Model,
-		TokenName:         meta.TokenName,
-		Quota:             int(quota),
-		Content:           logContent,
-		IsStream:          meta.IsStream,
-		ElapsedTime:       helper.CalcElapsedTime(meta.StartTime),
-		SystemPromptReset: systemPromptReset,
-	})
 	model.UpdateUserUsedQuotaAndRequestCount(meta.UserId, quota)
 	model.UpdateChannelUsedQuota(meta.ChannelId, quota)
 }

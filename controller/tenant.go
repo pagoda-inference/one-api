@@ -27,8 +27,10 @@ const (
 // CreateTenant handles POST /api/tenant
 func CreateTenant(c *gin.Context) {
 	var req struct {
-		Name string `json:"name" binding:"required"`
-		Code string `json:"code" binding:"required"`
+		Name         string `json:"name" binding:"required"`
+		Code         string `json:"code" binding:"required"`
+		CompanyId    int    `json:"company_id"`
+		DepartmentId int    `json:"department_id"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -39,20 +41,22 @@ func CreateTenant(c *gin.Context) {
 	userId := c.GetInt(ctxkey.UserId)
 
 	tenant := &model.Tenant{
-		Name:    req.Name,
-		Code:    req.Code,
-		Status:  model.TenantStatusActive,
-		OwnerId: userId,
+		Name:         req.Name,
+		Code:         req.Code,
+		Status:       model.TenantStatusActive,
+		OwnerId:      userId,
+		CompanyId:    req.CompanyId,
+		DepartmentId: req.DepartmentId,
 	}
 
 	if err := model.CreateTenant(tenant); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create tenant"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to create tenant: " + err.Error()})
 		return
 	}
 
 	// Add creator as owner
 	if err := model.AddUserToTenant(userId, tenant.Id, model.RoleOwner, 0); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to add user to tenant"})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to add user to tenant: " + err.Error()})
 		return
 	}
 
@@ -68,12 +72,7 @@ func CreateTenant(c *gin.Context) {
 // GetMyTenants handles GET /api/tenant
 func GetMyTenants(c *gin.Context) {
 	userId := c.GetInt(ctxkey.UserId)
-
-	roles, err := model.GetUserTenants(userId)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to get tenants"})
-		return
-	}
+	userRole := c.GetInt(ctxkey.Role)
 
 	type TenantInfo struct {
 		model.Tenant
@@ -83,30 +82,55 @@ func GetMyTenants(c *gin.Context) {
 		UserCount   int64 `json:"user_count"`
 	}
 
-	tenants := make([]*TenantInfo, 0, len(roles))
-	for _, role := range roles {
-		tenant, err := model.GetTenantById(role.TenantId)
+	var tenants []*TenantInfo
+
+	// Root user (role=100) can see all tenants
+	if userRole == model.RoleRootUser {
+		allTenants, err := model.GetAllTenants()
 		if err != nil {
-			continue
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to get tenants"})
+			return
+		}
+		for _, tenant := range allTenants {
+			count, _ := model.CountTenantUsers(tenant.Id)
+			tenants = append(tenants, &TenantInfo{
+				Tenant:   *tenant,
+				Role:     0, // root has owner-level access
+				UserCount: count,
+			})
+		}
+	} else {
+		roles, err := model.GetUserTenants(userId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to get tenants"})
+			return
 		}
 
-		info := &TenantInfo{
-			Tenant: *tenant,
-			Role:   role.Role,
+		tenants = make([]*TenantInfo, 0, len(roles))
+		for _, role := range roles {
+			tenant, err := model.GetTenantById(role.TenantId)
+			if err != nil {
+				continue
+			}
+
+			info := &TenantInfo{
+				Tenant: *tenant,
+				Role:   role.Role,
+			}
+
+			// Get user's quota allocation
+			alloc, err := model.GetUserQuotaAllocation(role.TenantId, userId)
+			if err == nil {
+				info.QuotaAlloc = alloc.Quota
+				info.UsedQuota = alloc.UsedQuota
+			}
+
+			// Get user count
+			count, _ := model.CountTenantUsers(role.TenantId)
+			info.UserCount = count
+
+			tenants = append(tenants, info)
 		}
-
-		// Get user's quota allocation
-		alloc, err := model.GetUserQuotaAllocation(role.TenantId, userId)
-		if err == nil {
-			info.QuotaAlloc = alloc.Quota
-			info.UsedQuota = alloc.UsedQuota
-		}
-
-		// Get user count
-		count, _ := model.CountTenantUsers(role.TenantId)
-		info.UserCount = count
-
-		tenants = append(tenants, info)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -150,12 +174,15 @@ func GetTenant(c *gin.Context) {
 func UpdateTenant(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt(ctxkey.UserId)
+	userRole := c.GetInt(ctxkey.Role)
 
-	// Check if user has permission (owner only)
-	role, err := model.GetUserRoleInTenant(userId, tenantId)
-	if err != nil || role.Role != model.RoleOwner {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only owner can update tenant"})
-		return
+	// Check if user has permission (owner only, or root)
+	if userRole != model.RoleRootUser {
+		role, err := model.GetUserRoleInTenant(userId, tenantId)
+		if err != nil || role.Role != model.RoleOwner {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only owner can update tenant"})
+			return
+		}
 	}
 
 	var req struct {
@@ -163,6 +190,9 @@ func UpdateTenant(c *gin.Context) {
 		Settings   string `json:"settings"`
 		MaxUsers   int    `json:"max_users"`
 		MaxChannels int   `json:"max_channels"`
+		RateLimitRpm        int `json:"rate_limit_rpm"`
+		RateLimitTpm        int `json:"rate_limit_tpm"`
+		RateLimitConcurrent int `json:"rate_limit_concurrent"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -188,6 +218,15 @@ func UpdateTenant(c *gin.Context) {
 	if req.MaxChannels > 0 {
 		tenant.MaxChannels = req.MaxChannels
 	}
+	if req.RateLimitRpm >= 0 {
+		tenant.RateLimitRpm = req.RateLimitRpm
+	}
+	if req.RateLimitTpm >= 0 {
+		tenant.RateLimitTpm = req.RateLimitTpm
+	}
+	if req.RateLimitConcurrent >= 0 {
+		tenant.RateLimitConcurrent = req.RateLimitConcurrent
+	}
 
 	if err := model.UpdateTenant(tenant); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to update tenant"})
@@ -204,12 +243,15 @@ func UpdateTenant(c *gin.Context) {
 func InviteUser(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt(ctxkey.UserId)
+	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin or owner)
-	role, err := model.GetUserRoleInTenant(userId, tenantId)
-	if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
-		return
+	// Check permission (admin or owner, or root)
+	if userRole != model.RoleRootUser {
+		role, err := model.GetUserRoleInTenant(userId, tenantId)
+		if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+			return
+		}
 	}
 
 	var req struct {
@@ -264,23 +306,28 @@ func RemoveUser(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	targetUserId, _ := strconv.Atoi(c.Param("userId"))
 	userId := c.GetInt(ctxkey.UserId)
+	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin or owner)
-	role, err := model.GetUserRoleInTenant(userId, tenantId)
-	if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
-		return
+	// Check permission (admin or owner, or root)
+	var role *model.UserTenantRole
+	var err error
+	if userRole != model.RoleRootUser {
+		role, err = model.GetUserRoleInTenant(userId, tenantId)
+		if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+			return
+		}
 	}
 
-	// Cannot remove owner
+	// Cannot remove owner (unless root)
 	targetRole, _ := model.GetUserRoleInTenant(targetUserId, tenantId)
-	if targetRole.Role == model.RoleOwner {
+	if targetRole != nil && targetRole.Role == model.RoleOwner && userRole != model.RoleRootUser {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Cannot remove owner"})
 		return
 	}
 
-	// Cannot remove self if not owner
-	if targetUserId == userId && role.Role != model.RoleOwner {
+	// Cannot remove self if not owner (unless root)
+	if targetUserId == userId && (role == nil || role.Role != model.RoleOwner) && userRole != model.RoleRootUser {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Cannot remove yourself"})
 		return
 	}
@@ -304,12 +351,15 @@ func UpdateUserRole(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	targetUserId, _ := strconv.Atoi(c.Param("userId"))
 	userId := c.GetInt(ctxkey.UserId)
+	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (owner only)
-	role, err := model.GetUserRoleInTenant(userId, tenantId)
-	if err != nil || role.Role != model.RoleOwner {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only owner can update roles"})
-		return
+	// Check permission (owner only, or root)
+	if userRole != model.RoleRootUser {
+		role, err := model.GetUserRoleInTenant(userId, tenantId)
+		if err != nil || role.Role != model.RoleOwner {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only owner can update roles"})
+			return
+		}
 	}
 
 	var req struct {
@@ -347,12 +397,15 @@ func UpdateUserRole(c *gin.Context) {
 func AllocateUserQuotaAPI(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt(ctxkey.UserId)
+	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin or owner)
-	role, err := model.GetUserRoleInTenant(userId, tenantId)
-	if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
-		return
+	// Check permission (admin or owner, or root)
+	if userRole != model.RoleRootUser {
+		role, err := model.GetUserRoleInTenant(userId, tenantId)
+		if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+			return
+		}
 	}
 
 	var req struct {
@@ -440,12 +493,18 @@ func GetAuditLogsAPI(c *gin.Context) {
 func GetTenantUsersAPI(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt(ctxkey.UserId)
+	userRole := c.GetInt(ctxkey.Role)
 
-	// Check if user has access
-	role, err := model.GetUserRoleInTenant(userId, tenantId)
-	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Access denied"})
-		return
+	var role *model.UserTenantRole
+	var err error
+
+	// Root user can access any tenant
+	if userRole != model.RoleRootUser {
+		role, err = model.GetUserRoleInTenant(userId, tenantId)
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Access denied"})
+			return
+		}
 	}
 
 	users, err := model.GetTenantUsers(tenantId)
@@ -467,10 +526,13 @@ func GetTenantUsersAPI(c *gin.Context) {
 		alloc, _ := model.GetUserQuotaAllocation(tenantId, u.Id)
 
 		uwr := &UserWithRole{
-			User:      *u,
-			Role:      userRole.Role,
+			User:       *u,
+			Role:       0,
 			QuotaAlloc: 0,
 			UsedQuota:  0,
+		}
+		if userRole != nil {
+			uwr.Role = userRole.Role
 		}
 		if alloc != nil {
 			uwr.QuotaAlloc = alloc.Quota
@@ -482,6 +544,14 @@ func GetTenantUsersAPI(c *gin.Context) {
 
 	// Record audit log for viewing users
 	model.RecordAuditLog(tenantId, userId, "view_users", "tenant", tenantId, "", c.ClientIP(), c.Request.UserAgent())
+
+	// For root user, return owner-level role
+	if userRole == model.RoleRootUser {
+		role = &model.UserTenantRole{
+			Role:   0, // owner-level access
+			Status: 1,
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

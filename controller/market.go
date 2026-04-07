@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
@@ -116,14 +117,29 @@ func GetMarketStats(c *gin.Context) {
 		return
 	}
 
+	// Get active provider count (distinct channels.group)
+	// Note: "group" is a reserved keyword in PostgreSQL, must use quoted identifier
+	groupCol := "\"group\""
+	var totalGroups int64
+	model.DB.Model(&model.Channel{}).
+		Where("status = ? AND "+groupCol+" != ''", 1).
+		Distinct(groupCol).
+		Count(&totalGroups)
+
+	// Get trial models count
+	var trialModels int64
+	model.DB.Model(&model.ModelInfo{}).Where("status = ? AND is_trial = ?", model.ModelStatusActive, true).Count(&trialModels)
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
 			"total_models":     stats.TotalModels,
 			"total_providers":  stats.TotalProviders,
+			"total_groups":     stats.TotalGroups,
 			"chat_models":      stats.ChatModels,
 			"embedding_models": stats.EmbeddingModels,
 			"image_models":     stats.ImageModels,
+			"trial_models":     trialModels,
 			"avg_input_price":  stats.AvgInputPrice,
 			"avg_output_price": stats.AvgOutputPrice,
 		},
@@ -191,8 +207,9 @@ func formatModelInfo(m *model.ModelInfo) gin.H {
 }
 
 // GetMarketGroups handles GET /api/market/groups
+// Returns providers from the providers table for the marketplace group filter
 func GetMarketGroups(c *gin.Context) {
-	groups, err := model.GetAllModelGroups()
+	providers, err := model.GetActiveProviders()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -201,17 +218,20 @@ func GetMarketGroups(c *gin.Context) {
 		return
 	}
 
-	// Get model count per group
-	data := make([]gin.H, len(groups))
-	for i, g := range groups {
-		models, _ := model.GetModelsByGroup(g.Id)
+	// Build response with model count per provider
+	data := make([]gin.H, len(providers))
+	for i, p := range providers {
+		var modelCount int64
+		model.DB.Model(&model.ModelInfo{}).
+			Where("status = ? AND LOWER(provider) = ?", model.ModelStatusActive, strings.ToLower(p.Code)).
+			Count(&modelCount)
 		data[i] = gin.H{
-			"id":          g.Id,
-			"name":        g.Name,
-			"code":        g.Code,
-			"description": g.Description,
-			"icon_url":    g.IconUrl,
-			"model_count": len(models),
+			"id":          p.Id,
+			"code":        p.Code,
+			"name":        p.Name,
+			"logo_url":    p.LogoUrl,
+			"description": p.Description,
+			"model_count": modelCount,
 		}
 	}
 

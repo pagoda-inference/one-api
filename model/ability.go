@@ -110,3 +110,33 @@ func GetGroupModels(ctx context.Context, group string) ([]string, error) {
 	sort.Strings(models)
 	return models, err
 }
+
+// GetRandomSatisfiedChannelByModel finds a random satisfied channel by model only, without group filter
+func GetRandomSatisfiedChannelByModel(model string, ignoreFirstPriority bool) (*Channel, error) {
+	ability := Ability{}
+	trueVal := "1"
+	if common.UsingPostgreSQL {
+		trueVal = "true"
+	}
+
+	var err error = nil
+	var channelQuery *gorm.DB
+	if ignoreFirstPriority {
+		channelQuery = DB.Where("model = ? and enabled = "+trueVal, model)
+	} else {
+		maxPrioritySubQuery := DB.Model(&Ability{}).Select("MAX(priority)").Where("model = ? and enabled = "+trueVal, model)
+		channelQuery = DB.Where("model = ? and enabled = "+trueVal+" and priority = (?)", model, maxPrioritySubQuery)
+	}
+	if common.UsingSQLite || common.UsingPostgreSQL {
+		err = channelQuery.Order("RANDOM()").First(&ability).Error
+	} else {
+		err = channelQuery.Order("RAND()").First(&ability).Error
+	}
+	if err != nil {
+		return nil, err
+	}
+	channel := Channel{}
+	channel.Id = ability.ChannelId
+	err = DB.First(&channel, "id = ?", ability.ChannelId).Error
+	return &channel, err
+}

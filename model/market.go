@@ -2,6 +2,8 @@ package model
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/pagoda-inference/one-api/common/helper"
 )
@@ -25,26 +27,28 @@ type ModelInfo struct {
 	IsTrial      bool     `json:"is_trial" gorm:"default:false"`   // 是否支持试用
 	TrialQuota   int64    `json:"trial_quota" gorm:"default:0"`    // 试用额度
 	SLA          string   `json:"sla" gorm:"size:32;default:standard"` // SLA等级: standard/premium/enterprise
+	RateLimitRPM int      `json:"rate_limit_rpm" gorm:"default:0"`       // 模型级别 RPM 限流 (0=不限)
+	RateLimitTPM int      `json:"rate_limit_tpm" gorm:"default:0"`       // 模型级别 TPM 限流 (0=不限)
 	CreatedAt    int64    `json:"created_at" gorm:"bigint"`
 	UpdatedAt    int64    `json:"updated_at" gorm:"bigint"`
 }
 
-// ModelGroup represents a model group/category
-type ModelGroup struct {
-	Id          int    `json:"id" gorm:"primaryKey"`
-	Name        string `json:"name" gorm:"size:64"`        // 分组名称
-	Code        string `json:"code" gorm:"size:32;uniqueIndex"` // 分组代码
-	Description string `json:"description" gorm:"type:text"`
-	IconUrl     string `json:"icon_url" gorm:"size:255"`
-	SortOrder   int    `json:"sort_order" gorm:"default:0"`
-	Status      string `json:"status" gorm:"size:32;default:active"`
-	CreatedAt   int64  `json:"created_at" gorm:"bigint"`
-	UpdatedAt   int64  `json:"updated_at" gorm:"bigint"`
-}
+// ModelGroup is deprecated - use channels.group for provider concept
+// type ModelGroup struct {
+// 	Id          int    `json:"id" gorm:"primaryKey"`
+// 	Name        string `json:"name" gorm:"size:64"`
+// 	Code        string `json:"code" gorm:"size:32;uniqueIndex"`
+// 	Description string `json:"description" gorm:"type:text"`
+// 	IconUrl     string `json:"icon_url" gorm:"size:255"`
+// 	SortOrder   int    `json:"sort_order" gorm:"default:0"`
+// 	Status      string `json:"status" gorm:"size:32;default:active"`
+// 	CreatedAt   int64  `json:"created_at" gorm:"bigint"`
+// 	UpdatedAt   int64  `json:"updated_at" gorm:"bigint"`
+// }
 
-func (ModelGroup) TableName() string {
-	return "model_groups"
-}
+// func (ModelGroup) TableName() string {
+// 	return "model_groups"
+// }
 
 // ModelPricing represents configurable model pricing
 type ModelPricing struct {
@@ -140,6 +144,23 @@ func GetModelById(id string) (*ModelInfo, error) {
 	return &model, nil
 }
 
+// GetMarketModelById is an alias for GetModelById
+func GetMarketModelById(id string) (*ModelInfo, error) {
+	return GetModelById(id)
+}
+
+// GetAllMarketModels retrieves all models (including inactive) for admin management
+func GetAllMarketModels() ([]*ModelInfo, error) {
+	var models []*ModelInfo
+	err := DB.Order("sort_order ASC, id ASC").Find(&models).Error
+	return models, err
+}
+
+// DeleteMarketModel deletes a model by ID
+func DeleteMarketModel(id string) error {
+	return DB.Delete(&ModelInfo{}, "id = ?", id).Error
+}
+
 // GetActiveModels retrieves all active models
 func GetActiveModels(modelType string, limit int, offset int) ([]*ModelInfo, error) {
 	var models []*ModelInfo
@@ -172,10 +193,10 @@ func SearchModels(keyword string, modelType string, limit int, offset int) ([]*M
 	return models, err
 }
 
-// GetModelsByProvider retrieves models by provider
+// GetModelsByProvider retrieves models by provider (case-insensitive)
 func GetModelsByProvider(provider string) ([]*ModelInfo, error) {
 	var models []*ModelInfo
-	err := DB.Where("status = ? AND provider = ?", ModelStatusActive, provider).
+	err := DB.Where("status = ? AND LOWER(provider) = ?", ModelStatusActive, strings.ToLower(provider)).
 		Order("sort_order ASC").Find(&models).Error
 	return models, err
 }
@@ -239,14 +260,14 @@ func GetModelMarketStats() (*ModelMarketStats, error) {
 	// Count total active models
 	DB.Model(&ModelInfo{}).Where("status = ?", ModelStatusActive).Count(&stats.TotalModels)
 
-	// Count providers
-	DB.Model(&ModelInfo{}).
-		Where("status = ?", ModelStatusActive).
-		Distinct("provider").
-		Count(&stats.TotalProviders)
+	// Count providers from providers table (channels)
+	var providerCount int64
+	DB.Model(&Provider{}).Where("status = ?", "active").Count(&providerCount)
+	fmt.Printf("[DEBUG] Provider count: %d\n", providerCount)
+	stats.TotalProviders = providerCount
 
-	// Count groups
-	DB.Model(&ModelGroup{}).Where("status = ?", "active").Count(&stats.TotalGroups)
+	// Count groups - use providers count
+	stats.TotalGroups = stats.TotalProviders
 
 	// Count by type
 	DB.Model(&ModelInfo{}).
@@ -266,50 +287,26 @@ func GetModelMarketStats() (*ModelMarketStats, error) {
 		Where("status = ? AND is_trial = ?", ModelStatusActive, true).
 		Count(&stats.TrialModels)
 
-	// Average prices
+	// Average prices - use COALESCE to handle NULL when no models have prices
 	DB.Model(&ModelInfo{}).
 		Where("status = ? AND input_price > 0", ModelStatusActive).
-		Select("AVG(input_price)").Scan(&stats.AvgInputPrice)
+		Select("COALESCE(AVG(input_price), 0)").Scan(&stats.AvgInputPrice)
 
 	DB.Model(&ModelInfo{}).
 		Where("status = ? AND output_price > 0", ModelStatusActive).
-		Select("AVG(output_price)").Scan(&stats.AvgOutputPrice)
+		Select("COALESCE(AVG(output_price), 0)").Scan(&stats.AvgOutputPrice)
 
 	return stats, nil
 }
 
-// Model group operations
+// Model group operations - deprecated, use channels.group for provider concept
 
-// CreateModelGroup creates a new model group
-func CreateModelGroup(group *ModelGroup) error {
-	if group.CreatedAt == 0 {
-		group.CreatedAt = helper.GetTimestamp()
-	}
-	if group.UpdatedAt == 0 {
-		group.UpdatedAt = helper.GetTimestamp()
-	}
-	if group.Status == "" {
-		group.Status = "active"
-	}
-	return DB.Create(group).Error
-}
-
-// GetModelGroupById retrieves a group by ID
-func GetModelGroupById(id int) (*ModelGroup, error) {
-	var group ModelGroup
-	err := DB.First(&group, id).Error
-	if err != nil {
-		return nil, err
-	}
-	return &group, nil
-}
-
-// GetAllModelGroups retrieves all active groups
-func GetAllModelGroups() ([]*ModelGroup, error) {
-	var groups []*ModelGroup
-	err := DB.Where("status = ?", "active").Order("sort_order ASC, id ASC").Find(&groups).Error
-	return groups, err
-}
+// func CreateModelGroup(group *ModelGroup) error { ... }
+// func GetModelGroupById(id int) (*ModelGroup, error) { ... }
+// func GetAllModelGroups() ([]*ModelGroup, error) { ... }
+// func GetAllMarketGroups() ([]*ModelGroup, error) { ... }
+// func UpdateModelGroup(group *ModelGroup) error { ... }
+// func DeleteModelGroup(id int) error { ... }
 
 // GetModelsByGroup retrieves models by group ID
 func GetModelsByGroup(groupId int) ([]*ModelInfo, error) {
@@ -466,23 +463,8 @@ func InitializeDefaultModels() error {
 		return nil
 	}
 
-	// Initialize model groups first
-	groups := []ModelGroup{
-		{Id: 1, Name: "OpenAI", Code: "openai", Description: "OpenAI GPT系列模型", SortOrder: 1},
-		{Id: 2, Name: "Anthropic", Code: "anthropic", Description: "Anthropic Claude系列模型", SortOrder: 2},
-		{Id: 3, Name: "Google", Code: "google", Description: "Google Gemini系列模型", SortOrder: 3},
-		{Id: 4, Name: "百度文心", Code: "baidu", Description: "百度文心大模型", SortOrder: 4},
-		{Id: 5, Name: "阿里通义", Code: "alibaba", Description: "阿里通义千问大模型", SortOrder: 5},
-		{Id: 6, Name: "智谱AI", Code: "zhipu", Description: "智谱AI大模型", SortOrder: 6},
-		{Id: 7, Name: "MiniMax", Code: "minimax", Description: "MiniMax海螺大模型", SortOrder: 7},
-		{Id: 8, Name: "BEDI", Code: "bedi", Description: "BEDI私有GPU集群部署模型", SortOrder: 9},
-		{Id: 99, Name: "内部部署", Code: "internal", Description: "其他内部vLLM部署模型", SortOrder: 100},
-	}
-	for i := range groups {
-		if err := CreateModelGroup(&groups[i]); err != nil {
-			return err
-		}
-	}
+	// ModelGroup is deprecated - groups are now represented by channels.group field
+	// No need to initialize model_groups table
 
 	defaultModels := []ModelInfo{
 		// OpenAI models (Group 1)

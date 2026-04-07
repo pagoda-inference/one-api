@@ -60,8 +60,15 @@ func GetMaxUserId() int {
 }
 
 func GetAllUsers(startIdx int, num int, order string) (users []*User, err error) {
-	query := DB.Limit(num).Offset(startIdx).Omit("password").Where("status != ?", UserStatusDeleted)
+	fmt.Printf("[DEBUG] GetAllUsers called: startIdx=%d, num=%d, order=%s\n", startIdx, num, order)
 
+	// Initialize explicitly to avoid nil slice issues
+	users = make([]*User, 0, num)
+
+	// Build base query
+	query := DB.Table("users").Where("status != ?", UserStatusDeleted)
+
+	// Apply ordering
 	switch order {
 	case "quota":
 		query = query.Order("quota desc")
@@ -73,8 +80,25 @@ func GetAllUsers(startIdx int, num int, order string) (users []*User, err error)
 		query = query.Order("id desc")
 	}
 
-	err = query.Find(&users).Error
-	return users, err
+	// Execute with limit/offset
+	err = query.Limit(num).Offset(startIdx).Find(&users).Error
+	fmt.Printf("[DEBUG] After Find: %d users, error: %v\n", len(users), err)
+	if err != nil {
+		return users, err
+	}
+
+	// Also try raw rows to double-check
+	rows, err := query.Limit(num).Offset(startIdx).Rows()
+	if err == nil {
+		defer rows.Close()
+		count := 0
+		for rows.Next() {
+			count++
+		}
+		fmt.Printf("[DEBUG] Rows count (verification): %d\n", count)
+	}
+
+	return users, nil
 }
 
 func CountUsers() (int64, error) {

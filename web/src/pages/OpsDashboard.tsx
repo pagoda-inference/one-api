@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Table, Statistic, Spin, Progress, Tag, Tabs, Button, Space, Modal, Form, Input, message } from 'antd'
-import { DollarOutlined, UserOutlined, ApiOutlined, RiseOutlined, SafetyCertificateOutlined, AlertOutlined, DashboardOutlined, LineChartOutlined } from '@ant-design/icons'
+import { Row, Col, Card, Table, Statistic, Spin, Progress, Tag, Tabs, Button, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, message, Divider } from 'antd'
+import { DollarOutlined, UserOutlined, ApiOutlined, RiseOutlined, SafetyCertificateOutlined, AlertOutlined, DashboardOutlined, LineChartOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
-import { getOpsStats, getChannelHealth, getSystemHealth, getAlertConfig, updateAlertConfig, exportReport, OpsStats, ChannelHealth, SystemHealth, AlertConfig } from '../services/api'
+import { getOpsStats, getChannelHealth, getSystemHealth, getAlertConfig, updateAlertConfig, exportReport, getOpsUsers, updateUser, getChannels, createChannel, updateChannel, deleteChannel, getProviders, OpsStats, ChannelHealth, SystemHealth, AlertConfig, Channel, Provider } from '../services/api'
 
 const { TabPane } = Tabs
 
@@ -17,9 +17,23 @@ const OpsDashboard: React.FC = () => {
   const [totalChannels, setTotalChannels] = useState(0)
   const [alertModalVisible, setAlertModalVisible] = useState(false)
   const [form] = Form.useForm()
+  const [users, setUsers] = useState<any[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersTotal, setUsersTotal] = useState(0)
+  const [channels, setChannels] = useState<Channel[]>([])
+  const [channelsLoading, setChannelsLoading] = useState(false)
+  const [channelModalVisible, setChannelModalVisible] = useState(false)
+  const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
+  const [channelForm] = Form.useForm()
+  const [providers, setProviders] = useState<Provider[]>([])
+  const [editUserModalVisible, setEditUserModalVisible] = useState(false)
+  const [editingUser, setEditingUser] = useState<any>(null)
+  const [editUserForm] = Form.useForm()
 
   useEffect(() => {
     loadData()
+    loadUsers()
+    loadChannels()
   }, [])
 
   const loadData = async () => {
@@ -43,6 +57,174 @@ const OpsDashboard: React.FC = () => {
       console.error('Failed to load ops data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadUsers = async (offset = 0, limit = 20) => {
+    try {
+      setUsersLoading(true)
+      const res = await getOpsUsers({ limit, offset })
+      if (res.data.success) {
+        setUsers(res.data.data.users || [])
+        setUsersTotal(res.data.data.total || 0)
+      }
+    } catch (error) {
+      console.error('Failed to load users:', error)
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
+  const handleEditUser = (record: any) => {
+    setEditingUser(record)
+    editUserForm.setFieldsValue({
+      group: record.group,
+      quota: record.quota,
+      role: record.role,
+      status: record.status,
+    })
+    setEditUserModalVisible(true)
+  }
+
+  const handleUpdateUser = async () => {
+    try {
+      const values = await editUserForm.validateFields()
+      const res = await updateUser(editingUser.id, values)
+      if (res.data.success) {
+        message.success('更新成功')
+        setEditUserModalVisible(false)
+        loadUsers()
+      } else {
+        message.error(res.data.message || '更新失败')
+      }
+    } catch (error) {
+      message.error('更新失败')
+    }
+  }
+
+  const loadChannels = async () => {
+    try {
+      setChannelsLoading(true)
+      const res = await getChannels()
+      if (res.data.success) {
+        setChannels(res.data.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to load channels:', error)
+    } finally {
+      setChannelsLoading(false)
+    }
+  }
+
+  const loadProviders = async () => {
+    try {
+      const res = await getProviders()
+      if (res.data.success) {
+        setProviders(res.data.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to load providers:', error)
+    }
+  }
+
+  const handleCreateChannel = () => {
+    setEditingChannel(null)
+    channelForm.resetFields()
+    loadProviders()
+    setChannelModalVisible(true)
+  }
+
+  const handleEditChannel = (record: Channel) => {
+    setEditingChannel(record)
+    // Parse models string and model_mapping JSON into modelMappings array format for the form
+    let modelMappings: { client: string; upstream: string }[] = []
+    if (record.models && record.models.trim()) {
+      const modelList = record.models.split(',').filter(Boolean)
+      // Parse model_mapping JSON to get upstream names
+      let mappingObj: Record<string, string> = {}
+      try {
+        if (record.model_mapping) {
+          mappingObj = JSON.parse(record.model_mapping)
+        }
+      } catch (e) {
+        console.error('Failed to parse model_mapping:', e)
+      }
+      modelMappings = modelList.map((client: string) => ({
+        client: client.trim(),
+        upstream: mappingObj[client.trim()] || ''
+      }))
+    }
+    channelForm.setFieldsValue({ ...record, modelMappings })
+    loadProviders()
+    setChannelModalVisible(true)
+  }
+
+  const handleDeleteChannel = async (id: number) => {
+    try {
+      const res = await deleteChannel(id)
+      if (res.data.success) {
+        message.success('删除成功')
+        loadChannels()
+      } else {
+        message.error(res.data.message || '删除失败')
+      }
+    } catch (error) {
+      message.error('删除失败')
+    }
+  }
+
+  const handleChannelSubmit = async () => {
+    try {
+      const values = await channelForm.validateFields()
+
+      // Process model mappings: extract client models and build mapping JSON
+      let models = ''
+      let modelMapping = '{}'
+      if (values.modelMappings && values.modelMappings.length > 0) {
+        const clientModels = values.modelMappings.map((m: { client: string; upstream: string }) => m.client).filter(Boolean)
+        models = clientModels.join(',')
+        const mappingObj: Record<string, string> = {}
+        values.modelMappings.forEach((m: { client: string; upstream: string }) => {
+          if (m.client && m.upstream) {
+            mappingObj[m.client] = m.upstream
+          }
+        })
+        modelMapping = JSON.stringify(mappingObj)
+      }
+
+      const payload = {
+        ...values,
+        models,
+        model_mapping: modelMapping,
+      }
+      delete payload.modelMappings
+
+      // 如果是编辑模式且用户没有输入新 key，则不发送 key 字段，避免覆盖原有值
+      if (editingChannel && !values.key) {
+        delete payload.key
+      }
+
+      if (editingChannel) {
+        const res = await updateChannel(editingChannel.id, payload)
+        if (res.data.success) {
+          message.success('更新成功')
+          setChannelModalVisible(false)
+          loadChannels()
+        } else {
+          message.error(res.data.message || '更新失败')
+        }
+      } else {
+        const res = await createChannel(payload)
+        if (res.data.success) {
+          message.success('创建成功')
+          setChannelModalVisible(false)
+          loadChannels()
+        } else {
+          message.error(res.data.message || '创建失败')
+        }
+      }
+    } catch (error) {
+      message.error(editingChannel ? '更新失败' : '创建失败')
     }
   }
 
@@ -95,6 +277,7 @@ const OpsDashboard: React.FC = () => {
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: '名称', dataIndex: 'name', key: 'name' },
     { title: '类型', dataIndex: 'type', key: 'type', render: (v: number) => ['OpenAI', 'Azure', 'Anthropic', 'Google', '自定义'][v] || '未知' },
+    { title: 'Provider', dataIndex: 'group', key: 'group', width: 100 },
     { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
     {
       title: '成功率',
@@ -271,6 +454,75 @@ const OpsDashboard: React.FC = () => {
             </Button>
           </Card>
         </TabPane>
+
+        <TabPane tab={<span><ApiOutlined /> 渠道管理</span>} key="4">
+          <Card
+            title="渠道列表"
+            extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreateChannel}>添加渠道</Button>}
+          >
+            <Table
+              dataSource={channels}
+              columns={[
+                { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+                { title: '名称', dataIndex: 'name', key: 'name' },
+                { title: '类型', dataIndex: 'type', key: 'type', render: (v: number) => ['OpenAI', 'Azure', 'Anthropic', 'Google', '自定义'][v] || '未知' },
+                { title: 'Group', dataIndex: 'group', key: 'group', width: 100 },
+                { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
+                { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
+                { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? <Tag color="green">启用</Tag> : v === 2 ? <Tag color="red">禁用</Tag> : <Tag>未知</Tag> },
+                {
+                  title: '操作',
+                  key: 'action',
+                  width: 150,
+                  render: (_: any, record: Channel) => (
+                    <Space>
+                      <Button type="link" size="small" onClick={() => handleEditChannel(record)}>编辑</Button>
+                      <Popconfirm title="确定删除？" onConfirm={() => handleDeleteChannel(record.id)}>
+                        <Button type="link" size="small" danger>删除</Button>
+                      </Popconfirm>
+                    </Space>
+                  )
+                }
+              ]}
+              rowKey="id"
+              loading={channelsLoading}
+              pagination={{ pageSize: 10 }}
+            />
+          </Card>
+        </TabPane>
+
+        <TabPane tab={<span><UserOutlined /> 用户管理</span>} key="5">
+          <Card title="用户列表">
+            <Table
+              dataSource={users}
+              columns={[
+                { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+                { title: '用户名', dataIndex: 'username', key: 'username', render: (v: string, r: any) => r.display_name || v },
+                { title: '邮箱', dataIndex: 'email', key: 'email' },
+                { title: 'Group', dataIndex: 'group', key: 'group', width: 100 },
+                { title: '角色', dataIndex: 'role', key: 'role', render: (v: number) => v === 100 ? '超级管理员' : v === 10 ? '管理员' : '普通用户' },
+                { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? '正常' : v === 2 ? '禁用' : '已删除' },
+                { title: '额度', dataIndex: 'quota', key: 'quota', render: (v: number) => v.toLocaleString() },
+                { title: '已用额度', dataIndex: 'used_quota', key: 'used_quota', render: (v: number) => v.toLocaleString() },
+                { title: '请求次数', dataIndex: 'request_count', key: 'request_count' },
+                {
+                  title: '操作',
+                  key: 'action',
+                  width: 100,
+                  render: (_: any, record: any) => (
+                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditUser(record)}>
+                      编辑
+                    </Button>
+                  )
+                },
+              ]}
+              rowKey="id"
+              loading={usersLoading}
+              pagination={{ pageSize: 20, total: usersTotal, showTotal: (t) => `共 ${t} 条` }}
+              onChange={(pagination) => loadUsers(((pagination.current || 1) - 1) * 20, 20)}
+            />
+          </Card>
+        </TabPane>
       </Tabs>
 
       <Modal
@@ -300,6 +552,134 @@ const OpsDashboard: React.FC = () => {
           </Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit">保存</Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingChannel ? '编辑渠道' : '添加渠道'}
+        open={channelModalVisible}
+        onCancel={() => setChannelModalVisible(false)}
+        onOk={handleChannelSubmit}
+        okText="保存"
+        cancelText="取消"
+        width={700}
+      >
+        <Form form={channelForm} layout="vertical">
+          <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: '请输入渠道名称' }]}>
+            <Input placeholder="如: BEDI-集群1" />
+          </Form.Item>
+          <Form.Item name="type" label="渠道类型" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { value: 0, label: 'OpenAI' },
+                { value: 1, label: 'Azure' },
+                { value: 2, label: 'Anthropic' },
+                { value: 3, label: 'Google' },
+                { value: 5, label: '自定义' },
+              ]}
+              placeholder="选择渠道类型"
+            />
+          </Form.Item>
+          <Form.Item name="base_url" label="Base URL" rules={[{ required: true, message: '请输入Base URL' }]}>
+            <Input placeholder="如: https://api.bedicloud.net/v1" />
+          </Form.Item>
+          <Form.Item name="group" label="Provider" rules={[{ required: true, message: '请选择Provider' }]}>
+            <Select
+              showSearch
+              allowClear
+              placeholder="选择 Provider"
+              options={providers.map(p => ({ value: p.code, label: p.name }))}
+            />
+          </Form.Item>
+          <Form.Item name="key" label="API Key" rules={[{ required: true, message: '请输入API Key' }]}>
+            <Input.Password placeholder="请输入API Key" />
+          </Form.Item>
+
+          <Divider>支持的模型</Divider>
+
+          <Form.List name="modelMappings">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'client']}
+                      label="客户端模型名"
+                      rules={[{ required: true, message: '请输入客户端模型名' }]}
+                    >
+                      <Input placeholder="如: glm-4" style={{ width: 200 }} />
+                    </Form.Item>
+                    <span>→</span>
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'upstream']}
+                      label="上游实际名称"
+                      rules={[{ required: true, message: '请输入上游名称' }]}
+                    >
+                      <Input placeholder="如: ZhipuAI/GLM-4" style={{ width: 200 }} />
+                    </Form.Item>
+                    <Button type="link" danger onClick={() => remove(name)}>删除</Button>
+                  </Space>
+                ))}
+                <Form.Item>
+                  <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                    添加模型映射
+                  </Button>
+                </Form.Item>
+              </>
+            )}
+          </Form.List>
+
+          <Divider />
+
+          <Form.Item name="priority" label="优先级">
+            <InputNumber style={{ width: '100%' }} placeholder="数值越大越优先" min={0} />
+          </Form.Item>
+          <Form.Item name="status" label="状态">
+            <Select
+              options={[
+                { value: 1, label: '启用' },
+                { value: 2, label: '禁用' },
+              ]}
+              placeholder="选择状态"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="编辑用户"
+        open={editUserModalVisible}
+        onCancel={() => setEditUserModalVisible(false)}
+        onOk={handleUpdateUser}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={editUserForm} layout="vertical">
+          <Form.Item name="group" label="分组（Group）">
+            <Input placeholder="如: bedi, default" />
+          </Form.Item>
+          <Form.Item name="quota" label="额度">
+            <InputNumber style={{ width: '100%' }} placeholder="-1 = 无限制，0 = 无额度" min={-1} />
+          </Form.Item>
+          <Form.Item name="role" label="角色">
+            <Select
+              options={[
+                { value: 1, label: '普通用户' },
+                { value: 10, label: '管理员' },
+                { value: 100, label: '超级管理员' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="status" label="状态">
+            <Select
+              options={[
+                { value: 1, label: '正常' },
+                { value: 2, label: '禁用' },
+              ]}
+            />
           </Form.Item>
         </Form>
       </Modal>

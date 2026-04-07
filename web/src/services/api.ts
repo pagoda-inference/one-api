@@ -197,7 +197,12 @@ export interface Tenant {
   quota_used: number
   max_users: number
   max_channels: number
+  rate_limit_rpm: number
+  rate_limit_tpm: number
+  rate_limit_concurrent: number
   settings: string
+  company_id: number
+  department_id: number
   created_at: string
   updated_at: string
 }
@@ -236,19 +241,19 @@ export interface AuditLog {
 
 // API functions
 export const getMarketModels = (params?: { type?: string; q?: string; limit?: number; offset?: number }) =>
-  api.get('/market/models', { params })
+  api.get('/user/market/models', { params })
 
 export const getMarketModel = (id: string) =>
   api.get(`/market/models/${id}`)
 
 export const getMarketProviders = () =>
-  api.get('/market/providers')
+  api.get('/user/market/providers')
 
 export const getMarketStats = () =>
-  api.get('/market/stats')
+  api.get('/user/market/stats')
 
 export const calculatePrice = (params: { model_id: string; prompt_tokens: number; completion_tokens: number }) =>
-  api.get('/market/calculate', { params })
+  api.get('/user/market/calculate', { params })
 
 export const getDashboard = () =>
   api.get('/dashboard')
@@ -299,6 +304,9 @@ export const createToken = (data: { name: string; models?: string }) =>
 export const deleteToken = (id: number) =>
   api.delete(`/token/${id}`)
 
+export const updateToken = (id: number, data: { name?: string; models?: string; remain_quota?: number; unlimited_quota?: boolean; rate_limit_rpm?: number; rate_limit_tpm?: number; rate_limit_concurrent?: number }) =>
+  api.put(`/token/${id}`, data)
+
 export const getUserInfo = () =>
   api.get('/user/self')
 
@@ -337,8 +345,56 @@ export const getOpsUsage = (params?: { start?: string; end?: string }) =>
 export const getChannelHealth = () =>
   api.get('/admin/channels/health')
 
+// Channel types
+export interface Channel {
+  id: number
+  type: number
+  key: string
+  status: number
+  name: string
+  weight: number
+  created_time: number
+  test_time: number
+  response_time: number
+  base_url: string
+  other: string
+  balance: number
+  balance_updated_time: number
+  models: string
+  group: string
+  used_quota: number
+  model_mapping: string
+  priority: number
+  config: string
+  system_prompt: string
+}
+
+export const getChannels = (params?: { limit?: number; offset?: number }) =>
+  api.get<{ success: boolean; data: Channel[]; message?: string }>('/channel', { params })
+
+export const getChannelGroups = () =>
+  api.get<{ success: boolean; data: string[] }>('/channel/groups')
+
+export const getChannel = (id: number) =>
+  api.get<{ success: boolean; data: Channel; message?: string }>(`/channel/${id}`)
+
+export const createChannel = (data: Partial<Channel>) =>
+  api.post<{ success: boolean; data?: Channel; message?: string }>('/channel', data)
+
+export const updateChannel = (_id: number, data: Partial<Channel>) =>
+  api.put<{ success: boolean; data?: Channel; message?: string }>('/channel', { ...data, id: _id })
+
+export const deleteChannel = (id: number) =>
+  api.delete<{ success: boolean; message?: string }>(`/channel/${id}`)
+
+export const testChannel = (id: number) =>
+  api.get<{ success: boolean; message?: string }>(`/channel/test/${id}`)
+
 export const getOpsUsers = (params?: { limit?: number; offset?: number }) =>
   api.get('/admin/ops/users', { params })
+
+export const updateUser = (id: number, data: { group?: string; quota?: number; role?: number; status?: number }) =>
+  api.put(`/admin/${id}`, data)
 
 export const getAlertConfig = () =>
   api.get('/admin/alerts/config')
@@ -386,24 +442,80 @@ export const getAuditLogs = (tenantId: number, params?: { limit?: number; offset
 export const leaveTenant = (tenantId: number) =>
   api.post(`/tenant/${tenantId}/leave`)
 
+// Company API functions (Platform/Company/Department/Team hierarchy)
+export interface Company {
+  id: number
+  name: string
+  code: string
+  logo_url: string
+  description: string
+  quota_limit: number
+  quota_used: number
+  status: number
+  department_count?: number
+  team_count?: number
+}
+
+export interface Department {
+  id: number
+  company_id: number
+  name: string
+  code: string
+  description: string
+  quota_limit: number
+  quota_used: number
+  status: number
+  team_count?: number
+}
+
+export const createCompany = (data: { name: string; code: string; logo_url?: string; description?: string; quota_limit?: number }) =>
+  api.post('/company', data)
+
+export const getAllCompanies = () =>
+  api.get<{ success: boolean; data: Company[] }>('/company')
+
+export const getCompany = (id: number) =>
+  api.get<{ success: boolean; data: Company & { departments: Department[] } }>(`/company/${id}`)
+
+export const updateCompany = (id: number, data: Partial<Company>) =>
+  api.put(`/company/${id}`, data)
+
+export const deleteCompany = (id: number) =>
+  api.delete<{ success: boolean; message?: string }>(`/company/${id}`)
+
+export const createDepartment = (companyId: number, data: { name: string; code?: string; description?: string; quota_limit?: number }) =>
+  api.post(`/company/${companyId}/departments`, data)
+
+export const getDepartments = (companyId: number) =>
+  api.get<{ success: boolean; data: Department[] }>(`/company/${companyId}/departments`)
+
+export const getDepartment = (id: number) =>
+  api.get<{ success: boolean; data: Department & { teams: any[] } }>(`/department/${id}`)
+
+export const updateDepartment = (id: number, data: Partial<Department>) =>
+  api.put(`/department/${id}`, data)
+
+export const deleteDepartment = (id: number) =>
+  api.delete<{ success: boolean; message?: string }>(`/department/${id}`)
+
 // Model market API functions
 export const getMarketGroups = () =>
-  api.get('/market/groups')
+  api.get('/user/market/groups')
 
 export const getMarketModelsByGroup = (groupId: number) =>
-  api.get(`/market/groups/${groupId}/models`)
+  api.get(`/user/market/groups/${groupId}/models`)
 
 export const getModelPricing = (modelId: string) =>
-  api.get(`/market/models/${modelId}/pricing`)
+  api.get(`/user/market/models/${modelId}/pricing`)
 
 export const getModelTrial = (modelId: string) =>
-  api.get(`/market/models/${modelId}/trial`)
+  api.get(`/user/market/models/${modelId}/trial`)
 
 export const startModelTrial = (modelId: string) =>
-  api.post(`/market/models/${modelId}/trial`)
+  api.post(`/user/market/models/${modelId}/trial`)
 
 export const getUserTrials = () =>
-  api.get('/market/trials')
+  api.get('/user/market/trials')
 
 // Model Management APIs (Admin)
 export interface ModelItem {
@@ -419,32 +531,85 @@ export interface ModelItem {
   status: string
   icon_url: string
   sort_order: number
-  created_time: number
-  updated_time: number
+  group_id: number
+  tags: string
+  is_trial: boolean
+  trial_quota: number
+  sla: string
+  rate_limit_rpm: number
+  rate_limit_tpm: number
+  created_at: number
+  updated_at: number
 }
 
 export const listModels = () =>
-  api.get<{ success: boolean; data: ModelItem[] }>('/admin/models')
+  api.get<{ success: boolean; data: ModelItem[]; message?: string }>('/admin/models')
 
 export const getModel = (id: string) =>
-  api.get<{ success: boolean; data: ModelItem }>(`/admin/models/${id}`)
+  api.get<{ success: boolean; data: ModelItem; message?: string }>(`/admin/models/model?id=${encodeURIComponent(id)}`)
 
 export const createModel = (data: Partial<ModelItem>) =>
-  api.post<{ success: boolean; data: ModelItem }>('/admin/models', data)
+  api.post<{ success: boolean; data?: ModelItem; message?: string }>('/admin/models', data)
 
 export const updateModel = (id: string, data: Partial<ModelItem>) =>
-  api.put<{ success: boolean; data: ModelItem }>(`/admin/models/${id}`, data)
+  api.put<{ success: boolean; data?: ModelItem; message?: string }>(`/admin/models/model?id=${encodeURIComponent(id)}`, data)
 
 export const deleteModel = (id: string) =>
-  api.delete<{ success: boolean }>(`/admin/models/${id}`)
+  api.delete<{ success: boolean; message?: string }>(`/admin/models/model?id=${encodeURIComponent(id)}`)
+
+export const batchDeleteModels = (ids: string[]) =>
+  api.post<{ success: boolean; message?: string }>('/admin/models/batch-delete', { ids })
 
 export const uploadModelLogo = (formData: FormData) =>
   api.post<{ success: boolean; data: { url: string } }>('/admin/models/upload-logo', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 
+export const uploadProviderLogo = (formData: FormData) =>
+  api.post<{ success: boolean; data: { url: string } }>('/admin/providers/upload-logo', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+
+export const listLogos = () =>
+  api.get<{ success: boolean; data: { name: string; url: string }[] }>('/admin/logos')
+
+export const deleteLogo = (filename: string) =>
+  api.delete<{ success: boolean; message?: string }>('/admin/logos', { params: { filename } })
+
 export const getModelTypes = () =>
   api.get<{ success: boolean; data: { value: string; label: string }[] }>('/admin/models/types')
 
 export const getModelStatuses = () =>
   api.get<{ success: boolean; data: { value: string; label: string }[] }>('/admin/models/statuses')
+
+// Provider Management APIs
+export interface Provider {
+  id: number
+  code: string
+  name: string
+  logo_url: string
+  description: string
+  website: string
+  status: string
+  sort_order: number
+  created_at: number
+  updated_at: number
+}
+
+export const getProviders = () =>
+  api.get<{ success: boolean; data: Provider[]; message?: string }>('/admin/providers')
+
+export const getProvider = (id: number) =>
+  api.get<{ success: boolean; data: Provider; message?: string }>(`/admin/providers/${id}`)
+
+export const createProvider = (data: Partial<Provider>) =>
+  api.post<{ success: boolean; data?: Provider; message?: string }>('/admin/providers', data)
+
+export const updateProvider = (id: number, data: Partial<Provider>) =>
+  api.put<{ success: boolean; data?: Provider; message?: string }>(`/admin/providers/${id}`, data)
+
+export const deleteProvider = (id: number) =>
+  api.delete<{ success: boolean; message?: string }>(`/admin/providers/${id}`)
+
+export const getProviderStatuses = () =>
+  api.get<{ success: boolean; data: { value: string; label: string }[] }>('/admin/providers/statuses')

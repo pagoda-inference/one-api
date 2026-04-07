@@ -366,15 +366,24 @@ func GetSelf(c *gin.Context) {
 
 func UpdateUser(c *gin.Context) {
 	ctx := c.Request.Context()
-	var updatedUser model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&updatedUser)
-	if err != nil || updatedUser.Id == 0 {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": i18n.Translate(c, "invalid_parameter"),
 		})
 		return
 	}
+	var updatedUser model.User
+	err = json.NewDecoder(c.Request.Body).Decode(&updatedUser)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": i18n.Translate(c, "invalid_parameter"),
+		})
+		return
+	}
+	updatedUser.Id = id
 	if updatedUser.Password == "" {
 		updatedUser.Password = "$I_LOVE_U" // make Validator happy :)
 	}
@@ -385,7 +394,7 @@ func UpdateUser(c *gin.Context) {
 		})
 		return
 	}
-	originUser, err := model.GetUserById(updatedUser.Id, false)
+	originUser, err := model.GetUserById(id, false)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

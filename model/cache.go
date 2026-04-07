@@ -257,3 +257,42 @@ func CacheGetRandomSatisfiedChannel(group string, model string, ignoreFirstPrior
 	idx := rand.Intn(len(filteredChannels))
 	return filteredChannels[idx], nil
 }
+
+// CacheGetRandomSatisfiedChannelByModel finds a random satisfied channel by model only, without group filter
+func CacheGetRandomSatisfiedChannelByModel(model string, ignoreFirstPriority bool) (*Channel, error) {
+	if !config.MemoryCacheEnabled {
+		return GetRandomSatisfiedChannelByModel(model, ignoreFirstPriority)
+	}
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+
+	// Iterate through all groups to find channels with the given model
+	for _, model2channels := range group2model2channels {
+		channels := model2channels[model]
+		if len(channels) > 0 {
+			// Filter by priority
+			endIdx := len(channels)
+			firstChannel := channels[0]
+			if firstChannel.GetPriority() > 0 {
+				for i := range channels {
+					if channels[i].GetPriority() != firstChannel.GetPriority() {
+						endIdx = i
+						break
+					}
+				}
+			}
+
+			// Get filtered channels
+			filteredChannels := channels[:endIdx]
+			if ignoreFirstPriority && endIdx < len(channels) {
+				filteredChannels = channels[endIdx:]
+			}
+
+			// Use simple random selection
+			idx := rand.Intn(len(filteredChannels))
+			return filteredChannels[idx], nil
+		}
+	}
+
+	return nil, errors.New("channel not found")
+}

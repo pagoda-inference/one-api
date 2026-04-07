@@ -134,12 +134,13 @@ const Dashboard: React.FC = () => {
     grid: { left: 50, right: 20, top: 20, bottom: 30 },
     xAxis: {
       type: 'category',
-      data: modelUsage.map(d => d.model_id?.slice(0, 15) || ''),
+      data: modelUsage.map(d => d.model_name?.slice(0, 20) || d.model_id?.slice(0, 20) || ''),
       axisLine: { lineStyle: { color: '#e8e8e8' } },
       axisLabel: { color: '#8c8c8c', rotate: 30 }
     },
     yAxis: {
       type: 'value',
+      name: 'Token数',
       axisLine: { show: false },
       splitLine: { lineStyle: { color: '#f5f5f5' } },
       axisLabel: { color: '#8c8c8c' }
@@ -255,11 +256,11 @@ const Dashboard: React.FC = () => {
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>Token消耗排行</div>
             <Table
               dataSource={modelUsage}
-              rowKey="model_id"
+              rowKey="model_name"
               pagination={false}
               columns={[
                 { title: '排名', width: 60, render: (_, __, i) => <Badge count={i + 1} style={{ backgroundColor: '#667eea' }} /> },
-                { title: '模型', dataIndex: 'model_id', ellipsis: true },
+                { title: '模型', dataIndex: 'model_name', ellipsis: true },
                 { title: 'Prompt Tokens', dataIndex: 'prompt_tokens', render: (v) => formatQuota(v) },
                 { title: 'Completion Tokens', dataIndex: 'completion_tokens', render: (v) => formatQuota(v) },
                 {
@@ -376,15 +377,14 @@ const Dashboard: React.FC = () => {
                     icon={<CopyOutlined />}
                     style={{ color: '#667eea' }}
                     onClick={() => {
-                      navigator.clipboard.writeText(token.key)
-                      // message.success('已复制')
+                      navigator.clipboard.writeText(`sk-${token.key}`)
                     }}
                   >
                     复制
                   </Button>
                 </div>
                 <div style={{ fontSize: 12, color: '#8c8c8c', fontFamily: 'monospace' }}>
-                  {token.key?.slice(0, 20)}...
+                  sk-{token.key?.slice(0, 20)}...
                 </div>
               </div>
             ))}

@@ -463,14 +463,40 @@ func GetHourlyUsageStatistics(userId int, startTimestamp, endTimestamp int64) ([
 	return stats, err
 }
 
+// GetActiveUsersByLogs returns user IDs that made API calls in the given time range
+func GetActiveUsersByLogs(startTimestamp, endTimestamp int64) ([]int, error) {
+	var userIds []int
+	query := LOG_DB.Table("logs").
+		Where("type = ?", LogTypeConsume).
+		Where("created_at >= ?", startTimestamp).
+		Where("created_at <= ?", endTimestamp).
+		Distinct("user_id").
+		Pluck("user_id", &userIds)
+	return userIds, query.Error
+}
+
 // GetUserUsageSummary returns a summary of usage for a user
 func GetUserUsageSummary(userId int, startTimestamp, endTimestamp int64) (map[string]interface{}, error) {
-	var totalQuota int64
-	var totalPromptTokens int64
-	var totalCompletionTokens int64
-	var totalRequests int64
+	type usageResult struct {
+		TotalRequests          int64 `gorm:"column:total_requests"`
+		TotalQuota             int64 `gorm:"column:total_quota"`
+		TotalPromptTokens      int64 `gorm:"column:total_prompt_tokens"`
+		TotalCompletionTokens  int64 `gorm:"column:total_completion_tokens"`
+	}
+
+	result := &usageResult{}
+	ifnull := "IFNULL"
+	if common.UsingPostgreSQL {
+		ifnull = "COALESCE"
+	}
 
 	query := LOG_DB.Table("logs").
+		Select(fmt.Sprintf(`
+			COUNT(1) as total_requests,
+			%s(SUM(quota), 0) as total_quota,
+			%s(SUM(prompt_tokens), 0) as total_prompt_tokens,
+			%s(SUM(completion_tokens), 0) as total_completion_tokens
+		`, ifnull, ifnull, ifnull)).
 		Where("type = ?", LogTypeConsume)
 
 	if userId > 0 {
@@ -483,27 +509,16 @@ func GetUserUsageSummary(userId int, startTimestamp, endTimestamp int64) (map[st
 		query = query.Where("created_at <= ?", endTimestamp)
 	}
 
-	err := query.Select(`
-		COUNT(1) as total_requests,
-		COALESCE(SUM(quota), 0) as total_quota,
-		COALESCE(SUM(prompt_tokens), 0) as total_prompt_tokens,
-		COALESCE(SUM(completion_tokens), 0) as total_completion_tokens
-	`).Scan(map[string]interface{}{
-		"total_requests":          &totalRequests,
-		"total_quota":             &totalQuota,
-		"total_prompt_tokens":     &totalPromptTokens,
-		"total_completion_tokens": &totalCompletionTokens,
-	}).Error
-
+	err := query.Scan(result).Error
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]interface{}{
-		"total_requests":          totalRequests,
-		"total_quota":             totalQuota,
-		"total_prompt_tokens":     totalPromptTokens,
-		"total_completion_tokens": totalCompletionTokens,
-		"total_tokens":            totalPromptTokens + totalCompletionTokens,
+		"total_requests":          result.TotalRequests,
+		"total_quota":             result.TotalQuota,
+		"total_prompt_tokens":     result.TotalPromptTokens,
+		"total_completion_tokens": result.TotalCompletionTokens,
+		"total_tokens":            result.TotalPromptTokens + result.TotalCompletionTokens,
 	}, nil
 }

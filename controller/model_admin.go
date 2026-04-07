@@ -14,27 +14,29 @@ import (
 )
 
 type ModelRequest struct {
-	Id            string `json:"id"`
-	Name          string `json:"name" binding:"required"`
-	Provider      string `json:"provider"`
-	ModelType     string `json:"model_type"`
-	Description   string `json:"description"`
-	ContextLen    int    `json:"context_len"`
+	Id            string  `json:"id"`
+	Name          string  `json:"name"`
+	Provider      string  `json:"provider"`
+	ModelType     string  `json:"model_type"`
+	Description   string  `json:"description"`
+	ContextLen    int     `json:"context_len"`
 	InputPrice    float64 `json:"input_price"`
 	OutputPrice   float64 `json:"output_price"`
-	Capabilities  string `json:"capabilities"`
-	Status        string `json:"status"`
-	IconUrl       string `json:"icon_url"`
-	SortOrder     int    `json:"sort_order"`
+	Capabilities  string  `json:"capabilities"`
+	Status        string  `json:"status"`
+	IconUrl       string  `json:"icon_url"`
+	SortOrder     int     `json:"sort_order"`
+	RateLimitRPM  int     `json:"rate_limit_rpm"`
+	RateLimitTPM  int     `json:"rate_limit_tpm"`
 }
 
 type UploadLogoResponse struct {
 	Url string `json:"url"`
 }
 
-// AdminListModels 获取所有模型
+// AdminListModels 获取所有模型（从 model_info 读取）
 func AdminListModels(c *gin.Context) {
-	models, err := model.GetAllAdminModels()
+	models, err := model.GetAllMarketModels()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -51,20 +53,17 @@ func AdminListModels(c *gin.Context) {
 
 // GetModel 获取单个模型
 func GetModel(c *gin.Context) {
-	id := c.Param("id")
-	m, err := model.GetAdminModelById(id)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "模型不存在",
-		})
+	id := c.Query("id")
+	if id == "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "缺少模型ID"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    m,
-	})
+	m, err := model.GetMarketModelById(id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "模型不存在"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": m})
 }
 
 // CreateModel 创建模型
@@ -78,7 +77,7 @@ func CreateModel(c *gin.Context) {
 		return
 	}
 
-	m := &model.Model{
+	m := &model.ModelInfo{
 		Id:           req.Id,
 		Name:         req.Name,
 		Provider:     req.Provider,
@@ -91,8 +90,10 @@ func CreateModel(c *gin.Context) {
 		Status:       req.Status,
 		IconUrl:      req.IconUrl,
 		SortOrder:    req.SortOrder,
-		CreatedTime:  time.Now().Unix(),
-		UpdatedTime:  time.Now().Unix(),
+		RateLimitRPM: req.RateLimitRPM,
+		RateLimitTPM: req.RateLimitTPM,
+		CreatedAt:    time.Now().Unix(),
+		UpdatedAt:    time.Now().Unix(),
 	}
 
 	if m.Id == "" {
@@ -102,7 +103,7 @@ func CreateModel(c *gin.Context) {
 		m.Status = "active"
 	}
 
-	err := model.CreateModel(m)
+	err := m.Create()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -120,7 +121,11 @@ func CreateModel(c *gin.Context) {
 
 // UpdateModel 更新模型
 func UpdateModel(c *gin.Context) {
-	id := c.Param("id")
+	id := c.Query("id")
+	if id == "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "缺少模型ID"})
+		return
+	}
 	var req ModelRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -130,7 +135,7 @@ func UpdateModel(c *gin.Context) {
 		return
 	}
 
-	m, err := model.GetAdminModelById(id)
+	m, err := model.GetMarketModelById(id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -169,9 +174,15 @@ func UpdateModel(c *gin.Context) {
 	if req.SortOrder >= 0 {
 		m.SortOrder = req.SortOrder
 	}
-	m.UpdatedTime = time.Now().Unix()
+	if req.RateLimitRPM >= 0 {
+		m.RateLimitRPM = req.RateLimitRPM
+	}
+	if req.RateLimitTPM >= 0 {
+		m.RateLimitTPM = req.RateLimitTPM
+	}
+	m.UpdatedAt = time.Now().Unix()
 
-	err = model.UpdateModel(m)
+	err = m.Update()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -189,8 +200,12 @@ func UpdateModel(c *gin.Context) {
 
 // DeleteModel 删除模型
 func DeleteModel(c *gin.Context) {
-	id := c.Param("id")
-	err := model.DeleteModel(id)
+	id := c.Query("id")
+	if id == "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "缺少模型ID"})
+		return
+	}
+	err := model.DeleteMarketModel(id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -202,6 +217,21 @@ func DeleteModel(c *gin.Context) {
 		"success": true,
 		"message": "删除成功",
 	})
+}
+
+// BatchDeleteModels 批量删除模型
+func BatchDeleteModels(c *gin.Context) {
+	var req struct {
+		Ids []string `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.Ids) == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "请选择要删除的模型"})
+		return
+	}
+	for _, id := range req.Ids {
+		model.DeleteMarketModel(id)
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": fmt.Sprintf("已删除 %d 个模型", len(req.Ids))})
 }
 
 // UploadModelLogo 上传模型 Logo
@@ -237,7 +267,7 @@ func UploadModelLogo(c *gin.Context) {
 
 	// 生成文件名
 	filename := fmt.Sprintf("model_%d_%s%s", time.Now().UnixNano(), random.GetUUID()[:8], ext)
-	uploadDir := "web/public/logos"
+	uploadDir := "/data/logos"
 
 	// 确保目录存在
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
@@ -266,6 +296,29 @@ func UploadModelLogo(c *gin.Context) {
 		},
 	})
 }
+
+// GroupRequest for model group CRUD - DEPRECATED, use channels.group instead
+// type GroupRequest struct {
+// 	Id          int    `json:"id"`
+// 	Name        string `json:"name" binding:"required"`
+// 	Code        string `json:"code"`
+// 	Description string `json:"description"`
+// 	IconUrl     string `json:"icon_url"`
+// 	SortOrder   int    `json:"sort_order"`
+// 	Status      string `json:"status"`
+// }
+
+// AdminListModelGroups - DEPRECATED
+// func AdminListModelGroups(c *gin.Context) { ... }
+
+// CreateModelGroup - DEPRECATED
+// func CreateModelGroup(c *gin.Context) { ... }
+
+// UpdateModelGroup - DEPRECATED
+// func UpdateModelGroup(c *gin.Context) { ... }
+
+// DeleteModelGroup - DEPRECATED
+// func DeleteModelGroup(c *gin.Context) { ... }
 
 // GetModelTypes 获取模型类型列表
 func GetModelTypes(c *gin.Context) {

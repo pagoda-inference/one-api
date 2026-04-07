@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -18,15 +19,16 @@ import (
 type OpsStats struct {
 	TodayRevenue     float64            `json:"today_revenue"`
 	TodayUsage       int64              `json:"today_usage_tokens"`
+	TodayTokens      int64              `json:"today_tokens"`
 	ActiveUsers      int                `json:"active_users"`
 	ChannelHealth    float64            `json:"channel_health_rate"`
-	TotalUsers      int64              `json:"total_users"`
-	TotalChannels   int64              `json:"total_channels"`
-	TotalTokens     int64              `json:"total_tokens"`
-	TotalQuota      int64              `json:"total_quota"`
-	RevenueByDay    map[string]float64 `json:"revenue_by_day"`
-	UsageByModel    map[string]int64   `json:"usage_by_model"`
-	TopUpByDay      map[string]float64  `json:"topup_by_day"`
+	TotalUsers       int64              `json:"total_users"`
+	TotalChannels    int64              `json:"total_channels"`
+	TotalTokens      int64              `json:"total_tokens"`
+	TotalQuota       int64              `json:"total_quota"`
+	RevenueByDay     map[string]float64 `json:"revenue_by_day"`
+	UsageByModel     map[string]int64   `json:"usage_by_model"`
+	TopUpByDay       map[string]float64 `json:"topup_by_day"`
 }
 
 // GetOpsStats handles GET /api/admin/ops/stats
@@ -59,15 +61,50 @@ func GetOpsStats(c *gin.Context) {
 	// Today's usage
 	usage, _ := model.GetUserUsageSummary(0, startOfDay, endOfDay)
 	if usage != nil {
-		stats.TodayUsage = usage["total_tokens"].(int64)
+		if v, ok := usage["total_tokens"].(int64); ok {
+			stats.TodayTokens = v
+			stats.TodayUsage = v
+		} else if v, ok := usage["total_tokens"].(int); ok {
+			stats.TodayTokens = int64(v)
+			stats.TodayUsage = int64(v)
+		}
 	}
 
 	// Total users
 	totalUsers, _ := model.CountUsers()
 	stats.TotalUsers = totalUsers
 
-	// Active users today
-	stats.ActiveUsers = len(paidOrders) // Approximation
+	// Active users today - count distinct users with activity (from paid orders + from logs)
+	activeUserSet := make(map[int]bool)
+	for _, order := range paidOrders {
+		if order.CreatedAt >= startOfDay && order.CreatedAt < endOfDay {
+			activeUserSet[order.UserId] = true
+		}
+	}
+	// Also count users who made API calls today (from logs)
+	todayLogsUsers, _ := model.GetActiveUsersByLogs(startOfDay, endOfDay)
+	for _, uid := range todayLogsUsers {
+		activeUserSet[uid] = true
+	}
+	stats.ActiveUsers = len(activeUserSet)
+
+	// Total quota - sum of all users' quota
+	allUsers, _ := model.GetAllUsers(0, 10000, "")
+	var totalQuota int64
+	for _, u := range allUsers {
+		totalQuota += u.Quota
+	}
+	stats.TotalQuota = totalQuota
+
+	// Total tokens consumed (all time)
+	allTimeUsage, _ := model.GetUserUsageSummary(0, 0, 0)
+	if allTimeUsage != nil {
+		if v, ok := allTimeUsage["total_tokens"].(int64); ok {
+			stats.TotalTokens = v
+		} else if v, ok := allTimeUsage["total_tokens"].(int); ok {
+			stats.TotalTokens = int64(v)
+		}
+	}
 
 	// Total channels
 	totalChannels, _ := model.CountChannels()
@@ -267,8 +304,8 @@ func GetChannelHealth(c *gin.Context) {
 		Name         string  `json:"name"`
 		Status       string  `json:"status"`
 		Type         int     `json:"type"`
+		Group        string  `json:"group"`
 		BaseURL      string  `json:"base_url"`
-		Balance      float64 `json:"balance"`
 		SuccessRate  float64 `json:"success_rate"`
 		AvgLatency   int64   `json:"avg_latency"`
 		Priority     int     `json:"priority"`
@@ -285,6 +322,7 @@ func GetChannelHealth(c *gin.Context) {
 			Name:       ch.Name,
 			Status:     strconv.Itoa(ch.Status),
 			Type:       ch.Type,
+			Group:      ch.Group,
 			BaseURL:    ch.GetBaseURL(),
 			Priority:   int(ch.GetPriority()),
 			IsEnabled:  ch.Status == model.ChannelStatusEnabled,
@@ -330,6 +368,7 @@ func GetChannelHealth(c *gin.Context) {
 // GetOpsUsers handles GET /api/admin/ops/users
 func GetOpsUsers(c *gin.Context) {
 	role := c.GetInt(ctxkey.Role)
+	fmt.Printf("[DEBUG GetOpsUsers] role=%d, RoleAdminUser=%d\n", role, model.RoleAdminUser)
 	if role < model.RoleAdminUser {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Admin access required"})
 		return
@@ -337,6 +376,7 @@ func GetOpsUsers(c *gin.Context) {
 
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	offset, _ := strconv.Atoi(c.Query("offset"))
+	fmt.Printf("[DEBUG GetOpsUsers] limit=%d, offset=%d\n", limit, offset)
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -344,13 +384,15 @@ func GetOpsUsers(c *gin.Context) {
 		offset = 0
 	}
 
-	users, err := model.GetAllUsers(limit, offset, "")
+	users, err := model.GetAllUsers(offset, limit, "")
+	fmt.Printf("[DEBUG GetOpsUsers] after GetAllUsers: users=%d, err=%v\n", len(users), err)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to get users"})
 		return
 	}
 
 	total, _ := model.CountUsers()
+	fmt.Printf("[DEBUG GetOpsUsers] total=%d\n", total)
 
 	// Enrich with usage data
 	type EnrichedUser struct {

@@ -14,18 +14,24 @@ const (
 
 // Tenant represents an organization/team in multi-tenant system
 type Tenant struct {
-	Id          int       `json:"id" gorm:"primarykey"`
-	Name        string    `json:"name" gorm:"type:varchar(64);not null"`
-	Code        string    `json:"code" gorm:"type:varchar(32);uniqueIndex"` // Unique identifier for API
-	Status      int       `json:"status" gorm:"type:int;default:1"`
-	OwnerId     int       `json:"owner_id" gorm:"type:int;index"` // Owner user ID
-	QuotaLimit  int64     `json:"quota_limit" gorm:"bigint;default:0"` // Total quota limit for tenant
-	QuotaUsed   int64     `json:"quota_used" gorm:"bigint;default:0"`  // Quota used by tenant
-	MaxUsers    int       `json:"max_users" gorm:"type:int;default:10"` // Max users allowed
-	MaxChannels int       `json:"max_channels" gorm:"type:int;default:5"` // Max channels allowed
-	Settings    string    `json:"settings" gorm:"type:text"` // JSON settings
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Id           int       `json:"id" gorm:"primarykey"`
+	Name         string    `json:"name" gorm:"type:varchar(64);not null"`
+	Code         string    `json:"code" gorm:"type:varchar(32);uniqueIndex"` // Unique identifier for API
+	Status       int       `json:"status" gorm:"type:int;default:1"`
+	OwnerId      int       `json:"owner_id" gorm:"type:int;index"`           // Owner user ID
+	QuotaLimit   int64     `json:"quota_limit" gorm:"bigint;default:0"`      // Total quota limit for tenant
+	QuotaUsed    int64     `json:"quota_used" gorm:"bigint;default:0"`       // Quota used by tenant
+	MaxUsers     int       `json:"max_users" gorm:"type:int;default:10"`     // Max users allowed
+	MaxChannels  int       `json:"max_channels" gorm:"type:int;default:5"`   // Max channels allowed
+	Settings     string    `json:"settings" gorm:"type:text"`               // JSON settings
+	CompanyId    int       `json:"company_id" gorm:"type:int;index"`         // Belongs to which company
+	DepartmentId int       `json:"department_id" gorm:"type:int;index"`     // Belongs to which department
+	// Rate limiting fields (0 means unlimited)
+	RateLimitRpm         int       `json:"rate_limit_rpm" gorm:"type:int;default:0"`
+	RateLimitTpm         int       `json:"rate_limit_tpm" gorm:"type:int;default:0"`
+	RateLimitConcurrent   int       `json:"rate_limit_concurrent" gorm:"type:int;default:0"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 func (Tenant) TableName() string {
@@ -86,6 +92,13 @@ func GetTenantById(id int) (*Tenant, error) {
 		return nil, err
 	}
 	return &tenant, nil
+}
+
+// GetAllTenants returns all tenants (for root user)
+func GetAllTenants() ([]*Tenant, error) {
+	var tenants []*Tenant
+	err := DB.Order("id ASC").Find(&tenants).Error
+	return tenants, err
 }
 
 // GetTenantByCode returns tenant by code

@@ -178,6 +178,34 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&Model{}); err != nil {
 		return err
 	}
+	// ModelGroup is deprecated - use channels.group for provider concept
+	// if err = DB.AutoMigrate(&ModelGroup{}); err != nil {
+	// 	return err
+	// }
+	// Tenant tables
+	if err = DB.AutoMigrate(&Tenant{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&UserTenantRole{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&QuotaAllocation{}); err != nil {
+		return err
+	}
+	// Provider table
+	if err = DB.AutoMigrate(&Provider{}); err != nil {
+		return err
+	}
+	// Company and Department tables (Platform/Company/Department/Team hierarchy)
+	if err = DB.AutoMigrate(&Company{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&Department{}); err != nil {
+		return err
+	}
+	if err = DB.AutoMigrate(&AuditLog{}); err != nil {
+		return err
+	}
 	return nil
 }
 
