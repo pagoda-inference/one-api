@@ -22,6 +22,7 @@ const OpsDashboard: React.FC = () => {
   const [usersTotal, setUsersTotal] = useState(0)
   const [channels, setChannels] = useState<Channel[]>([])
   const [channelsLoading, setChannelsLoading] = useState(false)
+  const [channelsTotal, setChannelsTotal] = useState(0)
   const [channelModalVisible, setChannelModalVisible] = useState(false)
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [channelForm] = Form.useForm()
@@ -102,12 +103,13 @@ const OpsDashboard: React.FC = () => {
     }
   }
 
-  const loadChannels = async () => {
+  const loadChannels = async (offset: number = 0, limit: number = 10) => {
     try {
       setChannelsLoading(true)
-      const res = await getChannels()
+      const res = await getChannels({ offset, limit })
       if (res.data.success) {
         setChannels(res.data.data || [])
+        setChannelsTotal(res.data.total || 0)
       }
     } catch (error) {
       console.error('Failed to load channels:', error)
@@ -412,7 +414,7 @@ const OpsDashboard: React.FC = () => {
               columns={channelColumns}
               rowKey="id"
               size="small"
-              pagination={{ pageSize: 10 }}
+              pagination={{ pageSize: 10, total: channelHealth.length, showTotal: (t) => `共 ${t} 条` }}
             />
           </Card>
         </TabPane>
@@ -486,7 +488,8 @@ const OpsDashboard: React.FC = () => {
               ]}
               rowKey="id"
               loading={channelsLoading}
-              pagination={{ pageSize: 10 }}
+              pagination={{ pageSize: 10, total: channelsTotal, showTotal: (t) => `共 ${t} 条` }}
+              onChange={(pagination) => loadChannels(((pagination.current || 1) - 1) * 10, 10)}
             />
           </Card>
         </TabPane>

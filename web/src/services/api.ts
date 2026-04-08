@@ -370,7 +370,7 @@ export interface Channel {
 }
 
 export const getChannels = (params?: { limit?: number; offset?: number }) =>
-  api.get<{ success: boolean; data: Channel[]; message?: string }>('/channel', { params })
+  api.get<{ success: boolean; data: Channel[]; message?: string; total?: number }>('/channel', { params })
 
 export const getChannelGroups = () =>
   api.get<{ success: boolean; data: string[] }>('/channel/groups')

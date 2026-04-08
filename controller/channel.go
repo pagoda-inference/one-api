@@ -12,10 +12,23 @@ import (
 
 func GetAllChannels(c *gin.Context) {
 	p, _ := strconv.Atoi(c.Query("p"))
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	offset, _ := strconv.Atoi(c.Query("offset"))
+
+	// Default to ItemsPerPage if no limit specified
+	if limit <= 0 {
+		limit = config.ItemsPerPage
+	}
 	if p < 0 {
 		p = 0
 	}
-	channels, err := model.GetAllChannels(p*config.ItemsPerPage, config.ItemsPerPage, "limited")
+
+	startIdx := p * limit
+	if offset > 0 {
+		startIdx = offset
+	}
+
+	channels, err := model.GetAllChannels(startIdx, limit, "limited")
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -23,10 +36,15 @@ func GetAllChannels(c *gin.Context) {
 		})
 		return
 	}
+
+	// Get total count for pagination
+	total, _ := model.CountChannels()
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    channels,
+		"total":   total,
 	})
 	return
 }
