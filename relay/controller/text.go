@@ -20,6 +20,7 @@ import (
 	"github.com/pagoda-inference/one-api/relay/channeltype"
 	"github.com/pagoda-inference/one-api/relay/meta"
 	"github.com/pagoda-inference/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/relay/relaymode"
 )
 
 func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
@@ -88,6 +89,32 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 }
 
 func getRequestBody(c *gin.Context, meta *meta.Meta, textRequest *model.GeneralOpenAIRequest, adaptor adaptor.Adaptor) (io.Reader, error) {
+	// For rerank, we need to map the model name in the body
+	if meta.Mode == relaymode.Rerank {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			return nil, err
+		}
+		var reqBody map[string]any
+		if err := json.Unmarshal(body, &reqBody); err != nil {
+			return nil, err
+		}
+		// Model name mapping
+		if modelName, ok := reqBody["model"].(string); ok {
+			if mappedModel, ok := meta.ModelMapping[modelName]; ok {
+				reqBody["model"] = mappedModel
+			}
+		}
+		// Custom type (TGI) needs documents → texts conversion
+		if meta.ChannelType == channeltype.Custom {
+			if docs, ok := reqBody["documents"].([]any); ok {
+				reqBody["texts"] = docs
+				delete(reqBody, "documents")
+			}
+		}
+		body, _ = json.Marshal(reqBody)
+		return bytes.NewBuffer(body), nil
+	}
 	if !config.EnforceIncludeUsage &&
 		meta.APIType == apitype.OpenAI &&
 		meta.OriginModelName == meta.ActualModelName &&

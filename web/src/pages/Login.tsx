@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Button, message, Form, Input, Select } from 'antd'
+import { GlobalOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
 import Logo from '../components/Logo'
+import { useTranslation } from 'react-i18next'
+import { useLanguage } from '../contexts/LanguageContext'
+import { useTheme } from '../contexts/ThemeContext'
 
 interface LarkApp {
   id: number
@@ -11,6 +15,9 @@ interface LarkApp {
 }
 
 const Login: React.FC = () => {
+  const { t } = useTranslation()
+  const { language, toggleLanguage } = useLanguage()
+  const { themeMode, toggleTheme } = useTheme()
   const [loginType, setLoginType] = useState<'feishu' | 'password'>('feishu')
   const [loading, setLoading] = useState(false)
   const [larkApps, setLarkApps] = useState<LarkApp[]>([])
@@ -51,10 +58,10 @@ const Login: React.FC = () => {
         localStorage.setItem('access_token', `sk-${data.data.id}`)
         window.location.href = '/dashboard'
       } else {
-        message.error(data.message || '登录失败')
+        message.error(data.message || t('login.login_failed'))
       }
     } catch {
-      message.error('登录失败，请重试')
+      message.error(t('login.login_retry'))
     } finally {
       setLoading(false)
     }
@@ -65,7 +72,7 @@ const Login: React.FC = () => {
       const stateRes = await fetch('/api/oauth/state')
       const stateData = await stateRes.json()
       if (!stateData.success || !stateData.data) {
-        message.error(stateData.message || '获取登录状态失败')
+        message.error(stateData.message || t('login.get_state_failed'))
         return
       }
       const state = stateData.data
@@ -89,20 +96,45 @@ const Login: React.FC = () => {
       const larkAuthUrl = `https://accounts.feishu.cn/open-apis/authen/v1/authorize?redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}&state=${state}`
       window.location.href = larkAuthUrl
     } catch (err) {
-      message.error('登录失败，请重试')
+      message.error(t('login.login_retry'))
     }
   }
+
+  const isDark = themeMode === 'dark'
 
   return (
     <div style={{
       minHeight: '100vh',
       display: 'flex',
-      background: 'linear-gradient(135deg, #f8fbff 0%, #e8f4ff 100%)'
+      background: isDark ? '#000' : 'linear-gradient(135deg, #f8fbff 0%, #e8f4ff 100%)'
     }}>
+      {/* 顶部右侧语言和主题切换 */}
+      <div style={{
+        position: 'fixed',
+        top: 16,
+        right: 16,
+        zIndex: 100,
+        display: 'flex',
+        gap: 8
+      }}>
+        <Button
+          type="text"
+          icon={<GlobalOutlined />}
+          onClick={toggleLanguage}
+          style={{ color: isDark ? '#fff' : '#667eea' }}
+        />
+        <Button
+          type="text"
+          icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+          onClick={toggleTheme}
+          style={{ color: isDark ? '#fff' : '#667eea' }}
+        />
+      </div>
+
       {/* 左侧品牌区域 */}
       <div style={{
         flex: 1,
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: isDark ? '#001529' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -160,7 +192,7 @@ const Login: React.FC = () => {
           textAlign: 'center',
           position: 'relative',
           zIndex: 1
-        }}>BEDI 宝塔</h1>
+        }}>{t('login.title')}</h1>
 
         <p style={{
           color: 'rgba(255,255,255,0.9)',
@@ -172,8 +204,8 @@ const Login: React.FC = () => {
           position: 'relative',
           zIndex: 1
         }}>
-          企业级 AI 模型网关平台<br />
-          统一接入 · 灵活路由 · 便捷管理
+          {t('login.subtitle')}<br />
+          {language === 'zh' ? '统一接入 · 灵活路由 · 便捷管理' : 'Unified Access · Flexible Routing · Easy Management'}
         </p>
 
         <div style={{
@@ -184,9 +216,9 @@ const Login: React.FC = () => {
           zIndex: 1
         }}>
           {[
-            { icon: '🤖', label: 'AI 模型' },
-            { icon: '🔐', label: '安全认证' },
-            { icon: '📊', label: '用量分析' }
+            { icon: '🤖', label: language === 'zh' ? 'AI 模型' : 'AI Models' },
+            { icon: '🔐', label: language === 'zh' ? '安全认证' : 'Secure Auth' },
+            { icon: '📊', label: language === 'zh' ? '用量分析' : 'Usage Analytics' }
           ].map((item, i) => (
             <div key={i} style={{
               textAlign: 'center',
@@ -217,21 +249,22 @@ const Login: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 40
+        padding: 40,
+        background: isDark ? '#141414' : '#fff'
       }}>
         <div style={{ width: '100%', maxWidth: 360 }}>
           <h2 style={{
             fontSize: 28,
             fontWeight: 700,
-            color: '#1a1a1a',
+            color: isDark ? '#fff' : '#1a1a1a',
             margin: '0 0 8px'
-          }}>欢迎回来</h2>
+          }}>{t('login.welcome_back')}</h2>
           <p style={{
-            color: '#666',
+            color: isDark ? '#a1a1a1' : '#666',
             margin: '0 0 24px',
             fontSize: 14
           }}>
-            {loginType === 'feishu' ? '请使用公司飞书账号登录' : '请输入账号密码登录'}
+            {loginType === 'feishu' ? t('login.feishu_login_desc') : t('login.password_login_desc')}
           </p>
 
           {loginType === 'feishu' ? (
@@ -240,7 +273,7 @@ const Login: React.FC = () => {
               {larkApps.length > 1 && (
                 <Form.Item style={{ marginBottom: 16 }}>
                   <Select
-                    placeholder="选择组织"
+                    placeholder={language === 'zh' ? '选择组织' : 'Select Organization'}
                     value={selectedAppId}
                     onChange={(value) => setSelectedAppId(value)}
                     style={{ width: '100%', height: 48 }}
@@ -279,12 +312,12 @@ const Login: React.FC = () => {
                   <path d="M18 4C10.268 4 4 10.268 4 18s6.268 14 14 14 14-6.268 14-14S25.732 4 18 4z" fill="#fff"/>
                   <path d="M18 8c-5.523 0-10 4.477-10 10s4.477 10 10 10 10-4.477 10-10S23.523 8 18 8zm4.5 14.5h-9v-9h9v9z" fill="#12B7F5"/>
                 </svg>
-                飞书登录 / 注册
+                {t('login.feishu_login')}
               </Button>
 
               <div style={{ textAlign: 'center', margin: '24px 0' }}>
                 <a onClick={() => setLoginType('password')} style={{ color: '#667eea', cursor: 'pointer' }}>
-                  使用密码登录
+                  {t('login.use_password')}
                 </a>
               </div>
             </>
@@ -295,11 +328,11 @@ const Login: React.FC = () => {
                 onFinish={handlePasswordLogin}
                 size="large"
               >
-                <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
-                  <Input placeholder="用户名" />
+                <Form.Item name="username" rules={[{ required: true, message: language === 'zh' ? '请输入用户名' : 'Please enter username' }]}>
+                  <Input placeholder={t('common.username')} />
                 </Form.Item>
-                <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
-                  <Input.Password placeholder="密码" />
+                <Form.Item name="password" rules={[{ required: true, message: language === 'zh' ? '请输入密码' : 'Please enter password' }]}>
+                  <Input.Password placeholder={t('common.password')} />
                 </Form.Item>
                 <Form.Item>
                   <Button type="primary" htmlType="submit" block loading={loading} style={{
@@ -310,35 +343,35 @@ const Login: React.FC = () => {
                     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     border: 'none'
                   }}>
-                    登录
+                    {t('common.login')}
                   </Button>
                 </Form.Item>
               </Form>
 
               <div style={{ textAlign: 'center', margin: '16px 0' }}>
                 <a onClick={() => setLoginType('feishu')} style={{ color: '#667eea', cursor: 'pointer' }}>
-                  使用飞书登录
+                  {t('login.use_feishu')}
                 </a>
               </div>
             </>
           )}
 
           <p style={{
-            color: '#999',
+            color: isDark ? '#666' : '#999',
             fontSize: 12,
             marginTop: 24,
             textAlign: 'center'
           }}>
-            登录即表示同意我们的服务条款
+            {language === 'zh' ? '登录即表示同意我们的服务条款' : 'By logging in, you agree to our Terms of Service'}
           </p>
 
           <p style={{
-            color: '#ccc',
+            color: isDark ? '#444' : '#ccc',
             fontSize: 12,
             marginTop: 48,
             textAlign: 'center'
           }}>
-            © 2026 BEDI 宝塔. 保留所有权利.
+            {t('login.copyright')}
           </p>
         </div>
       </div>

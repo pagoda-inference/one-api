@@ -5,11 +5,15 @@ import {
   ExperimentOutlined, AppstoreOutlined, BarsOutlined,
   ThunderboltOutlined, PictureOutlined, AudioOutlined, FileTextOutlined
 } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
+import { useTheme } from '../contexts/ThemeContext'
 import { getMarketModels, getMarketStats, getMarketGroups, getModelTrial, startModelTrial, calculatePrice, Model, ModelGroup, MarketStats } from '../services/api'
 
 const { Search } = Input
 
 const ModelMarket: React.FC = () => {
+  const { t } = useTranslation()
+  const { themeMode } = useTheme()
   const [models, setModels] = useState<Model[]>([])
   const [groups, setGroups] = useState<ModelGroup[]>([])
   const [stats, setStats] = useState<MarketStats | null>(null)
@@ -186,12 +190,14 @@ const ModelMarket: React.FC = () => {
     }
   }
 
-  // Model type options with icons
+  // Model type options with icons (ordered by category)
   const typeOptions = [
     { value: '', label: '全部类型' },
     { value: 'chat', label: '对话', icon: <RobotOutlined /> },
     { value: 'vlm', label: '多模态', icon: <ExperimentOutlined /> },
+    { value: 'reranker', label: '重排序', icon: <SyncOutlined /> },
     { value: 'embedding', label: '嵌入', icon: <FileTextOutlined /> },
+    { value: 'ocr', label: 'OCR', icon: <FileTextOutlined /> },
     { value: 'image', label: '图像', icon: <PictureOutlined /> },
     { value: 'audio', label: '音频', icon: <AudioOutlined /> }
   ]
@@ -202,16 +208,17 @@ const ModelMarket: React.FC = () => {
       style={{
         borderRadius: 12,
         border: 'none',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+        boxShadow: '0 2px 8px var(--shadow)',
+        background: 'var(--bg-card)'
       }}
-      styles={{ body: { padding: '16px 20px' } }}
+      styles={{ body: { padding: '16px 20px', background: 'var(--bg-card)' } }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ color: '#8c8c8c', fontSize: 13, marginBottom: 4 }}>{title}</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#262626' }}>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
             {value}
-            <span style={{ fontSize: 13, color: '#8c8c8c', marginLeft: 4 }}>{suffix}</span>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)', marginLeft: 4 }}>{suffix}</span>
           </div>
         </div>
         <div style={{
@@ -246,14 +253,16 @@ const ModelMarket: React.FC = () => {
     <Card
       hoverable
       onClick={() => showModelDetail(model)}
+      className="model-card"
       style={{
         borderRadius: 12,
         border: 'none',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        boxShadow: '0 2px 8px var(--shadow)',
         overflow: 'hidden',
-        transition: 'all 0.3s'
+        transition: 'all 0.3s',
+        background: 'var(--bg-card)'
       }}
-      styles={{ body: { padding: 16 } }}
+      styles={{ body: { padding: 16, background: 'var(--bg-card)' } }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         {getModelLogo(model) ? (
@@ -266,7 +275,7 @@ const ModelMarket: React.FC = () => {
               borderRadius: 10,
               objectFit: 'contain',
               flexShrink: 0,
-              background: '#f5f5f5'
+              background: themeMode === 'dark' ? 'var(--bg-secondary)' : '#f5f5f5'
             }}
             onError={(e) => {
               // 如果图片加载失败，显示图标
@@ -294,7 +303,7 @@ const ModelMarket: React.FC = () => {
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ fontWeight: 600, fontSize: 14, color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: model.sla === 'enterprise' ? 140 : '100%' }}>{model.name}</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: model.sla === 'enterprise' ? 140 : '100%' }}>{model.name}</span>
             {model.is_trial && (
               <Tag
                 style={{
@@ -306,7 +315,7 @@ const ModelMarket: React.FC = () => {
                   padding: '0 4px'
                 }}
               >
-                试用
+                {t ? t('model.trial') : '试用'}
               </Tag>
             )}
             {model.sla === 'enterprise' && (
@@ -325,11 +334,11 @@ const ModelMarket: React.FC = () => {
             )}
           </div>
 
-          <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 8 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
             {model.provider}
           </div>
 
-          <div style={{ fontSize: 12, color: '#595959', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {model.description || '暂无描述'}
           </div>
 
@@ -342,16 +351,16 @@ const ModelMarket: React.FC = () => {
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingTop: 8,
-            borderTop: '1px solid #f0f0f0'
+            borderTop: '1px solid var(--border-color)'
           }}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ fontSize: 11, color: '#8c8c8c' }}>输入</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>输入</span>
               <span style={{ fontSize: 12, fontWeight: 500, color: '#667eea' }}>
                 {formatPrice(model.input_price)}
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ fontSize: 11, color: '#8c8c8c' }}>输出</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>输出</span>
               <span style={{ fontSize: 12, fontWeight: 500, color: '#764ba2' }}>
                 {formatPrice(model.output_price)}
               </span>
@@ -370,10 +379,11 @@ const ModelMarket: React.FC = () => {
       style={{
         borderRadius: 12,
         border: 'none',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-        marginBottom: 8
+        boxShadow: '0 2px 8px var(--shadow)',
+        marginBottom: 8,
+        background: 'var(--bg-card)'
       }}
-      styles={{ body: { padding: '12px 16px' } }}
+      styles={{ body: { padding: '12px 16px', background: 'var(--bg-card)' } }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {getModelLogo(model) ? (
@@ -385,7 +395,7 @@ const ModelMarket: React.FC = () => {
               height: 36,
               borderRadius: 8,
               objectFit: 'contain',
-              background: '#f5f5f5'
+              background: themeMode === 'dark' ? 'var(--bg-secondary)' : '#f5f5f5'
             }}
             onError={(e) => {
               const target = e.target as HTMLImageElement
@@ -411,21 +421,21 @@ const ModelMarket: React.FC = () => {
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>{model.name}</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{model.name}</span>
             {model.is_trial && (
               <Tag style={{ background: '#f6ffed', color: '#52c41a', border: 'none', borderRadius: 4, fontSize: 10 }}>试用</Tag>
             )}
-            <span style={{ fontSize: 12, color: '#8c8c8c' }}>{model.provider}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{model.provider}</span>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#8c8c8c' }}>输入</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>输入</div>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#667eea' }}>{formatPrice(model.input_price)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#8c8c8c' }}>输出</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>输出</div>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#764ba2' }}>{formatPrice(model.output_price)}</div>
           </div>
         </div>
@@ -468,8 +478,8 @@ const ModelMarket: React.FC = () => {
 
       {/* Filters */}
       <Card
-        style={{ marginBottom: 16, borderRadius: 12, border: 'none' }}
-        styles={{ body: { padding: '16px 20px' } }}
+        style={{ marginBottom: 16, borderRadius: 12, border: 'none', background: 'var(--bg-card)' }}
+        styles={{ body: { padding: '16px 20px', background: 'var(--bg-card)' } }}
       >
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} sm={12} md={8}>
@@ -558,9 +568,10 @@ const ModelMarket: React.FC = () => {
                       style={{
                         borderRadius: 12,
                         border: 'none',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+                        boxShadow: '0 2px 8px var(--shadow)',
+                        background: 'var(--bg-card)'
                       }}
-                      styles={{ body: { padding: 16 } }}
+                      styles={{ body: { padding: 16, background: 'var(--bg-card)' } }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         {group.icon_url ? (
@@ -643,7 +654,9 @@ const ModelMarket: React.FC = () => {
               <Descriptions.Item label="类型">
                 <Tag style={{ borderRadius: 4 }}>{selectedModel.model_type}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="上下文长度">{selectedModel.context_len.toLocaleString()} tokens</Descriptions.Item>
+              <Descriptions.Item label={selectedModel.model_type === 'embedding' ? '维度' : '上下文长度'}>
+                {selectedModel.context_len.toLocaleString()}{selectedModel.model_type === 'embedding' ? '' : ' tokens'}
+              </Descriptions.Item>
               <Descriptions.Item label="输入价格">
                 <span style={{ color: '#667eea', fontWeight: 500 }}>{formatPrice(selectedModel.input_price)}</span>
               </Descriptions.Item>

@@ -4,10 +4,38 @@
   box-sizing: border-box;
 }
 
+:root {
+  --color-primary: #667eea;
+  --color-secondary: #764ba2;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f7fa;
+  --bg-card: #ffffff;
+  --text-primary: #262626;
+  --text-secondary: #8c8c8c;
+  --border-color: #f0f0f0;
+  --header-bg: #001529;
+  --shadow: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+  --color-primary: #667eea;
+  --color-secondary: #764ba2;
+  --bg-primary: #141414;
+  --bg-secondary: #1f1f1f;
+  --bg-card: #1f1f1f;
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1a1;
+  --border-color: #303030;
+  --header-bg: #001529;
+  --shadow: rgba(0, 0, 0, 0.3);
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
     'Noto Sans Emoji';
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 #root {
@@ -15,13 +43,14 @@ body {
 }
 
 .layout-header {
-  background: #001529;
+  background: var(--header-bg);
   padding: 0 24px;
 }
 
 .layout-content {
   padding: 24px;
   min-height: calc(100vh - 64px);
+  background: var(--bg-secondary);
 }
 
 .stat-card {
@@ -32,23 +61,25 @@ body {
 .stat-card .stat-value {
   font-size: 28px;
   font-weight: 600;
-  color: #1890ff;
+  color: var(--color-primary);
 }
 
 .stat-card .stat-label {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 8px;
 }
 
 .model-card {
   height: 100%;
   transition: all 0.3s;
+  background: var(--bg-card);
+  border-color: var(--border-color);
 }
 
 .model-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px var(--shadow);
 }
 
 .model-card .model-header {
@@ -62,7 +93,7 @@ body {
   width: 48px;
   height: 48px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -74,11 +105,12 @@ body {
 .model-card .model-name {
   font-size: 16px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .model-card .model-provider {
   font-size: 12px;
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .model-card .model-price {
@@ -86,7 +118,7 @@ body {
   justify-content: space-between;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 }
 
 .model-card .price-item {
@@ -95,24 +127,25 @@ body {
 
 .model-card .price-label {
   font-size: 12px;
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .model-card .price-value {
   font-size: 14px;
   font-weight: 500;
-  color: #1890ff;
+  color: var(--color-primary);
 }
 
 .topup-card {
   text-align: center;
   padding: 24px;
+  background: var(--bg-card);
 }
 
 .topup-amount {
   font-size: 36px;
   font-weight: 600;
-  color: #1890ff;
+  color: var(--color-primary);
   margin: 16px 0;
 }
 
@@ -121,7 +154,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #fafafa;
+  background: var(--bg-secondary);
   border-radius: 8px;
   margin-bottom: 8px;
 }
@@ -129,11 +162,222 @@ body {
 .api-key-item .key-value {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   word-break: break-all;
 }
 
 .usage-chart {
   height: 300px;
   margin-top: 16px;
+}
+
+/* Dark mode specific overrides */
+[data-theme="dark"] .ant-layout {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .ant-layout-header {
+  background: var(--header-bg);
+}
+
+[data-theme="dark"] .ant-card {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .ant-table {
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .ant-modal-content {
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .ant-menu {
+  background: var(--header-bg);
+}
+
+/* Stat card dark mode */
+[data-theme="dark"] .stat-card .stat-value {
+  color: var(--color-primary);
+}
+
+[data-theme="dark"] .stat-card .stat-label {
+  color: var(--text-secondary);
+}
+
+/* Model card dark mode overrides */
+[data-theme="dark"] .model-card {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .model-card .model-name {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .model-card .model-provider {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .model-card .price-label {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .model-card .price-value {
+  color: var(--color-primary);
+}
+
+[data-theme="dark"] .model-card {
+  background: var(--bg-card);
+}
+
+/* Topup card dark mode */
+[data-theme="dark"] .topup-card {
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .topup-amount {
+  color: var(--color-primary);
+}
+
+/* API key item dark mode */
+[data-theme="dark"] .api-key-item {
+  background: var(--bg-primary);
+}
+
+[data-theme="dark"] .api-key-item .key-value {
+  color: var(--text-secondary);
+}
+
+/* Usage chart dark mode */
+[data-theme="dark"] .usage-chart {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* Ant Design component dark mode fixes */
+[data-theme="dark"] .ant-card {
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .ant-descriptions-item-label {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .ant-descriptions-item-content {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ant-drawer-header {
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .ant-drawer-body {
+  background: var(--bg-card);
+}
+
+[data-theme="dark"] .ant-tabs-tab {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .ant-tabs-tab-active {
+  color: var(--color-primary);
+}
+
+[data-theme="dark"] .ant-select-selector {
+  background: var(--bg-card) !important;
+}
+
+[data-theme="dark"] .ant-input {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ant-tabs-content {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ant-form-item-export {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ant-statistic-title {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .ant-statistic-content {
+  color: var(--text-primary);
+}
+
+/* Search input dark mode */
+[data-theme="dark"] .ant-input {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .ant-input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* Badge dark mode */
+[data-theme="dark"] .ant-badge-count {
+  background: var(--color-primary);
+}
+
+/* Drawer dark mode */
+[data-theme="dark"] .ant-drawer-header-title .ant-drawer-title {
+  color: var(--text-primary);
+}
+
+/* Code blocks in dark mode */
+[data-theme="dark"] pre {
+  background: #1a1a2e;
+  color: #e0e0e0;
+}
+
+/* Tag dark mode */
+[data-theme="dark"] .ant-tag {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+/* Segment control dark mode */
+[data-theme="dark"] .ant-segmented {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .ant-segmented-item {
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .ant-segmented-item-selected {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* Button text dark mode */
+[data-theme="dark"] .ant-btn {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ant-btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+/* Menu dark mode */
+[data-theme="dark"] .ant-menu-item {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .ant-menu-item-selected {
+  background: rgba(102, 126, 234, 0.15);
+  color: var(--color-primary);
 }

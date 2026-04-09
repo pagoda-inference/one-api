@@ -304,7 +304,7 @@ export const createToken = (data: { name: string; models?: string }) =>
 export const deleteToken = (id: number) =>
   api.delete(`/token/${id}`)
 
-export const updateToken = (id: number, data: { name?: string; models?: string; remain_quota?: number; unlimited_quota?: boolean; rate_limit_rpm?: number; rate_limit_tpm?: number; rate_limit_concurrent?: number }) =>
+export const updateToken = (id: number, data: { name?: string; models?: string; status?: number; remain_quota?: number; unlimited_quota?: boolean; rate_limit_rpm?: number; rate_limit_tpm?: number; rate_limit_concurrent?: number }) =>
   api.put(`/token/${id}`, data)
 
 export const getUserInfo = () =>
@@ -341,6 +341,16 @@ export const getOpsRevenue = (params?: { start?: string; end?: string }) =>
 
 export const getOpsUsage = (params?: { start?: string; end?: string }) =>
   api.get('/admin/ops/usage', { params })
+
+// Admin usage stats
+export const getAdminUsageSummary = (params?: { start?: string; end?: string; model?: string; channel?: number }) =>
+  api.get('/admin/usage/summary', { params })
+
+export const getAdminUsageByUsers = (params?: { start?: string; end?: string }) =>
+  api.get('/admin/usage/by-users', { params })
+
+export const getAdminUsageByModels = (params?: { start?: string; end?: string }) =>
+  api.get('/admin/usage/by-models', { params })
 
 export const getChannelHealth = () =>
   api.get('/admin/channels/health')

@@ -175,6 +175,13 @@ func UpdateChannel(c *gin.Context) {
 		})
 		return
 	}
+	// If key is empty (user didn't provide a new key), preserve the existing key
+	if channel.Key == "" {
+		existingChannel, err := model.GetChannelById(channel.Id, false)
+		if err == nil && existingChannel != nil {
+			channel.Key = existingChannel.Key
+		}
+	}
 	err = channel.Update()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

@@ -23,6 +23,7 @@ const OpsDashboard: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([])
   const [channelsLoading, setChannelsLoading] = useState(false)
   const [channelsTotal, setChannelsTotal] = useState(0)
+  const [channelsOffset, setChannelsOffset] = useState(0)
   const [channelModalVisible, setChannelModalVisible] = useState(false)
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [channelForm] = Form.useForm()
@@ -106,6 +107,7 @@ const OpsDashboard: React.FC = () => {
   const loadChannels = async (offset: number = 0, limit: number = 10) => {
     try {
       setChannelsLoading(true)
+      setChannelsOffset(offset)
       const res = await getChannels({ offset, limit })
       if (res.data.success) {
         setChannels(res.data.data || [])
@@ -157,6 +159,8 @@ const OpsDashboard: React.FC = () => {
       }))
     }
     channelForm.setFieldsValue({ ...record, modelMappings })
+    // 如果是编辑模式，用占位符触发 Input.Password 显示掩码
+    channelForm.setFieldsValue({ key: '********' })
     loadProviders()
     setChannelModalVisible(true)
   }
@@ -202,7 +206,8 @@ const OpsDashboard: React.FC = () => {
       delete payload.modelMappings
 
       // 如果是编辑模式且用户没有输入新 key，则不发送 key 字段，避免覆盖原有值
-      if (editingChannel && !values.key) {
+      // 如果 key 是占位符，说明用户没改，删除不发送
+      if (editingChannel && (!values.key || values.key === '********')) {
         delete payload.key
       }
 
@@ -211,7 +216,7 @@ const OpsDashboard: React.FC = () => {
         if (res.data.success) {
           message.success('更新成功')
           setChannelModalVisible(false)
-          loadChannels()
+          loadChannels(channelsOffset, 10)
         } else {
           message.error(res.data.message || '更新失败')
         }
@@ -575,11 +580,9 @@ const OpsDashboard: React.FC = () => {
           <Form.Item name="type" label="渠道类型" rules={[{ required: true }]}>
             <Select
               options={[
-                { value: 0, label: 'OpenAI' },
-                { value: 1, label: 'Azure' },
-                { value: 2, label: 'Anthropic' },
-                { value: 3, label: 'Google' },
-                { value: 5, label: '自定义' },
+                { value: 50, label: 'OpenAI兼容' },
+                { value: 14, label: 'Anthropic' },
+                { value: 8, label: '自定义' },
               ]}
               placeholder="选择渠道类型"
             />
@@ -595,7 +598,11 @@ const OpsDashboard: React.FC = () => {
               options={providers.map(p => ({ value: p.code, label: p.name }))}
             />
           </Form.Item>
-          <Form.Item name="key" label="API Key" rules={[{ required: true, message: '请输入API Key' }]}>
+          <Form.Item
+            name="key"
+            label="API Key"
+            rules={editingChannel ? [] : [{ required: true, message: '请输入API Key' }]}
+          >
             <Input.Password placeholder="请输入API Key" />
           </Form.Item>
 

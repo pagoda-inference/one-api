@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pagoda-inference/one-api/relay/adaptor"
 	channelhelper "github.com/pagoda-inference/one-api/relay/adaptor"
+	"github.com/pagoda-inference/one-api/relay/channeltype"
 	"github.com/pagoda-inference/one-api/relay/meta"
 	"github.com/pagoda-inference/one-api/relay/model"
 	relaymodel "github.com/pagoda-inference/one-api/relay/model"
@@ -58,9 +59,12 @@ func (a *Adaptor) GetChannelName() string {
 
 // GetRequestURL remove static prefix, and return the real request url to the upstream service
 func (a *Adaptor) GetRequestURL(meta *meta.Meta) (string, error) {
+	if meta.ChannelType == channeltype.Custom {
+		// Custom type: true passthrough, use base_url as-is
+		return meta.BaseURL, nil
+	}
 	prefix := fmt.Sprintf("/v1/oneapi/proxy/%d", meta.ChannelId)
 	return meta.BaseURL + strings.TrimPrefix(meta.RequestURLPath, prefix), nil
-
 }
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Request, meta *meta.Meta) error {
@@ -75,7 +79,7 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Request, meta *me
 	req.Header.Del("Connection")
 
 	// set authorization header
-	req.Header.Set("Authorization", meta.APIKey)
+	req.Header.Set("Authorization", "Bearer "+meta.APIKey)
 
 	return nil
 }

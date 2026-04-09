@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Popconfirm, Row, Col } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Popconfirm, Row, Col, Switch } from 'antd'
 import { PlusOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, EyeInvisibleOutlined, EditOutlined } from '@ant-design/icons'
 import { getTokens, createToken, deleteToken, updateToken } from '../services/api'
 
@@ -9,6 +9,7 @@ interface Token {
   key: string
   fullKey: string
   status: string
+  status_id: number
   created_at: number
   accessed_at: number
   used_quota: number
@@ -44,6 +45,7 @@ const ApiKeys: React.FC = () => {
         key: t.key ? `sk-${t.key.substring(0, 8)}...` : '',  // 用于显示
         fullKey: t.key ? `sk-${t.key}` : '',  // 用于复制
         status: t.status === 1 ? 'active' : 'disabled',
+        status_id: t.status,
         created_at: t.created_time,
         accessed_at: t.accessed_time,
         used_quota: t.used_quota || 0,
@@ -79,6 +81,7 @@ const ApiKeys: React.FC = () => {
     setEditingToken(record)
     editForm.setFieldsValue({
       name: record.name,
+      status: record.status_id === 1,
       remain_quota: record.remain_quota,
       rate_limit_rpm: record.rate_limit_rpm,
       rate_limit_tpm: record.rate_limit_tpm,
@@ -87,10 +90,17 @@ const ApiKeys: React.FC = () => {
     setEditModalVisible(true)
   }
 
-  const handleUpdate = async (values: { name: string; remain_quota?: number; rate_limit_rpm?: number; rate_limit_tpm?: number; rate_limit_concurrent?: number }) => {
+  const handleUpdate = async (values: { name: string; status?: boolean; remain_quota?: number; rate_limit_rpm?: number; rate_limit_tpm?: number; rate_limit_concurrent?: number }) => {
     if (!editingToken) return
     try {
-      await updateToken(editingToken.id, values)
+      await updateToken(editingToken.id, {
+        name: values.name,
+        status: values.status ? 1 : 2,
+        remain_quota: values.remain_quota,
+        rate_limit_rpm: values.rate_limit_rpm,
+        rate_limit_tpm: values.rate_limit_tpm,
+        rate_limit_concurrent: values.rate_limit_concurrent,
+      })
       message.success('更新成功')
       setEditModalVisible(false)
       loadTokens()
@@ -133,7 +143,7 @@ const ApiKeys: React.FC = () => {
       render: (key: string, record: Token) => (
         <Space>
           <code style={{ background: '#f5f5f5', padding: '4px 8px', borderRadius: 4 }}>
-            {showKey === record.id ? record.key : key}
+            {showKey === record.id ? record.fullKey : key}
           </code>
           <Button
             type="text"
@@ -300,6 +310,9 @@ response = openai.ChatCompletion.create(
           <Form.Item name="name" label="Key 名称" rules={[{ required: true, message: '请输入Key名称' }]}>
             <Input placeholder="如: 开发环境 Key" />
           </Form.Item>
+          <Form.Item name="status" label="状态" valuePropName="checked">
+            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          </Form.Item>
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item name="rate_limit_rpm" label="RPM (请求/分钟)">
@@ -318,7 +331,7 @@ response = openai.ChatCompletion.create(
             </Col>
           </Row>
           <Form.Item name="remain_quota" label="剩余额度">
-            <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+            <InputNumber style={{ width: '100%' }} placeholder="-1 = 无限制，0 = 无额度" min={-1} />
           </Form.Item>
           <Form.Item>
             <Space>

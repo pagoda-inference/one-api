@@ -1,14 +1,16 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Badge, Button, Modal, message } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Badge, Button, Modal, message, Select } from 'antd'
 import {
   DashboardOutlined, ShopOutlined, KeyOutlined, PlusSquareOutlined,
   HistoryOutlined, FileTextOutlined, SettingOutlined, TeamOutlined,
-  BellOutlined, GlobalOutlined, LogoutOutlined, UserOutlined,
+  BellOutlined, LogoutOutlined, UserOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined, DatabaseOutlined,
-  CloudServerOutlined
+  CloudServerOutlined, MoonOutlined, SunOutlined
 } from '@ant-design/icons'
 import React, { useState } from 'react'
 import Logo from './components/Logo'
+import { useTheme } from './contexts/ThemeContext'
+import { useLanguage } from './contexts/LanguageContext'
 
 import Dashboard from './pages/Dashboard'
 import ModelMarket from './pages/ModelMarket'
@@ -31,6 +33,8 @@ const { Content } = Layout
 const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation()
   const navigate = useNavigate()
+  const { themeMode, toggleTheme } = useTheme()
+  const { language, setLanguage } = useLanguage()
   // 同步从 localStorage 初始化，避免首次渲染时 user 为 null
   const [user, setUser] = useState<User | null>(() => {
     const userInfoStr = localStorage.getItem('user_info')
@@ -92,7 +96,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (!user) {
     return (
-      <Layout style={{ minHeight: '100vh', background: '#f5f7fa' }}>
+      <Layout style={{ minHeight: '100vh', background: 'var(--bg-secondary)' }}>
         <Content style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Navigate to="/login" replace />
         </Content>
@@ -124,8 +128,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         collapsed={collapsed}
         width={220}
         style={{
-          background: '#fff',
-          boxShadow: '2px 0 8px rgba(0,0,0,0.06)',
+          background: 'var(--bg-primary)',
+          boxShadow: '2px 0 8px var(--shadow)',
           position: 'fixed',
           left: 0,
           top: 0,
@@ -140,10 +144,10 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
           justifyContent: collapsed ? 'center' : 'flex-start',
           padding: collapsed ? 0 : '0 20px',
-          borderBottom: '1px solid #f0f0f0'
+          borderBottom: '1px solid var(--border-color)'
         }}>
           {collapsed ? (
-            <span style={{ fontWeight: 700, fontSize: 16, color: '#333' }}>宝塔</span>
+            <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>宝塔</span>
           ) : (
             <div style={{
               display: 'flex',
@@ -151,7 +155,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               gap: 8
             }}>
               <Logo width={90} height={26} />
-              <span style={{ fontWeight: 700, fontSize: 15, color: '#333', whiteSpace: 'nowrap' }}>BEDI 宝塔</span>
+              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>BEDI 宝塔</span>
             </div>
           )}
         </div>
@@ -184,14 +188,14 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         />
       </Layout.Sider>
 
-      <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin-left 0.2s' }}>
+      <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin-left 0.2s', background: 'var(--bg-secondary)' }}>
         <Layout.Header style={{
-          background: '#fff',
+          background: 'var(--bg-primary)',
           padding: '0 24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          boxShadow: '0 1px 4px var(--shadow)',
           position: 'sticky',
           top: 0,
           zIndex: 99,
@@ -203,9 +207,9 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               type="text"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed(!collapsed)}
-              style={{ fontSize: 16 }}
+              style={{ fontSize: 16, color: 'var(--text-primary)' }}
             />
-            <span style={{ color: '#333', fontWeight: 500 }}>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
               {getGreeting()}，{user.display_name || user.username}
             </span>
           </div>
@@ -213,10 +217,23 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             {/* TODO: 接通通知接口 */}
             <Badge count={0} size="small">
-              <Button type="text" icon={<BellOutlined />} style={{ fontSize: 16 }} />
+              <Button type="text" icon={<BellOutlined />} style={{ fontSize: 16, color: 'var(--text-primary)' }} />
             </Badge>
-            {/* TODO: 后续支持多语言 */}
-            <Button type="text" icon={<GlobalOutlined />} style={{ fontSize: 16 }} disabled />
+            <Select
+              value={language}
+              onChange={(value) => setLanguage(value)}
+              style={{ width: 100 }}
+              options={[
+                { value: 'zh', label: '中文' },
+                { value: 'en', label: 'English' },
+              ]}
+            />
+            <Button
+              type="text"
+              icon={themeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+              onClick={toggleTheme}
+              style={{ fontSize: 16, color: 'var(--text-primary)' }}
+            />
 
             <Dropdown
               menu={{ items: userMenuItems, onClick: onUserMenuClick }}
@@ -235,7 +252,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <Content style={{
           margin: 24,
           minHeight: 'calc(100vh - 64px - 48px)',
-          background: '#f5f7fa'
+          background: 'var(--bg-secondary)'
         }}>
           {children}
         </Content>
