@@ -149,3 +149,66 @@ func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName st
 	}
 	return nil, &textResponse.Usage
 }
+
+// EmbeddingHandler handles embedding responses, especially for TGI backends
+// that return array format [[0.1, 0.2, ...]] instead of OpenAI format
+func EmbeddingHandler(c *gin.Context, resp *http.Response, modelName string) *model.ErrorWithStatusCode {
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
+	}
+	err = resp.Body.Close()
+	if err != nil {
+		return ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError)
+	}
+
+	// Try to unmarshal as OpenAI format first
+	var openaiResponse EmbeddingResponse
+	if err := json.Unmarshal(responseBody, &openaiResponse); err == nil {
+		// Already in OpenAI format, just copy headers and body
+		for k, v := range resp.Header {
+			c.Writer.Header().Set(k, v[0])
+		}
+		c.Writer.WriteHeader(resp.StatusCode)
+		_, err = c.Writer.Write(responseBody)
+		if err != nil {
+			return ErrorWrapper(err, "write_response_body_failed", http.StatusInternalServerError)
+		}
+		return nil
+	}
+
+	// TGI returns array format [[0.1, 0.2, ...]], need to convert to OpenAI format
+	var tgiEmbedding [][]float64
+	if err := json.Unmarshal(responseBody, &tgiEmbedding); err != nil {
+		return ErrorWrapper(err, "unmarshal_embedding_response_failed", http.StatusInternalServerError)
+	}
+
+	// Convert to OpenAI embedding response format
+	openaiResp := EmbeddingResponse{
+		Object: "list",
+		Model:  modelName,
+	}
+	for i, embedding := range tgiEmbedding {
+		openaiResp.Data = append(openaiResp.Data, EmbeddingResponseItem{
+			Object:    "embedding",
+			Index:     i,
+			Embedding: embedding,
+		})
+	}
+
+	// Write converted response
+	respBody, _ := json.Marshal(openaiResp)
+	for k, v := range resp.Header {
+		if k == "Content-Type" {
+			c.Writer.Header().Set(k, "application/json")
+		} else {
+			c.Writer.Header().Set(k, v[0])
+		}
+	}
+	c.Writer.WriteHeader(http.StatusOK)
+	_, err = c.Writer.Write(respBody)
+	if err != nil {
+		return ErrorWrapper(err, "write_response_body_failed", http.StatusInternalServerError)
+	}
+	return nil
+}

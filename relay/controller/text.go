@@ -115,6 +115,30 @@ func getRequestBody(c *gin.Context, meta *meta.Meta, textRequest *model.GeneralO
 		body, _ = json.Marshal(reqBody)
 		return bytes.NewBuffer(body), nil
 	}
+	// Custom type (TGI) embedding needs input → inputs conversion
+	if meta.Mode == relaymode.Embeddings && meta.ChannelType == channeltype.Custom {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			return nil, err
+		}
+		var reqBody map[string]any
+		if err := json.Unmarshal(body, &reqBody); err != nil {
+			return nil, err
+		}
+		// input → inputs conversion
+		if input, ok := reqBody["input"]; ok {
+			reqBody["inputs"] = input
+			delete(reqBody, "input")
+		}
+		// model name mapping
+		if modelName, ok := reqBody["model"].(string); ok {
+			if mappedModel, ok := meta.ModelMapping[modelName]; ok {
+				reqBody["model"] = mappedModel
+			}
+		}
+		body, _ = json.Marshal(reqBody)
+		return bytes.NewBuffer(body), nil
+	}
 	if !config.EnforceIncludeUsage &&
 		meta.APIType == apitype.OpenAI &&
 		meta.OriginModelName == meta.ActualModelName &&

@@ -11,6 +11,7 @@ import (
 	"github.com/pagoda-inference/one-api/common/ctxkey"
 	"github.com/pagoda-inference/one-api/common/random"
 	"github.com/pagoda-inference/one-api/model"
+	"gorm.io/gorm"
 )
 
 type ModelRequest struct {
@@ -101,6 +102,18 @@ func CreateModel(c *gin.Context) {
 	}
 	if m.Status == "" {
 		m.Status = "active"
+	}
+
+	// 自动分配 sort_order：如果未指定或为0，则分配最大值+1
+	if m.SortOrder <= 0 {
+		var maxOrder int
+		model.DB.Model(&model.ModelInfo{}).Select("COALESCE(MAX(sort_order), 0)").Scan(&maxOrder)
+		m.SortOrder = maxOrder + 1
+	} else {
+		// 指定了 sort_order > 0，需要将 >= 该位置的所有记录往后移动一位
+		model.DB.Model(&model.ModelInfo{}).
+			Where("sort_order >= ?", m.SortOrder).
+			Update("sort_order", gorm.Expr("sort_order + 1"))
 	}
 
 	err := m.Create()

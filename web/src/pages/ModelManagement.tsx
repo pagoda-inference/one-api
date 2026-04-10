@@ -318,7 +318,7 @@ const ModelManagement: React.FC = () => {
         okText="保存"
         cancelText="取消"
       >
-        <Form form={form} layout="vertical" initialValues={{ status: 'active', sort_order: 0 }}>
+        <Form form={form} layout="vertical" initialValues={{ status: 'active' }}>
           <Form.Item name="id" label="模型ID" rules={[{ required: true, message: '请输入模型ID' }]}>
             <Input placeholder="如: Qwen2.5-72B-Instruct 或 deepseek-ai/DeepSeek-R1" />
           </Form.Item>
@@ -355,7 +355,7 @@ const ModelManagement: React.FC = () => {
             </Form.Item>
 
             <Form.Item name="sort_order" label="排序" style={{ flex: 1 }}>
-              <InputNumber style={{ width: '100%' }} placeholder="0" min={0} />
+              <InputNumber style={{ width: '100%' }} placeholder="留空自动分配" min={0} />
             </Form.Item>
           </Row>
 
