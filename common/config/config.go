@@ -114,6 +114,8 @@ var BatchUpdateInterval = env.Int("BATCH_UPDATE_INTERVAL", 5)
 
 var RelayTimeout = env.Int("RELAY_TIMEOUT", 0) // unit is second
 
+var ResponseHeaderTimeout = env.Int("RESPONSE_HEADER_TIMEOUT", 60) // unit is second
+
 var GeminiSafetySetting = env.String("GEMINI_SAFETY_SETTING", "BLOCK_NONE")
 
 var Theme = env.String("THEME", "default")

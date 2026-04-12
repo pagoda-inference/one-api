@@ -60,6 +60,12 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/aff", controller.GetAffCode)
 				selfRoute.POST("/topup", controller.TopUp)
 				selfRoute.GET("/available_models", controller.GetUserAvailableModels)
+				selfRoute.GET("/signin/records", controller.GetSignInRecords)
+				selfRoute.POST("/signin", controller.SignIn)
+				selfRoute.GET("/notifications", controller.GetUserNotifications)
+				selfRoute.GET("/notifications/unread-count", controller.GetUnreadNotificationCount)
+				selfRoute.PUT("/notifications/:id/read", controller.MarkNotificationAsRead)
+				selfRoute.PUT("/notifications/read-all", controller.MarkAllNotificationsAsRead)
 			}
 
 			// Payment routes
@@ -161,6 +167,9 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.GET("/channels/health", controller.GetChannelHealth)
 			adminRoute.GET("/alerts/config", controller.GetAlertConfig)
 			adminRoute.PUT("/alerts/config", controller.UpdateAlertConfig)
+			adminRoute.GET("/notifications", controller.GetAllNotifications)
+			adminRoute.POST("/notifications", controller.CreateNotification)
+			adminRoute.DELETE("/notifications/:id", controller.DeleteNotification)
 			adminRoute.GET("/system/health", controller.GetSystemHealth)
 			adminRoute.GET("/reports/export", controller.ExportReport)
 
@@ -257,10 +266,11 @@ func SetApiRouter(router *gin.Engine) {
 			usageRoute.GET("/daily", controller.GetUsageDaily)
 		}
 		adminUsageRoute := apiRouter.Group("/admin/usage")
-		adminUsageRoute.Use(middleware.AdminAuth())
+		adminUsageRoute.Use(middleware.AdminTokenAuth())
 		{
 			adminUsageRoute.GET("/summary", controller.AdminGetUsageSummary)
-			adminUsageRoute.GET("/by-user", controller.AdminGetUsageByUser)
+			adminUsageRoute.GET("/by-users", controller.AdminGetUsageByUsers)
+			adminUsageRoute.GET("/by-models", controller.AdminGetUsageByModels)
 		}
 		groupRoute := apiRouter.Group("/group")
 		groupRoute.Use(middleware.AdminAuth())

@@ -243,3 +243,34 @@ func updateOptionMap(key string, value string) (err error) {
 	}
 	return err
 }
+
+// UpdateConfigInt updates a runtime config integer value
+func UpdateConfigInt(key string, value interface{}) {
+	config.OptionMapRWMutex.Lock()
+	defer config.OptionMapRWMutex.Unlock()
+
+	intVal, ok := value.(int)
+	if !ok {
+		// Try to convert from float64 (JSON numbers)
+		if fVal, fOk := value.(float64); fOk {
+			intVal = int(fVal)
+		}
+	}
+
+	switch key {
+	case "MaxConcurrentRequests":
+		config.MaxConcurrentRequests = intVal
+	case "RequestQueueTimeout":
+		config.RequestQueueTimeout = intVal
+	case "HealthCheckInterval":
+		config.HealthCheckInterval = intVal
+	case "HealthCheckFailThreshold":
+		config.HealthCheckFailThreshold = intVal
+	case "CircuitBreakerThreshold":
+		config.CircuitBreakerThreshold = intVal
+	case "CircuitBreakerTimeout":
+		config.CircuitBreakerTimeout = intVal
+	case "RelayTimeout":
+		config.RelayTimeout = intVal
+	}
+}

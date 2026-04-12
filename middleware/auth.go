@@ -165,3 +165,62 @@ func shouldCheckModel(c *gin.Context) bool {
 	}
 	return false
 }
+
+// AdminTokenAuth supports both session and token authentication for admin APIs
+func AdminTokenAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		// Try session auth first
+		session := sessions.Default(c)
+		id := session.Get("id")
+		if id != nil {
+			role := session.Get("role")
+			if role.(int) >= model.RoleAdminUser {
+				c.Set("id", id)
+				c.Set("role", role)
+				c.Set("username", session.Get("username"))
+				c.Next()
+				return
+			}
+		}
+
+		// Try token auth
+		key := c.Request.Header.Get("Authorization")
+		if key == "" {
+			abortWithMessage(c, http.StatusUnauthorized, "未提供认证令牌")
+			return
+		}
+		key = strings.TrimPrefix(key, "Bearer ")
+		key = strings.TrimPrefix(key, "sk-")
+		parts := strings.Split(key, "-")
+		key = parts[0]
+
+		token, err := model.ValidateUserToken(key)
+		if err != nil {
+			abortWithMessage(c, http.StatusUnauthorized, err.Error())
+			return
+		}
+
+		if token.Status != model.TokenStatusEnabled {
+			abortWithMessage(c, http.StatusUnauthorized, "令牌状态不可用")
+			return
+		}
+
+		// Check if token belongs to admin user
+		if !model.IsAdmin(token.UserId) {
+			abortWithMessage(c, http.StatusForbidden, "无权进行此操作，需要管理员权限")
+			return
+		}
+
+		userEnabled, err := model.CacheIsUserEnabled(token.UserId)
+		if err != nil || !userEnabled {
+			abortWithMessage(c, http.StatusForbidden, "用户已被封禁")
+			return
+		}
+
+		c.Set(ctxkey.Id, token.UserId)
+		c.Set(ctxkey.Role, model.RoleAdminUser)
+		c.Set("username", "token_user")
+
+		c.Next()
+	}
+}

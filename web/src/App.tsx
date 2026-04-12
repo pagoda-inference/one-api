@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Badge, Button, Modal, message, Select } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Badge, Button, Modal, message, Select, List, Popover } from 'antd'
 import {
   DashboardOutlined, ShopOutlined, KeyOutlined, PlusSquareOutlined,
   HistoryOutlined, FileTextOutlined, SettingOutlined, TeamOutlined,
@@ -7,7 +7,7 @@ import {
   MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined, DatabaseOutlined,
   CloudServerOutlined, MoonOutlined, SunOutlined
 } from '@ant-design/icons'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Logo from './components/Logo'
 import { useTheme } from './contexts/ThemeContext'
 import { useLanguage } from './contexts/LanguageContext'
@@ -25,7 +25,9 @@ import Teams from './pages/Teams'
 import Login from './pages/Login'
 import LarkOAuth from './pages/LarkOAuth'
 import ApiDocs from './pages/ApiDocs'
-import { logout, User } from './services/api'
+import Profile from './pages/Profile'
+import NotificationManage from './pages/NotificationManage'
+import { logout, User, getUnreadNotificationCount, getNotifications, markNotificationAsRead } from './services/api'
 
 const { Content } = Layout
 
@@ -48,6 +50,81 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return null
   })
   const [collapsed, setCollapsed] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [notificationLoading, setNotificationLoading] = useState(false)
+
+  // Fetch unread notification count
+  useEffect(() => {
+    if (user) {
+      fetchUnreadCount()
+      // Poll every 60 seconds
+      const interval = setInterval(fetchUnreadCount, 60000)
+      return () => clearInterval(interval)
+    }
+  }, [user])
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await getUnreadNotificationCount()
+      if (res.data?.success) {
+        setUnreadCount(res.data.data || 0)
+      }
+    } catch (error) {
+      console.error('Failed to fetch unread count:', error)
+    }
+  }
+
+  const fetchNotifications = async () => {
+    setNotificationLoading(true)
+    try {
+      const res = await getNotifications(10, 0)
+      if (res.data?.success) {
+        setNotifications(res.data.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error)
+    } finally {
+      setNotificationLoading(false)
+    }
+  }
+
+  const handleNotificationClick = async (notification: any) => {
+    if (!notification.is_read) {
+      try {
+        await markNotificationAsRead(notification.id)
+        fetchUnreadCount()
+        fetchNotifications()
+      } catch (error) {
+        console.error('Failed to mark as read:', error)
+      }
+    }
+  }
+
+  const notificationContent = (
+    <div style={{ width: 320, maxHeight: 400, overflow: 'auto' }}>
+      {notificationLoading ? (
+        <div style={{ padding: 20, textAlign: 'center' }}>加载中...</div>
+      ) : notifications.length === 0 ? (
+        <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>暂无通知</div>
+      ) : (
+        <List
+          dataSource={notifications}
+          renderItem={(item: any) => (
+            <List.Item
+              style={{ cursor: 'pointer', background: item.is_read ? 'transparent' : '#f0f0f0' }}
+              onClick={() => handleNotificationClick(item)}
+            >
+              <List.Item.Meta
+                title={<span>{item.is_read ? '' : <span style={{ color: '#1890ff' }}>•</span>} {item.title}</span>}
+                description={<span style={{ fontSize: 12 }}>{item.content}</span>}
+              />
+            </List.Item>
+          )}
+        />
+      )}
+    </div>
+  )
 
   const handleLogout = async () => {
     try {
@@ -72,6 +149,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         content: '确定要退出登录吗？',
         onOk: handleLogout
       })
+    } else if (key === 'profile') {
+      navigate('/profile')
     }
   }
 
@@ -79,8 +158,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const commonMenuItems = [
     { key: '/dashboard', icon: <DashboardOutlined />, label: '数据看板' },
     { key: '/market', icon: <ShopOutlined />, label: '模型广场' },
-    { key: '/docs', icon: <ApiOutlined />, label: 'API 文档' },
     { key: '/keys', icon: <KeyOutlined />, label: 'API Keys' },
+    { key: '/docs', icon: <ApiOutlined />, label: 'API 文档' },
     { key: '/usage', icon: <HistoryOutlined />, label: '用量明细' },
     { key: '/topup', icon: <PlusSquareOutlined />, label: '充值中心' },
     { key: '/invoices', icon: <FileTextOutlined />, label: '发票管理' },
@@ -91,6 +170,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     { key: '/ops', icon: <SettingOutlined />, label: '运营管理' },
     { key: '/ops/models', icon: <DatabaseOutlined />, label: '模型管理' },
     { key: '/ops/providers', icon: <CloudServerOutlined />, label: 'Provider 管理' },
+    { key: '/ops/notifications', icon: <BellOutlined />, label: '系统通知' },
     { key: '/teams', icon: <TeamOutlined />, label: '团队管理' },
   ]
 
@@ -215,10 +295,22 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            {/* TODO: 接通通知接口 */}
-            <Badge count={0} size="small">
-              <Button type="text" icon={<BellOutlined />} style={{ fontSize: 16, color: 'var(--text-primary)' }} />
-            </Badge>
+            <Popover
+              content={notificationContent}
+              title="通知"
+              trigger="click"
+              placement="bottomRight"
+              arrow={false}
+              onOpenChange={(open) => {
+                if (open) {
+                  fetchNotifications()
+                }
+              }}
+            >
+              <Badge count={unreadCount} size="small" offset={[-2, 2]}>
+                <Button type="text" icon={<BellOutlined />} style={{ fontSize: 16, color: 'var(--text-primary)' }} />
+              </Badge>
+            </Popover>
             <Select
               value={language}
               onChange={(value) => setLanguage(value)}
@@ -287,6 +379,8 @@ const App: React.FC = () => {
         <Route path="/ops/providers" element={<ProtectedPage><ProviderManagement /></ProtectedPage>} />
         <Route path="/teams" element={<ProtectedPage><Teams /></ProtectedPage>} />
         <Route path="/docs" element={<ProtectedPage><ApiDocs /></ProtectedPage>} />
+        <Route path="/profile" element={<ProtectedPage><Profile /></ProtectedPage>} />
+        <Route path="/ops/notifications" element={<ProtectedPage><NotificationManage /></ProtectedPage>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

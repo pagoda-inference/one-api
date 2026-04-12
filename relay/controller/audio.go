@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 
@@ -54,17 +55,27 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		}
 	}
 
-	modelRatio := billingratio.GetModelRatio(audioModel, channelType)
+	modelInfo, err := model.GetModelById(audioModel)
+	if err != nil {
+		logger.Warnf(ctx, "model not found: %s, using default price 0", audioModel)
+		modelInfo = nil
+	}
+	inputPrice := 0.0
+	outputPrice := 0.0
+	if modelInfo != nil {
+		inputPrice = modelInfo.InputPrice
+		outputPrice = modelInfo.OutputPrice
+	}
 	groupRatio := billingratio.GetGroupRatio(group)
-	ratio := modelRatio * groupRatio
 	var quota int64
 	var preConsumedQuota int64
 	switch relayMode {
 	case relaymode.AudioSpeech:
-		preConsumedQuota = int64(float64(len(ttsRequest.Input)) * ratio)
+		// inputPrice is yuan per 1000 tokens, len(ttsRequest.Input) is characters
+		preConsumedQuota = int64(math.Ceil(float64(len(ttsRequest.Input)) * inputPrice / 1000 * groupRatio))
 		quota = preConsumedQuota
 	default:
-		preConsumedQuota = int64(float64(config.PreConsumedQuota) * ratio)
+		preConsumedQuota = int64(math.Ceil(float64(config.PreConsumedQuota) * inputPrice / 1000 * groupRatio))
 	}
 	userQuota, err := model.CacheGetUserQuota(ctx, userId)
 	if err != nil {
@@ -207,7 +218,7 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		if err != nil {
 			return openai.ErrorWrapper(err, "get_text_from_body_err", http.StatusInternalServerError)
 		}
-		quota = int64(openai.CountTokenText(text, audioModel))
+		quota = int64(math.Ceil(float64(openai.CountTokenText(text, audioModel)) * outputPrice / 1000 * groupRatio))
 		resp.Body = io.NopCloser(bytes.NewBuffer(responseBody))
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -216,7 +227,7 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	succeed = true
 	quotaDelta := quota - preConsumedQuota
 	defer func(ctx context.Context) {
-		go billing.PostConsumeQuota(ctx, tokenId, quotaDelta, quota, userId, channelId, modelRatio, groupRatio, audioModel, tokenName)
+		go billing.PostConsumeQuota(ctx, tokenId, quotaDelta, quota, userId, channelId, inputPrice, outputPrice, groupRatio, audioModel, tokenName)
 	}(c.Request.Context())
 
 	for k, v := range resp.Header {

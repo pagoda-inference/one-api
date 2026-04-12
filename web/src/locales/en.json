@@ -1,0 +1,94 @@
+{
+  "common": {
+    "welcome": "Welcome back",
+    "login": "Login",
+    "logout": "Logout",
+    "username": "Username",
+    "password": "Password",
+    "email": "Email",
+    "phone": "Phone",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "loading": "Loading...",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "confirm_delete": "Are you sure you want to delete?",
+    "no_data": "No Data"
+  },
+  "menu": {
+    "dashboard": "Dashboard",
+    "channels": "Channels",
+    "tokens": "API Keys",
+    "models": "Models",
+    "users": "Users",
+    "topup": "Top Up",
+    "teams": "Teams",
+    "settings": "Settings",
+    "ops_dashboard": "Ops Dashboard"
+  },
+  "login": {
+    "title": "BEDI Baota",
+    "subtitle": "Enterprise AI Model Gateway Platform",
+    "welcome_back": "Welcome back",
+    "feishu_login_desc": "Please login with your company Feishu account",
+    "password_login_desc": "Please enter your username and password",
+    "feishu_login": "Feishu Login / Register",
+    "password_login": "Login with Password",
+    "use_password": "Use Password Login",
+    "use_feishu": "Use Feishu Login",
+    "copyright": "© 2026 BEDI Baota. All rights reserved."
+  },
+  "dashboard": {
+    "quota": "Quota",
+    "used_quota": "Used Quota",
+    "requests": "Requests",
+    "channel_status": "Channel Status",
+    "recent_activities": "Recent Activities"
+  },
+  "channel": {
+    "name": "Name",
+    "type": "Type",
+    "status": "Status",
+    "priority": "Priority",
+    "group": "Group",
+    "base_url": "Base URL",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "add_channel": "Add Channel",
+    "edit_channel": "Edit Channel",
+    "delete_channel": "Delete Channel",
+    "test_channel": "Test Channel"
+  },
+  "token": {
+    "api_key": "API Key",
+    "create_token": "Create API Key",
+    "token_name": "Key Name",
+    "expire_time": "Expire Time",
+    "copy_success": "Copied to clipboard",
+    "revoke_token": "Revoke Key"
+  },
+  "user": {
+    "user_id": "User ID",
+    "display_name": "Display Name",
+    "role": "Role",
+    "status": "Status",
+    "quota": "Quota",
+    "used_quota": "Used Quota",
+    "admin": "Admin",
+    "normal_user": "Normal User",
+    "super_admin": "Super Admin"
+  },
+  "ops": {
+    "channel_health": "Channel Health",
+    "success_rate": "Success Rate",
+    "avg_latency": "Avg Latency",
+    "alerts": "Alerts",
+    "system_health": "System Health"
+  }
+}

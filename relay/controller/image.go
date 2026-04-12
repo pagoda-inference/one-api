@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -168,18 +169,34 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		requestBody = bytes.NewBuffer(jsonStr)
 	}
 
-	modelRatio := billingratio.GetModelRatio(imageModel, meta.ChannelType)
 	groupRatio := billingratio.GetGroupRatio(meta.Group)
-	ratio := modelRatio * groupRatio
+
+	modelInfo, err := model.GetModelById(imageModel)
+	if err != nil {
+		logger.Warnf(ctx, "model not found: %s, using default price 0", imageModel)
+		modelInfo = nil
+	}
+	inputPrice := 0.0
+	outputPrice := 0.0
+	if modelInfo != nil {
+		inputPrice = modelInfo.InputPrice
+		outputPrice = modelInfo.OutputPrice
+	}
+	// Use inputPrice for image cost calculation (image generation is similar to output)
+	price := inputPrice
+	if price == 0 {
+		price = outputPrice
+	}
+
 	userQuota, err := model.CacheGetUserQuota(ctx, meta.UserId)
 
 	var quota int64
 	switch meta.ChannelType {
 	case channeltype.Replicate:
 		// replicate always return 1 image
-		quota = int64(ratio * imageCostRatio * 1000)
+		quota = int64(math.Ceil(price * imageCostRatio / 1000 * groupRatio))
 	default:
-		quota = int64(ratio*imageCostRatio*1000) * int64(imageRequest.N)
+		quota = int64(math.Ceil(price*imageCostRatio/1000*groupRatio)) * int64(imageRequest.N)
 	}
 
 	if userQuota-quota < 0 {
@@ -210,7 +227,7 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		}
 		if quota != 0 {
 			tokenName := c.GetString(ctxkey.TokenName)
-			logContent := fmt.Sprintf("倍率：%.2f × %.2f", modelRatio, groupRatio)
+			logContent := fmt.Sprintf("计费：输入%.6f元/1K + 输出%.6f元/1K，groupRatio=%.2f", inputPrice, outputPrice, groupRatio)
 			model.RecordConsumeLog(ctx, &model.Log{
 				UserId:           meta.UserId,
 				ChannelId:        meta.ChannelId,

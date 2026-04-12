@@ -9,8 +9,7 @@ const api = axios.create({
 // Add auth token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
-  // Only add Bearer token for real API keys (sk-), not for OAuth session tokens
-  if (token && token.startsWith('sk-')) {
+  if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
@@ -59,7 +58,7 @@ export interface ModelGroup {
   name: string
   code: string
   description: string
-  icon_url: string
+  logo_url: string
   model_count: number
 }
 
@@ -184,6 +183,14 @@ export interface AlertConfig {
   alert_email: string
   alert_webhook: string
   enabled: boolean
+  // System config
+  max_concurrent_requests: number
+  request_queue_timeout: number
+  health_check_interval: number
+  health_check_fail_threshold: number
+  circuit_breaker_threshold: number
+  circuit_breaker_timeout: number
+  relay_timeout: number
 }
 
 // Tenant types
@@ -310,6 +317,21 @@ export const updateToken = (id: number, data: { name?: string; models?: string; 
 export const getUserInfo = () =>
   api.get('/user/self')
 
+export const updateUserInfo = (data: { username?: string; password?: string; display_name?: string; email?: string }) =>
+  api.put('/user/self', data)
+
+export const getNotifications = (limit?: number, offset?: number) =>
+  api.get('/user/notifications', { params: { limit, offset } })
+
+export const getUnreadNotificationCount = () =>
+  api.get('/user/notifications/unread-count')
+
+export const markNotificationAsRead = (id: number) =>
+  api.put(`/user/notifications/${id}/read`)
+
+export const markAllNotificationsAsRead = () =>
+  api.put('/user/notifications/read-all')
+
 export const login = (data: { username: string; password: string }) =>
   api.post('/user/login', data)
 
@@ -359,6 +381,7 @@ export const getChannelHealth = () =>
 export interface Channel {
   id: number
   type: number
+  type_name: string
   key: string
   status: number
   name: string
@@ -412,6 +435,15 @@ export const getAlertConfig = () =>
 export const updateAlertConfig = (data: Partial<AlertConfig>) =>
   api.put('/admin/alerts/config', data)
 
+export const getAllNotifications = (limit?: number, offset?: number) =>
+  api.get('/admin/notifications', { params: { limit, offset } })
+
+export const createNotification = (data: { title: string; content: string; type?: string }) =>
+  api.post('/admin/notifications', data)
+
+export const deleteNotification = (id: number) =>
+  api.delete(`/admin/notifications/${id}`)
+
 export const getSystemHealth = () =>
   api.get('/admin/system/health')
 
@@ -436,6 +468,19 @@ export const getTenantUsers = (id: number) =>
 
 export const inviteUser = (tenantId: number, data: { user_id: number; role: number; quota?: number }) =>
   api.post(`/tenant/${tenantId}/users`, data)
+
+// Sign-in API functions
+export interface SignInRecord {
+  date: string
+  status: string
+  quota: number
+}
+
+export const getSignInRecords = () =>
+  api.get('/user/signin/records')
+
+export const signIn = () =>
+  api.post('/user/signin')
 
 export const removeUser = (tenantId: number, userId: number) =>
   api.delete(`/tenant/${tenantId}/users/${userId}`)
@@ -623,3 +668,10 @@ export const deleteProvider = (id: number) =>
 
 export const getProviderStatuses = () =>
   api.get<{ success: boolean; data: { value: string; label: string }[] }>('/admin/providers/statuses')
+
+// Option APIs for system settings
+export const getOptions = () =>
+  api.get<{ success: boolean; data: { key: string; value: string }[] }>('/option/')
+
+export const updateOption = (key: string, value: string) =>
+  api.put<{ success: boolean; message?: string }>('/option/', { key, value })

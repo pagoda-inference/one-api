@@ -23,7 +23,6 @@ const (
 	DefaultMaxConnsPerHost       = 200
 	DefaultIdleConnTimeout       = 90 * time.Second
 	DefaultTLSHandshakeTimeout   = 10 * time.Second
-	DefaultResponseHeaderTimeout = 10 * time.Second
 	DefaultExpectContinueTimeout = 1 * time.Second
 	DefaultDialTimeout           = 30 * time.Second
 	DefaultKeepAlive             = 30 * time.Second
@@ -40,7 +39,7 @@ func createTransport(proxyURL string) *http.Transport {
 
 		// Timeout settings
 		TLSHandshakeTimeout:   DefaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout: DefaultResponseHeaderTimeout,
+		ResponseHeaderTimeout: time.Duration(config.ResponseHeaderTimeout) * time.Second,
 		ExpectContinueTimeout: DefaultExpectContinueTimeout,
 
 		// Dial settings
@@ -108,4 +107,17 @@ func Init() {
 	// Log connection pool settings
 	logger.SysLog(fmt.Sprintf("HTTP client initialized: MaxIdleConns=%d, MaxIdleConnsPerHost=%d, MaxConnsPerHost=%d",
 		config.MaxIdleConns, config.MaxIdleConnsPerHost, config.MaxConnsPerHost))
+}
+
+// GetHTTPClient returns an HTTP client with the current RelayTimeout setting
+func GetHTTPClient() *http.Client {
+	if config.RelayTimeout == 0 {
+		return &http.Client{
+			Transport: HTTPClient.Transport,
+		}
+	}
+	return &http.Client{
+		Timeout:   time.Duration(config.RelayTimeout) * time.Second,
+		Transport: HTTPClient.Transport,
+	}
 }

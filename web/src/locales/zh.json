@@ -1,0 +1,94 @@
+{
+  "common": {
+    "welcome": "欢迎回来",
+    "login": "登录",
+    "logout": "退出登录",
+    "username": "用户名",
+    "password": "密码",
+    "email": "邮箱",
+    "phone": "电话",
+    "confirm": "确认",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "add": "添加",
+    "search": "搜索",
+    "loading": "加载中...",
+    "success": "成功",
+    "error": "错误",
+    "warning": "警告",
+    "confirm_delete": "确定要删除吗？",
+    "no_data": "暂无数据"
+  },
+  "menu": {
+    "dashboard": "仪表盘",
+    "channels": "渠道管理",
+    "tokens": "API Keys",
+    "models": "模型管理",
+    "users": "用户管理",
+    "topup": "充值",
+    "teams": "团队管理",
+    "settings": "系统设置",
+    "ops_dashboard": "运营面板"
+  },
+  "login": {
+    "title": "BEDI 宝塔",
+    "subtitle": "企业级 AI 模型网关平台",
+    "welcome_back": "欢迎回来",
+    "feishu_login_desc": "请使用公司飞书账号登录",
+    "password_login_desc": "请输入账号密码登录",
+    "feishu_login": "飞书登录 / 注册",
+    "password_login": "使用密码登录",
+    "use_password": "使用密码登录",
+    "use_feishu": "使用飞书登录",
+    "copyright": "© 2026 BEDI 宝塔. 保留所有权利."
+  },
+  "dashboard": {
+    "quota": "额度",
+    "used_quota": "已用额度",
+    "requests": "请求次数",
+    "channel_status": "渠道状态",
+    "recent_activities": "最近活动"
+  },
+  "channel": {
+    "name": "名称",
+    "type": "类型",
+    "status": "状态",
+    "priority": "优先级",
+    "group": "分组",
+    "base_url": "基础URL",
+    "enabled": "启用",
+    "disabled": "禁用",
+    "add_channel": "添加渠道",
+    "edit_channel": "编辑渠道",
+    "delete_channel": "删除渠道",
+    "test_channel": "测试渠道"
+  },
+  "token": {
+    "api_key": "API Key",
+    "create_token": "创建 API Key",
+    "token_name": "Key 名称",
+    "expire_time": "过期时间",
+    "copy_success": "已复制到剪贴板",
+    "revoke_token": "撤销 Key"
+  },
+  "user": {
+    "user_id": "用户ID",
+    "display_name": "显示名称",
+    "role": "角色",
+    "status": "状态",
+    "quota": "额度",
+    "used_quota": "已用额度",
+    "admin": "管理员",
+    "normal_user": "普通用户",
+    "super_admin": "超级管理员"
+  },
+  "ops": {
+    "channel_health": "渠道健康",
+    "success_rate": "成功率",
+    "avg_latency": "平均延迟",
+    "alerts": "告警配置",
+    "system_health": "系统状态"
+  }
+}

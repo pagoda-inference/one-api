@@ -1,25 +1,26 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Table, Statistic, Spin, Progress, Tag, Tabs, Button, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, message, Divider } from 'antd'
-import { DollarOutlined, UserOutlined, ApiOutlined, RiseOutlined, SafetyCertificateOutlined, AlertOutlined, DashboardOutlined, LineChartOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons'
+import { useSearchParams } from 'react-router-dom'
+import { Row, Col, Card, Table, Statistic, Spin, Progress, Tag, Tabs, Button, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, message, Divider, Switch } from 'antd'
+import { DollarOutlined, UserOutlined, ApiOutlined, RiseOutlined, SafetyCertificateOutlined, DashboardOutlined, LineChartOutlined, PlusOutlined, EditOutlined, SaveOutlined, SettingOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
-import { getOpsStats, getChannelHealth, getSystemHealth, getAlertConfig, updateAlertConfig, exportReport, getOpsUsers, updateUser, getChannels, createChannel, updateChannel, deleteChannel, getProviders, OpsStats, ChannelHealth, SystemHealth, AlertConfig, Channel, Provider } from '../services/api'
+import { getOpsStats, getChannelHealth, getAlertConfig, updateAlertConfig, exportReport, getOpsUsers, updateUser, getChannels, createChannel, updateChannel, deleteChannel, getProviders, getOptions, updateOption, OpsStats, ChannelHealth, AlertConfig, Channel, Provider } from '../services/api'
 
 const { TabPane } = Tabs
 
 const OpsDashboard: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab') || '1'
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<OpsStats | null>(null)
   const [channelHealth, setChannelHealth] = useState<ChannelHealth[]>([])
-  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null)
   const [alertConfig, setAlertConfig] = useState<AlertConfig | null>(null)
   const [overallHealth, setOverallHealth] = useState(0)
   const [enabledCount, setEnabledCount] = useState(0)
   const [totalChannels, setTotalChannels] = useState(0)
-  const [alertModalVisible, setAlertModalVisible] = useState(false)
-  const [form] = Form.useForm()
   const [users, setUsers] = useState<any[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [usersTotal, setUsersTotal] = useState(0)
+  const [usersOffset, setUsersOffset] = useState(0)
   const [channels, setChannels] = useState<Channel[]>([])
   const [channelsLoading, setChannelsLoading] = useState(false)
   const [channelsTotal, setChannelsTotal] = useState(0)
@@ -31,30 +32,52 @@ const OpsDashboard: React.FC = () => {
   const [editUserModalVisible, setEditUserModalVisible] = useState(false)
   const [editingUser, setEditingUser] = useState<any>(null)
   const [editUserForm] = Form.useForm()
+  const [activeTab, setActiveTab] = useState(initialTab)
+  const [settingForm] = Form.useForm()
+  const [settingSaving, setSettingSaving] = useState(false)
+  const [, setSettings] = useState({
+    QuotaForNewUser: 0,
+    QuotaForInviter: 0,
+    QuotaForInvitee: 0,
+    PreConsumedQuota: 500,
+    GroupRatio: '',
+    QuotaRemindThreshold: 0,
+    ChannelDisableThreshold: 0,
+    AutomaticDisableChannelEnabled: false,
+    AutomaticEnableChannelEnabled: false,
+    LogConsumeEnabled: false,
+    DisplayInCurrencyEnabled: false,
+    DisplayTokenStatEnabled: false,
+    RetryTimes: 3,
+  })
 
   useEffect(() => {
     loadData()
     loadUsers()
     loadChannels()
+    loadSettings()
   }, [])
+
+  const handleTabChange = (key: string) => {
+    setActiveTab(key)
+    setSearchParams({ tab: key })
+  }
 
   const loadData = async () => {
     try {
       setLoading(true)
-      const [statsRes, healthRes, sysRes, alertRes] = await Promise.all([
+      const [statsRes, healthRes, alertRes] = await Promise.all([
         getOpsStats(),
         getChannelHealth(),
-        getSystemHealth(),
         getAlertConfig()
       ])
 
-      setStats(statsRes.data.data)
-      setChannelHealth(healthRes.data.data.channels || [])
-      setOverallHealth(healthRes.data.data.overall_health || 0)
-      setEnabledCount(healthRes.data.data.enabled_count || 0)
-      setTotalChannels(healthRes.data.data.total_count || 0)
-      setSystemHealth(sysRes.data.data)
-      setAlertConfig(alertRes.data.data)
+      setStats(statsRes.data.data || null)
+      setChannelHealth(healthRes.data?.data?.channels || [])
+      setOverallHealth(healthRes.data?.data?.overall_health || 0)
+      setEnabledCount(healthRes.data?.data?.enabled_count || 0)
+      setTotalChannels(healthRes.data?.data?.total_count || 0)
+      setAlertConfig(alertRes.data.data || null)
     } catch (error) {
       console.error('Failed to load ops data:', error)
     } finally {
@@ -65,6 +88,7 @@ const OpsDashboard: React.FC = () => {
   const loadUsers = async (offset = 0, limit = 20) => {
     try {
       setUsersLoading(true)
+      setUsersOffset(offset)
       const res = await getOpsUsers({ limit, offset })
       if (res.data.success) {
         setUsers(res.data.data.users || [])
@@ -95,7 +119,7 @@ const OpsDashboard: React.FC = () => {
       if (res.data.success) {
         message.success('更新成功')
         setEditUserModalVisible(false)
-        loadUsers()
+        loadUsers(usersOffset, 20)
       } else {
         message.error(res.data.message || '更新失败')
       }
@@ -244,14 +268,111 @@ const OpsDashboard: React.FC = () => {
     }
   }
 
-  const handleUpdateAlert = async (values: any) => {
+  const loadSettings = async () => {
     try {
-      await updateAlertConfig(values)
-      message.success('告警配置已更新')
-      setAlertModalVisible(false)
-      loadData()
+      const res = await getOptions()
+      if (res.data.success) {
+        const data = res.data.data || []
+        const newSettings: any = {}
+
+        // Map OptionMap keys to form field names
+        const keyMap: Record<string, string> = {
+          'SysMaxConcurrentRequests': 'max_concurrent_requests',
+          'SysRequestQueueTimeout': 'request_queue_timeout',
+          'SysHealthCheckInterval': 'health_check_interval',
+          'SysHealthCheckFailThreshold': 'health_check_fail_threshold',
+          'SysCircuitBreakerThreshold': 'circuit_breaker_threshold',
+          'SysCircuitBreakerTimeout': 'circuit_breaker_timeout',
+          'SysRelayTimeout': 'relay_timeout',
+        }
+
+        data.forEach((item: any) => {
+          if (item.key === 'GroupRatio') {
+            try {
+              newSettings[item.key] = JSON.stringify(JSON.parse(item.value), null, 2)
+            } catch {
+              newSettings[item.key] = item.value || ''
+            }
+          } else if (item.key === 'AutomaticDisableChannelEnabled' || item.key === 'AutomaticEnableChannelEnabled' || item.key === 'LogConsumeEnabled' || item.key === 'DisplayInCurrencyEnabled' || item.key === 'DisplayTokenStatEnabled') {
+            newSettings[item.key] = item.value === 'true' || item.value === '1'
+          } else if (item.key === 'AlertEnabled') {
+            newSettings.alert_enabled = item.value === 'true' || item.value === '1'
+          } else if (item.key === 'AlertEmail') {
+            newSettings.alert_email = item.value
+          } else if (item.key === 'AlertWebhook') {
+            newSettings.alert_webhook = item.value
+          } else if (keyMap[item.key]) {
+            // Map backend keys to form field names
+            newSettings[keyMap[item.key]] = item.value ? parseFloat(item.value) : 0
+          } else if (item.key !== 'ModelRatio' && item.key !== 'CompletionRatio') {
+            newSettings[item.key] = item.value ? parseFloat(item.value) : 0
+          }
+        })
+        setSettings((prev: any) => ({ ...prev, ...newSettings }))
+        settingForm.setFieldsValue(newSettings)
+      }
     } catch (error) {
-      message.error('更新失败')
+      console.error('Failed to load options:', error)
+    }
+  }
+
+  const handleSaveSettings = async () => {
+    try {
+      setSettingSaving(true)
+      const values = settingForm.getFieldsValue()
+
+      // Prepare alert config data - use exact keys expected by backend
+      const alertData: any = {
+        alert_email: values.alert_email,
+        alert_webhook: values.alert_webhook,
+        alert_enabled: values.alert_enabled,
+        max_concurrent_requests: values.max_concurrent_requests,
+        request_queue_timeout: values.request_queue_timeout,
+        health_check_interval: values.health_check_interval,
+        health_check_fail_threshold: values.health_check_fail_threshold,
+        circuit_breaker_threshold: values.circuit_breaker_threshold,
+        circuit_breaker_timeout: values.circuit_breaker_timeout,
+        relay_timeout: values.relay_timeout,
+      }
+
+      // Update alert and system config via updateAlertConfig
+      await updateAlertConfig(alertData)
+
+      // Update other settings (GroupRatio, channel settings, etc.) via updateOption
+      const otherKeys = ['GroupRatio', 'AutomaticDisableChannelEnabled', 'AutomaticEnableChannelEnabled', 'ChannelDisableThreshold', 'DisplayInCurrencyEnabled', 'DisplayTokenStatEnabled', 'LogConsumeEnabled', 'RetryTimes', 'QuotaForNewUser', 'QuotaForInviter', 'QuotaForInvitee', 'PreConsumedQuota', 'QuotaRemindThreshold']
+      const otherPromises = otherKeys
+        .filter(key => values[key] !== undefined)
+        .map(key => {
+          let finalValue: any = values[key]
+          if (typeof values[key] === 'boolean') {
+            finalValue = values[key] ? 'true' : 'false'
+          } else if (typeof values[key] === 'object') {
+            finalValue = JSON.stringify(values[key])
+          } else {
+            finalValue = String(values[key])
+          }
+          return updateOption(key, finalValue)
+        })
+
+      await Promise.all(otherPromises)
+      message.success('设置保存成功')
+      loadSettings()
+      loadData() // Refresh alert config display
+    } catch (error: any) {
+      message.error(error.message || '保存失败')
+      console.error('Save error:', error)
+    } finally {
+      setSettingSaving(false)
+    }
+  }
+
+  const verifyJSON = (str: string) => {
+    if (!str || str.trim() === '') return true
+    try {
+      JSON.parse(str)
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -283,7 +404,7 @@ const OpsDashboard: React.FC = () => {
   const channelColumns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '类型', dataIndex: 'type', key: 'type', render: (v: number) => ['OpenAI', 'Azure', 'Anthropic', 'Google', '自定义'][v] || '未知' },
+    { title: '类型', dataIndex: 'type_name', key: 'type_name' },
     { title: 'Provider', dataIndex: 'group', key: 'group', width: 100 },
     { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
     {
@@ -386,7 +507,7 @@ const OpsDashboard: React.FC = () => {
         </Col>
       </Row>
 
-      <Tabs defaultActiveKey="1" style={{ marginTop: 16 }}>
+      <Tabs activeKey={activeTab} onChange={handleTabChange} style={{ marginTop: 16 }}>
         <TabPane tab={<span><LineChartOutlined /> 营收概览</span>} key="1">
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={16}>
@@ -412,94 +533,7 @@ const OpsDashboard: React.FC = () => {
           </Row>
         </TabPane>
 
-        <TabPane tab={<span><ApiOutlined /> 渠道健康</span>} key="2">
-          <Card title="渠道状态">
-            <Table
-              dataSource={channelHealth}
-              columns={channelColumns}
-              rowKey="id"
-              size="small"
-              pagination={{ pageSize: 10, total: channelHealth.length, showTotal: (t) => `共 ${t} 条` }}
-            />
-          </Card>
-        </TabPane>
-
-        <TabPane tab={<span><AlertOutlined /> 告警配置</span>} key="3">
-          <Card title="告警设置">
-            <Row gutter={[16, 16]}>
-              <Col xs={24} lg={12}>
-                <Card size="small" title="当前配置">
-                  <Space direction="vertical">
-                    <div>渠道失败阈值: <Tag color="red">{alertConfig?.channel_failure_threshold}</Tag></div>
-                    <div>队列利用率告警: <Tag color="orange">{alertConfig?.queue_utilization_alert}%</Tag></div>
-                    <div>错误率告警: <Tag color="red">{alertConfig?.error_rate_alert}%</Tag></div>
-                    <div>延迟阈值: <Tag color="blue">{alertConfig?.latency_threshold}ms</Tag></div>
-                    <div>告警邮箱: <Tag>{alertConfig?.alert_email || '未配置'}</Tag></div>
-                    <div>告警状态: <Tag color={alertConfig?.enabled ? 'green' : 'red'}>{alertConfig?.enabled ? '启用' : '禁用'}</Tag></div>
-                  </Space>
-                </Card>
-              </Col>
-              <Col xs={24} lg={12}>
-                <Card size="small" title="系统信息">
-                  {systemHealth && (
-                    <Space direction="vertical">
-                      <div>运行时间: <Tag>{Math.floor(systemHealth.uptime / 86400)}天{Math.floor((systemHealth.uptime % 86400) / 3600)}小时</Tag></div>
-                      <div>最大并发: <Tag>{systemHealth.config?.max_concurrent}</Tag></div>
-                      <div>健康检查间隔: <Tag>{systemHealth.config?.health_interval}s</Tag></div>
-                      <div>熔断阈值: <Tag>{systemHealth.config?.cb_threshold}</Tag></div>
-                      <div>队列利用率: <Progress percent={Math.round(systemHealth.queue?.utilization || 0)} size="small" /></div>
-                    </Space>
-                  )}
-                </Card>
-              </Col>
-            </Row>
-            <Button type="primary" style={{ marginTop: 16 }} onClick={() => {
-              form.setFieldsValue(alertConfig)
-              setAlertModalVisible(true)
-            }}>
-              修改配置
-            </Button>
-          </Card>
-        </TabPane>
-
-        <TabPane tab={<span><ApiOutlined /> 渠道管理</span>} key="4">
-          <Card
-            title="渠道列表"
-            extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreateChannel}>添加渠道</Button>}
-          >
-            <Table
-              dataSource={channels}
-              columns={[
-                { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-                { title: '名称', dataIndex: 'name', key: 'name' },
-                { title: '类型', dataIndex: 'type', key: 'type', render: (v: number) => ['OpenAI', 'Azure', 'Anthropic', 'Google', '自定义'][v] || '未知' },
-                { title: 'Group', dataIndex: 'group', key: 'group', width: 100 },
-                { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
-                { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
-                { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? <Tag color="green">启用</Tag> : v === 2 ? <Tag color="red">禁用</Tag> : <Tag>未知</Tag> },
-                {
-                  title: '操作',
-                  key: 'action',
-                  width: 150,
-                  render: (_: any, record: Channel) => (
-                    <Space>
-                      <Button type="link" size="small" onClick={() => handleEditChannel(record)}>编辑</Button>
-                      <Popconfirm title="确定删除？" onConfirm={() => handleDeleteChannel(record.id)}>
-                        <Button type="link" size="small" danger>删除</Button>
-                      </Popconfirm>
-                    </Space>
-                  )
-                }
-              ]}
-              rowKey="id"
-              loading={channelsLoading}
-              pagination={{ pageSize: 10, total: channelsTotal, showTotal: (t) => `共 ${t} 条` }}
-              onChange={(pagination) => loadChannels(((pagination.current || 1) - 1) * 10, 10)}
-            />
-          </Card>
-        </TabPane>
-
-        <TabPane tab={<span><UserOutlined /> 用户管理</span>} key="5">
+        <TabPane tab={<span><UserOutlined /> 用户管理</span>} key="2">
           <Card title="用户列表">
             <Table
               dataSource={users}
@@ -531,38 +565,225 @@ const OpsDashboard: React.FC = () => {
             />
           </Card>
         </TabPane>
-      </Tabs>
 
-      <Modal
-        title="修改告警配置"
-        open={alertModalVisible}
-        onCancel={() => setAlertModalVisible(false)}
-        footer={null}
-      >
-        <Form form={form} onFinish={handleUpdateAlert} layout="vertical">
-          <Form.Item name="channel_failure_threshold" label="渠道失败阈值">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item name="queue_utilization_alert" label="队列利用率告警(%)">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item name="error_rate_alert" label="错误率告警(%)">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item name="latency_threshold" label="延迟阈值(ms)">
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item name="alert_email" label="告警邮箱">
-            <Input />
-          </Form.Item>
-          <Form.Item name="alert_webhook" label="告警Webhook">
-            <Input />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit">保存</Button>
-          </Form.Item>
-        </Form>
-      </Modal>
+        <TabPane tab={<span><ApiOutlined /> 渠道管理</span>} key="3">
+          <Card
+            title="渠道列表"
+            extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreateChannel}>添加渠道</Button>}
+          >
+            <Table
+              dataSource={channels}
+              columns={[
+                { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
+                { title: '名称', dataIndex: 'name', key: 'name' },
+                { title: '类型', dataIndex: 'type_name', key: 'type_name' },
+                { title: 'Group', dataIndex: 'group', key: 'group', width: 100 },
+                { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
+                { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
+                { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? <Tag color="green">启用</Tag> : v === 2 ? <Tag color="red">禁用</Tag> : <Tag>未知</Tag> },
+                {
+                  title: '操作',
+                  key: 'action',
+                  width: 150,
+                  render: (_: any, record: Channel) => (
+                    <Space>
+                      <Button type="link" size="small" onClick={() => handleEditChannel(record)}>编辑</Button>
+                      <Popconfirm title="确定删除？" onConfirm={() => handleDeleteChannel(record.id)}>
+                        <Button type="link" size="small" danger>删除</Button>
+                      </Popconfirm>
+                    </Space>
+                  )
+                }
+              ]}
+              rowKey="id"
+              loading={channelsLoading}
+              pagination={{ pageSize: 10, total: channelsTotal, showTotal: (t) => `共 ${t} 条` }}
+              onChange={(pagination) => loadChannels(((pagination.current || 1) - 1) * 10, 10)}
+            />
+          </Card>
+        </TabPane>
+
+        <TabPane tab={<span><ApiOutlined /> 渠道健康</span>} key="4">
+          <Card title="渠道状态">
+            <Table
+              dataSource={channelHealth}
+              columns={channelColumns}
+              rowKey="id"
+              size="small"
+              pagination={{ pageSize: 10, total: channelHealth.length, showTotal: (t) => `共 ${t} 条` }}
+            />
+          </Card>
+        </TabPane>
+
+        <TabPane tab={<span><UserOutlined /> 配额设置</span>} key="6">
+          <Form form={settingForm} layout="vertical">
+            <Card title="配额配置" style={{ marginTop: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col span={12}>
+                  <Form.Item label="新用户初始配额" name="QuotaForNewUser">
+                    <InputNumber style={{ width: '100%' }} placeholder="-1 表示无限额" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="预消耗配额" name="PreConsumedQuota">
+                    <InputNumber style={{ width: '100%' }} placeholder="请求前预扣除的配额" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="邀请者奖励配额" name="QuotaForInviter">
+                    <InputNumber style={{ width: '100%' }} placeholder="邀请者获得的奖励" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="被邀请者奖励配额" name="QuotaForInvitee">
+                    <InputNumber style={{ width: '100%' }} placeholder="被邀请者获得的奖励" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="配额提醒阈值" name="QuotaRemindThreshold">
+                    <InputNumber style={{ width: '100%' }} placeholder="配额低于此值时提醒" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Button type="primary" icon={<SaveOutlined />} loading={settingSaving} onClick={handleSaveSettings} style={{ marginTop: 16 }}>
+                保存设置
+              </Button>
+            </Card>
+          </Form>
+        </TabPane>
+
+        <TabPane tab={<span><SettingOutlined /> 系统设置</span>} key="7">
+          <Form form={settingForm} layout="vertical">
+            <Card title="分组倍率" style={{ marginTop: 16 }}>
+              <Form.Item
+                name="GroupRatio"
+                rules={[{ validator: (_, value) => verifyJSON(value) ? Promise.resolve() : Promise.reject('不是合法的 JSON') }]}
+              >
+                <Input.TextArea
+                  rows={6}
+                  placeholder={'{\n  "default": 1.0,\n  "enterprise": 1.2\n}'}
+                  style={{ fontFamily: 'monospace' }}
+                />
+              </Form.Item>
+              <div style={{ color: '#999', fontSize: 12 }}>
+                JSON 格式，键为分组名称，值为倍率。例如 {" "}
+                {'{"default": 1.0}'} 表示默认分组倍率为 1.0
+              </div>
+            </Card>
+
+            <Card title="渠道自动管理" style={{ marginTop: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col span={12}>
+                  <Form.Item label="自动禁用渠道" name="AutomaticDisableChannelEnabled" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="自动启用渠道" name="AutomaticEnableChannelEnabled" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="渠道禁用阈值(秒)" name="ChannelDisableThreshold">
+                    <InputNumber style={{ width: '100%' }} placeholder="响应时间超过此值自动禁用" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
+
+            <Card title="显示设置" style={{ marginTop: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col span={12}>
+                  <Form.Item label="以货币形式显示" name="DisplayInCurrencyEnabled" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="显示 Token 统计" name="DisplayTokenStatEnabled" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="消费日志" name="LogConsumeEnabled" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="重试次数" name="RetryTimes">
+                    <InputNumber style={{ width: '100%' }} min={0} max={10} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
+
+            <Card title="告警设置" style={{ marginTop: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col span={12}>
+                  <Form.Item label="告警开关" name="alert_enabled">
+                    <Switch checked={alertConfig?.enabled} onChange={(checked) => {
+                      updateAlertConfig({ ...alertConfig, enabled: checked })
+                    }} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="告警邮箱" name="alert_email">
+                    <Input placeholder="接收告警的邮箱地址" />
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Form.Item label="告警Webhook" name="alert_webhook">
+                    <Input placeholder="接收告警的 Webhook URL" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
+
+            <Card title="性能配置" style={{ marginTop: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col span={12}>
+                  <Form.Item label="最大并发请求数" name="max_concurrent_requests">
+                    <InputNumber style={{ width: '100%' }} min={1} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="请求队列超时(秒)" name="request_queue_timeout">
+                    <InputNumber style={{ width: '100%' }} min={0} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="健康检查间隔(秒)" name="health_check_interval">
+                    <InputNumber style={{ width: '100%' }} min={10} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="健康检查失败阈值" name="health_check_fail_threshold">
+                    <InputNumber style={{ width: '100%' }} min={1} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="熔断失败阈值" name="circuit_breaker_threshold">
+                    <InputNumber style={{ width: '100%' }} min={1} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="熔断超时(秒)" name="circuit_breaker_timeout">
+                    <InputNumber style={{ width: '100%' }} min={1} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="请求超时(秒,0=无限)" name="relay_timeout">
+                    <InputNumber style={{ width: '100%' }} min={0} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
+
+            <Button type="primary" icon={<SaveOutlined />} loading={settingSaving} onClick={handleSaveSettings} style={{ marginTop: 16 }}>
+              保存设置
+            </Button>
+          </Form>
+        </TabPane>
+      </Tabs>
 
       <Modal
         title={editingChannel ? '编辑渠道' : '添加渠道'}

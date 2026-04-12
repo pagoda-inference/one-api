@@ -18,7 +18,6 @@ import (
 	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
 	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
-	billingratio "github.com/pagoda-inference/one-api/relay/billing/ratio"
 	"github.com/pagoda-inference/one-api/relay/channeltype"
 	"github.com/pagoda-inference/one-api/relay/controller/validator"
 	"github.com/pagoda-inference/one-api/relay/meta"
@@ -27,6 +26,10 @@ import (
 )
 
 func getAndValidateTextRequest(c *gin.Context, relayMode int) (*relaymodel.GeneralOpenAIRequest, error) {
+	// For rerank, skip parsing since the body format doesn't match GeneralOpenAIRequest
+	if relayMode == relaymode.Rerank {
+		return &relaymodel.GeneralOpenAIRequest{}, nil
+	}
 	textRequest := &relaymodel.GeneralOpenAIRequest{}
 	err := common.UnmarshalBodyReusable(c, textRequest)
 	if err != nil {
@@ -57,16 +60,17 @@ func getPromptTokens(textRequest *relaymodel.GeneralOpenAIRequest, relayMode int
 	return 0
 }
 
-func getPreConsumedQuota(textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, ratio float64) int64 {
+func getPreConsumedQuota(textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, inputPrice float64, groupRatio float64) int64 {
 	preConsumedTokens := config.PreConsumedQuota + int64(promptTokens)
 	if textRequest.MaxTokens != 0 {
 		preConsumedTokens += int64(textRequest.MaxTokens)
 	}
-	return int64(float64(preConsumedTokens) * ratio)
+	// inputPrice is in yuan per 1000 tokens
+	return int64(math.Ceil(float64(preConsumedTokens) * inputPrice / 1000 * groupRatio))
 }
 
-func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, ratio float64, meta *meta.Meta) (int64, *relaymodel.ErrorWithStatusCode) {
-	preConsumedQuota := getPreConsumedQuota(textRequest, promptTokens, ratio)
+func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, inputPrice float64, groupRatio float64, meta *meta.Meta) (int64, *relaymodel.ErrorWithStatusCode) {
+	preConsumedQuota := getPreConsumedQuota(textRequest, promptTokens, inputPrice, groupRatio)
 
 	userQuota, err := model.CacheGetUserQuota(ctx, meta.UserId)
 	if err != nil {
@@ -99,17 +103,21 @@ func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIR
 	return preConsumedQuota, nil
 }
 
-func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.Meta, textRequest *relaymodel.GeneralOpenAIRequest, ratio float64, preConsumedQuota int64, modelRatio float64, groupRatio float64, systemPromptReset bool) {
+func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.Meta, textRequest *relaymodel.GeneralOpenAIRequest, inputPrice float64, outputPrice float64, groupRatio float64, preConsumedQuota int64, systemPromptReset bool) {
 	if usage == nil {
 		logger.Error(ctx, "usage is nil, which is unexpected")
 		return
 	}
 	var quota int64
-	completionRatio := billingratio.GetCompletionRatio(textRequest.Model, meta.ChannelType)
 	promptTokens := usage.PromptTokens
 	completionTokens := usage.CompletionTokens
-	quota = int64(math.Ceil((float64(promptTokens) + float64(completionTokens)*completionRatio) * ratio))
-	if ratio != 0 && quota <= 0 {
+
+	// inputPrice and outputPrice are in yuan per 1000 tokens
+	inputQuota := float64(promptTokens) * inputPrice / 1000
+	outputQuota := float64(completionTokens) * outputPrice / 1000
+	quota = int64(math.Ceil((inputQuota + outputQuota) * groupRatio))
+
+	if inputPrice != 0 && outputPrice != 0 && quota <= 0 {
 		quota = 1
 	}
 	totalTokens := promptTokens + completionTokens
@@ -118,7 +126,7 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.M
 		// we cannot just return, because we may have to return the pre-consumed quota
 		quota = 0
 	}
-	logContent := fmt.Sprintf("倍率：%.2f × %.2f × %.2f", modelRatio, groupRatio, completionRatio)
+	logContent := fmt.Sprintf("计费：输入%.6f元/1K + 输出%.6f元/1K，groupRatio=%.2f", inputPrice, outputPrice, groupRatio)
 	model.RecordConsumeLog(ctx, &model.Log{
 		UserId:            meta.UserId,
 		ChannelId:         meta.ChannelId,

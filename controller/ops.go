@@ -13,6 +13,7 @@ import (
 	"github.com/pagoda-inference/one-api/middleware"
 	"github.com/pagoda-inference/one-api/model"
 	"github.com/pagoda-inference/one-api/monitor"
+	"github.com/pagoda-inference/one-api/relay/channeltype"
 )
 
 // OpsStats represents operations statistics
@@ -304,6 +305,7 @@ func GetChannelHealth(c *gin.Context) {
 		Name         string  `json:"name"`
 		Status       string  `json:"status"`
 		Type         int     `json:"type"`
+		TypeName     string  `json:"type_name"`
 		Group        string  `json:"group"`
 		BaseURL      string  `json:"base_url"`
 		SuccessRate  float64 `json:"success_rate"`
@@ -322,6 +324,7 @@ func GetChannelHealth(c *gin.Context) {
 			Name:       ch.Name,
 			Status:     strconv.Itoa(ch.Status),
 			Type:       ch.Type,
+			TypeName:   channeltype.GetTypeName(ch.Type),
 			Group:      ch.Group,
 			BaseURL:    ch.GetBaseURL(),
 			Priority:   int(ch.GetPriority()),
@@ -332,6 +335,9 @@ func GetChannelHealth(c *gin.Context) {
 			total := stats.SuccessCount + stats.FailCount
 			if total > 0 {
 				info.SuccessRate = float64(stats.SuccessCount) / float64(total) * 100
+			} else {
+				// Default to 100% for new channels with no requests
+				info.SuccessRate = 100
 			}
 			info.AvgLatency = stats.AvgLatency
 		}
@@ -420,6 +426,25 @@ func GetOpsUsers(c *gin.Context) {
 	})
 }
 
+// AlertConfig option keys
+const (
+	AlertKeyChannelFailureThreshold = "AlertChannelFailureThreshold"
+	AlertKeyQueueUtilizationAlert  = "AlertQueueUtilizationAlert"
+	AlertKeyErrorRateAlert         = "AlertErrorRateAlert"
+	AlertKeyLatencyThreshold        = "AlertLatencyThreshold"
+	AlertKeyAlertEmail             = "AlertEmail"
+	AlertKeyAlertWebhook           = "AlertWebhook"
+	AlertKeyEnabled                = "AlertEnabled"
+	// System config keys
+	SysKeyMaxConcurrentRequests    = "SysMaxConcurrentRequests"
+	SysKeyRequestQueueTimeout      = "SysRequestQueueTimeout"
+	SysKeyHealthCheckInterval      = "SysHealthCheckInterval"
+	SysKeyHealthCheckFailThreshold = "SysHealthCheckFailThreshold"
+	SysKeyCircuitBreakerThreshold = "SysCircuitBreakerThreshold"
+	SysKeyCircuitBreakerTimeout    = "SysCircuitBreakerTimeout"
+	SysKeyRelayTimeout             = "SysRelayTimeout"
+)
+
 // GetAlertConfig handles GET /api/admin/alerts/config
 func GetAlertConfig(c *gin.Context) {
 	role := c.GetInt(ctxkey.Role)
@@ -428,22 +453,57 @@ func GetAlertConfig(c *gin.Context) {
 		return
 	}
 
-	// Return current alert configuration
-	// In production, this would come from database or config
-	config := gin.H{
-		"channel_failure_threshold": config.CircuitBreakerThreshold,
-		"queue_utilization_alert":  80, // percent
-		"error_rate_alert":        1,   // percent
-		"latency_threshold":        5000, // ms
-		"alert_email":             "", // to be configured
-		"alert_webhook":           "", // to be configured
-		"enabled":                true,
+	// Read from OptionMap with fallback to config defaults
+	config.OptionMapRWMutex.RLock()
+	alertConfig := gin.H{
+		// Alert settings
+		"channel_failure_threshold": getAlertConfigValue(AlertKeyChannelFailureThreshold, config.CircuitBreakerThreshold),
+		"queue_utilization_alert":   getAlertConfigValue(AlertKeyQueueUtilizationAlert, 80),
+		"error_rate_alert":          getAlertConfigValue(AlertKeyErrorRateAlert, 1),
+		"latency_threshold":         getAlertConfigValue(AlertKeyLatencyThreshold, 5000),
+		"alert_email":               getAlertConfigValue(AlertKeyAlertEmail, ""),
+		"alert_webhook":             getAlertConfigValue(AlertKeyAlertWebhook, ""),
+		"enabled":                  getAlertConfigValue(AlertKeyEnabled, true),
+		// System config
+		"max_concurrent_requests":    getAlertConfigValue(SysKeyMaxConcurrentRequests, config.MaxConcurrentRequests),
+		"request_queue_timeout":     getAlertConfigValue(SysKeyRequestQueueTimeout, config.RequestQueueTimeout),
+		"health_check_interval":     getAlertConfigValue(SysKeyHealthCheckInterval, config.HealthCheckInterval),
+		"health_check_fail_threshold": getAlertConfigValue(SysKeyHealthCheckFailThreshold, config.HealthCheckFailThreshold),
+		"circuit_breaker_threshold": getAlertConfigValue(SysKeyCircuitBreakerThreshold, config.CircuitBreakerThreshold),
+		"circuit_breaker_timeout":   getAlertConfigValue(SysKeyCircuitBreakerTimeout, config.CircuitBreakerTimeout),
+		"relay_timeout":             getAlertConfigValue(SysKeyRelayTimeout, config.RelayTimeout),
 	}
+	config.OptionMapRWMutex.RUnlock()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    config,
+		"data":    alertConfig,
 	})
+}
+
+// getAlertConfigValue retrieves an alert config value from OptionMap with a default fallback
+func getAlertConfigValue(key string, defaultVal interface{}) interface{} {
+	if val, ok := config.OptionMap[key]; ok {
+		switch defaultVal.(type) {
+		case int:
+			if intVal, err := strconv.Atoi(val); err == nil {
+				return intVal
+			}
+		case int64:
+			if intVal, err := strconv.ParseInt(val, 10, 64); err == nil {
+				return intVal
+			}
+		case float64:
+			if floatVal, err := strconv.ParseFloat(val, 64); err == nil {
+				return floatVal
+			}
+		case bool:
+			return val == "true"
+		case string:
+			return val
+		}
+	}
+	return defaultVal
 }
 
 // UpdateAlertConfig handles PUT /api/admin/alerts/config
@@ -460,12 +520,62 @@ func UpdateAlertConfig(c *gin.Context) {
 		return
 	}
 
-	// In production, save to database
-	// For now, just acknowledge
+	// Save alert config fields
+	if v, ok := req["channel_failure_threshold"]; ok {
+		model.UpdateOption(AlertKeyChannelFailureThreshold, fmt.Sprintf("%v", v))
+	}
+	if v, ok := req["queue_utilization_alert"]; ok {
+		model.UpdateOption(AlertKeyQueueUtilizationAlert, fmt.Sprintf("%v", v))
+	}
+	if v, ok := req["error_rate_alert"]; ok {
+		model.UpdateOption(AlertKeyErrorRateAlert, fmt.Sprintf("%v", v))
+	}
+	if v, ok := req["latency_threshold"]; ok {
+		model.UpdateOption(AlertKeyLatencyThreshold, fmt.Sprintf("%v", v))
+	}
+	if v, ok := req["alert_email"]; ok {
+		model.UpdateOption(AlertKeyAlertEmail, fmt.Sprintf("%v", v))
+	}
+	if v, ok := req["alert_webhook"]; ok {
+		model.UpdateOption(AlertKeyAlertWebhook, fmt.Sprintf("%v", v))
+	}
+	if v, ok := req["enabled"]; ok {
+		model.UpdateOption(AlertKeyEnabled, fmt.Sprintf("%v", v))
+	}
+
+	// Save system config fields
+	if v, ok := req["max_concurrent_requests"]; ok {
+		model.UpdateOption(SysKeyMaxConcurrentRequests, fmt.Sprintf("%v", v))
+		model.UpdateConfigInt("MaxConcurrentRequests", v)
+	}
+	if v, ok := req["request_queue_timeout"]; ok {
+		model.UpdateOption(SysKeyRequestQueueTimeout, fmt.Sprintf("%v", v))
+		model.UpdateConfigInt("RequestQueueTimeout", v)
+	}
+	if v, ok := req["health_check_interval"]; ok {
+		model.UpdateOption(SysKeyHealthCheckInterval, fmt.Sprintf("%v", v))
+		model.UpdateConfigInt("HealthCheckInterval", v)
+	}
+	if v, ok := req["health_check_fail_threshold"]; ok {
+		model.UpdateOption(SysKeyHealthCheckFailThreshold, fmt.Sprintf("%v", v))
+		model.UpdateConfigInt("HealthCheckFailThreshold", v)
+	}
+	if v, ok := req["circuit_breaker_threshold"]; ok {
+		model.UpdateOption(SysKeyCircuitBreakerThreshold, fmt.Sprintf("%v", v))
+		model.UpdateConfigInt("CircuitBreakerThreshold", v)
+	}
+	if v, ok := req["circuit_breaker_timeout"]; ok {
+		model.UpdateOption(SysKeyCircuitBreakerTimeout, fmt.Sprintf("%v", v))
+		model.UpdateConfigInt("CircuitBreakerTimeout", v)
+	}
+	if v, ok := req["relay_timeout"]; ok {
+		model.UpdateOption(SysKeyRelayTimeout, fmt.Sprintf("%v", v))
+		model.UpdateConfigInt("RelayTimeout", v)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Alert config updated",
+		"message": "配置已更新，部分配置需重启服务生效",
 	})
 }
 

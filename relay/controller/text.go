@@ -11,6 +11,7 @@ import (
 
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/model"
 	"github.com/pagoda-inference/one-api/relay"
 	"github.com/pagoda-inference/one-api/relay/adaptor"
 	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
@@ -19,11 +20,11 @@ import (
 	billingratio "github.com/pagoda-inference/one-api/relay/billing/ratio"
 	"github.com/pagoda-inference/one-api/relay/channeltype"
 	"github.com/pagoda-inference/one-api/relay/meta"
-	"github.com/pagoda-inference/one-api/relay/model"
+	relaymodel "github.com/pagoda-inference/one-api/relay/model"
 	"github.com/pagoda-inference/one-api/relay/relaymode"
 )
 
-func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
+func RelayTextHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	ctx := c.Request.Context()
 	meta := meta.GetByContext(c)
 	// get & validate textRequest
@@ -40,14 +41,23 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 	meta.ActualModelName = textRequest.Model
 	// set system prompt if not empty
 	systemPromptReset := setSystemPrompt(ctx, textRequest, meta.ForcedSystemPrompt)
-	// get model ratio & group ratio
-	modelRatio := billingratio.GetModelRatio(textRequest.Model, meta.ChannelType)
+	// get model price & group ratio
+	modelInfo, err := model.GetModelById(textRequest.Model)
+	if err != nil {
+		logger.Warnf(ctx, "model not found: %s, using default price 0", textRequest.Model)
+		modelInfo = nil
+	}
+	inputPrice := 0.0
+	outputPrice := 0.0
+	if modelInfo != nil {
+		inputPrice = modelInfo.InputPrice
+		outputPrice = modelInfo.OutputPrice
+	}
 	groupRatio := billingratio.GetGroupRatio(meta.Group)
-	ratio := modelRatio * groupRatio
 	// pre-consume quota
 	promptTokens := getPromptTokens(textRequest, meta.Mode)
 	meta.PromptTokens = promptTokens
-	preConsumedQuota, bizErr := preConsumeQuota(ctx, textRequest, promptTokens, ratio, meta)
+	preConsumedQuota, bizErr := preConsumeQuota(ctx, textRequest, promptTokens, inputPrice, groupRatio, meta)
 	if bizErr != nil {
 		logger.Warnf(ctx, "preConsumeQuota failed: %+v", *bizErr)
 		return bizErr
@@ -84,11 +94,11 @@ func RelayTextHelper(c *gin.Context) *model.ErrorWithStatusCode {
 		return respErr
 	}
 	// post-consume quota
-	go postConsumeQuota(ctx, usage, meta, textRequest, ratio, preConsumedQuota, modelRatio, groupRatio, systemPromptReset)
+	go postConsumeQuota(ctx, usage, meta, textRequest, inputPrice, outputPrice, groupRatio, preConsumedQuota, systemPromptReset)
 	return nil
 }
 
-func getRequestBody(c *gin.Context, meta *meta.Meta, textRequest *model.GeneralOpenAIRequest, adaptor adaptor.Adaptor) (io.Reader, error) {
+func getRequestBody(c *gin.Context, meta *meta.Meta, textRequest *relaymodel.GeneralOpenAIRequest, adaptor adaptor.Adaptor) (io.Reader, error) {
 	// For rerank, we need to map the model name in the body
 	if meta.Mode == relaymode.Rerank {
 		body, err := io.ReadAll(c.Request.Body)

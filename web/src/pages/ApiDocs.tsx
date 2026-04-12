@@ -383,7 +383,7 @@ const ApiDocs: React.FC = () => {
                         columns={[
                           { title: '参数名', dataIndex: 'name', key: 'name', render: (v: string) => <code>{v}</code> },
                           { title: '类型', dataIndex: 'type', key: 'type' },
-                          { title: '必填', dataIndex: 'required', key: 'required', render: (v: boolean) => v ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag> },
+                          { title: '必填', dataIndex: 'required', key: 'required', render: (v: boolean) => v ? <Tag color="green">是</Tag> : <Tag color="red">否</Tag> },
                           { title: '说明', dataIndex: 'description', key: 'description' }
                         ]}
                         dataSource={endpoint.parameters.map(p => ({ ...p, key: p.name }))}
@@ -444,9 +444,18 @@ const ApiDocs: React.FC = () => {
                       <span style={{ fontWeight: 600, fontSize: 16 }}>{cat.name}</span>
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {cat.models.map((model, i) => (
-                        <Tag key={i} style={{ borderRadius: 4 }}>{model}</Tag>
-                      ))}
+                      {cat.models.map((model: any, i: number) => {
+                        // Support both string format and object format
+                        const modelName = typeof model === 'string' ? model : model.Name
+                        const modelStatus = typeof model === 'string' ? null : model.status
+                        const statusColor = typeof model === 'string' ? undefined : model.statusColor
+                        return (
+                          <Tag key={i} style={{ borderRadius: 4, color: statusColor }}>
+                            {modelName}
+                            {modelStatus && <span style={{ marginLeft: 4, opacity: 0.7 }}>({modelStatus})</span>}
+                          </Tag>
+                        )
+                      })}
                     </div>
                   </Card>
                 ))}
