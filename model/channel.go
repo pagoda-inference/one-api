@@ -38,6 +38,7 @@ type Channel struct {
 	Priority           *int64  `json:"priority" gorm:"bigint;default:0"`
 	Config             string  `json:"config"`
 	SystemPrompt       *string `json:"system_prompt" gorm:"type:text"`
+	TypeName           string  `json:"type_name" gorm:"-"` // computed field, not stored in DB
 }
 
 // GetWeight returns the channel weight, defaulting to 1 if not set

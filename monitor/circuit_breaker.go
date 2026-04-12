@@ -64,7 +64,7 @@ func (cb *CircuitBreaker) AllowRequest() bool {
 		return true
 	case StateOpen:
 		// Check if timeout has passed to transition to half-open
-		if time.Since(cb.lastFailureTime) > cb.timeout {
+		if time.Since(cb.lastFailureTime) > time.Duration(config.CircuitBreakerTimeout)*time.Second {
 			return true // Allow one request to test
 		}
 		return false
@@ -83,7 +83,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 
 	if cb.state == StateHalfOpen {
 		cb.successCount++
-		if cb.successCount >= cb.successThreshold {
+		if cb.successCount >= config.CircuitBreakerSuccessThreshold {
 			cb.state = StateClosed
 			cb.successCount = 0
 			logger.SysLog("circuit breaker: state changed to closed (recovered)")
@@ -104,7 +104,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 		cb.state = StateOpen
 		cb.successCount = 0
 		logger.SysLog("circuit breaker: state changed to open (probe failed)")
-	} else if cb.failureCount >= cb.failureThreshold {
+	} else if cb.failureCount >= config.CircuitBreakerThreshold {
 		// Too many failures, open the circuit
 		cb.state = StateOpen
 		logger.SysLog(fmt.Sprintf("circuit breaker: state changed to open (failures: %d)", cb.failureCount))

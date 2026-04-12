@@ -93,15 +93,11 @@ func ValidateUserToken(key string) (token *Token, err error) {
 		}
 		return nil, errors.New("该令牌已过期")
 	}
-	if !token.UnlimitedQuota && token.RemainQuota <= 0 {
-		if !common.RedisEnabled {
-			// in this case, we can make sure the token is exhausted
-			token.Status = TokenStatusExhausted
-			err := token.SelectUpdate()
-			if err != nil {
-				logger.SysError("failed to update token status" + err.Error())
-			}
-		}
+	if !token.UnlimitedQuota && token.RemainQuota < 0 {
+		// remain_quota = -1 means unlimited, so don't check quota
+	} else if !token.UnlimitedQuota && token.RemainQuota <= 0 {
+		// Note: do NOT auto-change status to exhausted here
+		// Status should only be changed manually by admin
 		return nil, errors.New("该令牌额度已用尽")
 	}
 	return token, nil
@@ -133,10 +129,24 @@ func (t *Token) Insert() error {
 	return err
 }
 
-// Update Make sure your token's fields is completed, because this will update non-zero values
+// Update updates token fields
 func (t *Token) Update() error {
 	var err error
-	err = DB.Model(t).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota", "models", "subnet", "rate_limit_rpm", "rate_limit_tpm", "rate_limit_concurrent").Updates(t).Error
+	fmt.Printf("DEBUG Token.Update: Id=%d, RemainQuota=%d, UnlimitedQuota=%t, Status=%d\n",
+		t.Id, t.RemainQuota, t.UnlimitedQuota, t.Status)
+	err = DB.Model(t).Where("id = ?", t.Id).Updates(map[string]interface{}{
+		"name":                   t.Name,
+		"status":                 t.Status,
+		"expired_time":           t.ExpiredTime,
+		"remain_quota":           t.RemainQuota,
+		"unlimited_quota":        t.UnlimitedQuota,
+		"models":                 t.Models,
+		"subnet":                 t.Subnet,
+		"rate_limit_rpm":         t.RateLimitRpm,
+		"rate_limit_tpm":         t.RateLimitTpm,
+		"rate_limit_concurrent":   t.RateLimitConcurrent,
+	}).Error
+	fmt.Printf("DEBUG Token.Update err=%v\n", err)
 	return err
 }
 
@@ -226,7 +236,9 @@ func PreConsumeTokenQuota(tokenId int, quota int64) (err error) {
 	if err != nil {
 		return err
 	}
-	if !token.UnlimitedQuota && token.RemainQuota < quota {
+	if token.RemainQuota < 0 {
+		// remain_quota = -1 means unlimited, skip token quota check
+	} else if !token.UnlimitedQuota && token.RemainQuota < quota {
 		return errors.New("令牌额度不足")
 	}
 	userQuota, err := GetUserQuota(token.UserId)

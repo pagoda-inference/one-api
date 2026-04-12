@@ -1,7 +1,10 @@
 package monitor
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/logger"
@@ -9,21 +12,93 @@ import (
 	"github.com/pagoda-inference/one-api/model"
 )
 
+// AlertConfig keys
+const (
+	AlertKeyChannelFailureThreshold = "AlertChannelFailureThreshold"
+	AlertKeyQueueUtilizationAlert  = "AlertQueueUtilizationAlert"
+	AlertKeyErrorRateAlert         = "AlertErrorRateAlert"
+	AlertKeyLatencyThreshold       = "AlertLatencyThreshold"
+	AlertKeyAlertEmail            = "AlertEmail"
+	AlertKeyAlertWebhook          = "AlertWebhook"
+	AlertKeyEnabled               = "AlertEnabled"
+)
+
 func notifyRootUser(subject string, content string) {
+	// Read alert config from OptionMap
+	config.OptionMapRWMutex.RLock()
+	alertEmail := config.OptionMap[AlertKeyAlertEmail]
+	alertWebhook := config.OptionMap[AlertKeyAlertWebhook]
+	alertEnabled := config.OptionMap[AlertKeyEnabled]
+	config.OptionMapRWMutex.RUnlock()
+
+	// Check if alerts are enabled
+	if alertEnabled != "true" {
+		return
+	}
+
+	// Send webhook if configured
+	if alertWebhook != "" {
+		go sendAlertWebhook(alertWebhook, subject, content)
+	}
+
+	// Determine email recipient
+	email := alertEmail
+	if email == "" {
+		// Fallback to root user email
+		if config.RootUserEmail == "" {
+			config.RootUserEmail = model.GetRootUserEmail()
+		}
+		email = config.RootUserEmail
+	}
+
+	if email == "" {
+		logger.SysWarn("no alert email configured, skipping email notification")
+		return
+	}
+
+	// Try message pusher first, then email
 	if config.MessagePusherAddress != "" {
 		err := message.SendMessage(subject, content, content)
 		if err != nil {
 			logger.SysError(fmt.Sprintf("failed to send message: %s", err.Error()))
-		} else {
-			return
+			// Fallback to email
+			err = message.SendEmail(subject, email, content)
+			if err != nil {
+				logger.SysError(fmt.Sprintf("failed to send email: %s", err.Error()))
+			}
+		}
+	} else {
+		// Send email directly
+		err := message.SendEmail(subject, email, content)
+		if err != nil {
+			logger.SysError(fmt.Sprintf("failed to send email: %s", err.Error()))
 		}
 	}
-	if config.RootUserEmail == "" {
-		config.RootUserEmail = model.GetRootUserEmail()
+}
+
+// sendAlertWebhook sends an alert to the configured webhook URL
+func sendAlertWebhook(webhookURL string, subject string, content string) {
+	type webhookPayload struct {
+		Subject string `json:"subject"`
+		Content string `json:"content"`
 	}
-	err := message.SendEmail(subject, config.RootUserEmail, content)
+	payload := webhookPayload{
+		Subject: subject,
+		Content: content,
+	}
+	data, err := json.Marshal(payload)
 	if err != nil {
-		logger.SysError(fmt.Sprintf("failed to send email: %s", err.Error()))
+		logger.SysError(fmt.Sprintf("failed to marshal webhook payload: %s", err.Error()))
+		return
+	}
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		logger.SysError(fmt.Sprintf("failed to send webhook: %s", err.Error()))
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		logger.SysError(fmt.Sprintf("webhook returned non-success status: %d", resp.StatusCode))
 	}
 }
 

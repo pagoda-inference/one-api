@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Popconfirm, Row, Col, Switch } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Popconfirm, Row, Col, Switch, Select } from 'antd'
 import { PlusOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, EyeInvisibleOutlined, EditOutlined } from '@ant-design/icons'
-import { getTokens, createToken, deleteToken, updateToken } from '../services/api'
+import { getTokens, createToken, deleteToken, updateToken, getMarketModels } from '../services/api'
 
 interface Token {
   id: number
@@ -17,6 +17,8 @@ interface Token {
   rate_limit_rpm: number
   rate_limit_tpm: number
   rate_limit_concurrent: number
+  models: string
+  modelNames: string[]
 }
 
 const ApiKeys: React.FC = () => {
@@ -29,10 +31,27 @@ const ApiKeys: React.FC = () => {
   const [showKey, setShowKey] = useState<number | null>(null)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     loadTokens()
+    loadModels()
   }, [])
+
+  const loadModels = async () => {
+    try {
+      const res = await getMarketModels({ limit: 500 })
+      if (res.data?.success) {
+        const models = (res.data.data?.models || []).map((m: any) => ({
+          id: m.id,
+          name: m.name || m.id,
+        }))
+        setAvailableModels(models)
+      }
+    } catch (error) {
+      console.error('Failed to load models:', error)
+    }
+  }
 
   const loadTokens = async () => {
     try {
@@ -52,7 +71,9 @@ const ApiKeys: React.FC = () => {
         remain_quota: t.remain_quota || 0,
         rate_limit_rpm: t.rate_limit_rpm || 0,
         rate_limit_tpm: t.rate_limit_tpm || 0,
-        rate_limit_concurrent: t.rate_limit_concurrent || 0
+        rate_limit_concurrent: t.rate_limit_concurrent || 0,
+        models: t.models || '',
+        modelNames: t.models ? t.models.split(',').filter(Boolean) : []
       }))
       setTokens(tokenData)
     } catch (error) {
@@ -62,10 +83,13 @@ const ApiKeys: React.FC = () => {
     }
   }
 
-  const handleCreate = async (values: { name: string }) => {
+  const handleCreate = async (values: { name: string; models?: string[] }) => {
     try {
       setCreateLoading(true)
-      await createToken({ name: values.name })
+      await createToken({
+        name: values.name,
+        models: values.models?.join(','),
+      })
       message.success('API Key 创建成功')
       setModalVisible(false)
       form.resetFields()
@@ -86,11 +110,12 @@ const ApiKeys: React.FC = () => {
       rate_limit_rpm: record.rate_limit_rpm,
       rate_limit_tpm: record.rate_limit_tpm,
       rate_limit_concurrent: record.rate_limit_concurrent,
+      models: record.modelNames,
     })
     setEditModalVisible(true)
   }
 
-  const handleUpdate = async (values: { name: string; status?: boolean; remain_quota?: number; rate_limit_rpm?: number; rate_limit_tpm?: number; rate_limit_concurrent?: number }) => {
+  const handleUpdate = async (values: { name: string; status?: boolean; remain_quota?: number; rate_limit_rpm?: number; rate_limit_tpm?: number; rate_limit_concurrent?: number; models?: string[] }) => {
     if (!editingToken) return
     try {
       await updateToken(editingToken.id, {
@@ -100,6 +125,7 @@ const ApiKeys: React.FC = () => {
         rate_limit_rpm: values.rate_limit_rpm,
         rate_limit_tpm: values.rate_limit_tpm,
         rate_limit_concurrent: values.rate_limit_concurrent,
+        models: values.models?.join(','),
       })
       message.success('更新成功')
       setEditModalVisible(false)
@@ -208,6 +234,23 @@ const ApiKeys: React.FC = () => {
       }
     },
     {
+      title: '允许模型',
+      key: 'models',
+      render: (_: any, record: Token) => {
+        if (!record.models) {
+          return <Tag color="blue">全部模型</Tag>
+        }
+        const modelList = record.modelNames
+        if (modelList.length === 0) {
+          return <Tag color="blue">全部模型</Tag>
+        }
+        if (modelList.length > 3) {
+          return <Tag>{modelList.slice(0, 3).join(', ')}...</Tag>
+        }
+        return <Tag>{modelList.join(', ')}</Tag>
+      }
+    },
+    {
       title: '操作',
       key: 'action',
       render: (_: any, record: Token) => (
@@ -265,7 +308,7 @@ response = openai.ChatCompletion.create(
 
           <h4 style={{ marginTop: 16 }}>注意事项</h4>
           <ul>
-            <li>API Key 只显示一次，请妥善保管</li>
+            <li>API Key 可显示，请妥善保管</li>
             <li>每个Key都有独立的额度限制</li>
             <li>可以设置Key的使用模型限制</li>
             <li>建议定期轮换Key以保障安全</li>
@@ -286,6 +329,20 @@ response = openai.ChatCompletion.create(
             rules={[{ required: true, message: '请输入Key名称' }]}
           >
             <Input placeholder="如: 开发环境 Key" />
+          </Form.Item>
+          <Form.Item
+            name="models"
+            label="允许模型"
+            tooltip="不选择则表示允许所有模型"
+          >
+            <Select
+              mode="multiple"
+              placeholder="不选择则允许所有模型"
+              allowClear
+              options={availableModels.map(m => ({ label: m.name, value: m.id }))}
+              style={{ width: '100%' }}
+              maxTagCount={3}
+            />
           </Form.Item>
           <Form.Item>
             <Space>
@@ -309,6 +366,16 @@ response = openai.ChatCompletion.create(
         <Form form={editForm} onFinish={handleUpdate} layout="vertical">
           <Form.Item name="name" label="Key 名称" rules={[{ required: true, message: '请输入Key名称' }]}>
             <Input placeholder="如: 开发环境 Key" />
+          </Form.Item>
+          <Form.Item name="models" label="允许模型" tooltip="不选择则表示允许所有模型">
+            <Select
+              mode="multiple"
+              placeholder="不选择则允许所有模型"
+              allowClear
+              options={availableModels.map(m => ({ label: m.name, value: m.id }))}
+              style={{ width: '100%' }}
+              maxTagCount={3}
+            />
           </Form.Item>
           <Form.Item name="status" label="状态" valuePropName="checked">
             <Switch checkedChildren="启用" unCheckedChildren="禁用" />

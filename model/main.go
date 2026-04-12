@@ -210,6 +210,14 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&LarkOAuthApp{}); err != nil {
 		return err
 	}
+	// Sign-in table
+	if err = DB.AutoMigrate(&SignIn{}); err != nil {
+		return err
+	}
+	// Notification table
+	if err = DB.AutoMigrate(&Notification{}); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -96,19 +96,64 @@ func UpdateAbilityStatus(channelId int, status bool) error {
 }
 
 func GetGroupModels(ctx context.Context, group string) ([]string, error) {
+	// Fix: default group temporarily returns bedi models
+	if group == "default" {
+		group = "bedi"
+	}
+
 	groupCol := "`group`"
 	trueVal := "1"
 	if common.UsingPostgreSQL {
 		groupCol = `"group"`
 		trueVal = "true"
 	}
-	var models []string
-	err := DB.Model(&Ability{}).Distinct("model").Where(groupCol+" = ? and enabled = "+trueVal, group).Pluck("model", &models).Error
+
+	// Fetch all ability records (no DISTINCT to avoid SQL ordering issues)
+	type abilityResult struct {
+		Model string
+	}
+	var abilityResults []abilityResult
+	err := DB.Table("abilities").
+		Select("model").
+		Where(groupCol+" = ? AND enabled = "+trueVal, group).
+		Order("model ASC").
+		Scan(&abilityResults).Error
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(models)
-	return models, err
+
+	// Deduplicate in Go
+	seen := make(map[string]bool)
+	uniqueModels := make([]string, 0, len(abilityResults))
+	for _, ar := range abilityResults {
+		if !seen[ar.Model] {
+			seen[ar.Model] = true
+			uniqueModels = append(uniqueModels, ar.Model)
+		}
+	}
+
+	// Get sort_order from model_info
+	type miResult struct {
+		Id        string
+		SortOrder int
+	}
+	var miResults []miResult
+	DB.Table("model_info").Select("id, sort_order").Scan(&miResults)
+	miMap := make(map[string]int)
+	for _, m := range miResults {
+		miMap[m.Id] = m.SortOrder
+	}
+
+	// Sort by sort_order, then by model name
+	sort.Slice(uniqueModels, func(i, j int) bool {
+		si := miMap[uniqueModels[i]]
+		sj := miMap[uniqueModels[j]]
+		if si != sj {
+			return si < sj
+		}
+		return uniqueModels[i] < uniqueModels[j]
+	})
+	return uniqueModels, nil
 }
 
 // GetRandomSatisfiedChannelByModel finds a random satisfied channel by model only, without group filter

@@ -139,19 +139,12 @@ func ListModels(c *gin.Context) {
 		userGroup, _ := model.CacheGetUserGroup(userId)
 		availableModels, _ = model.CacheGetGroupModels(ctx, userGroup)
 	}
-	modelSet := make(map[string]bool)
-	for _, availableModel := range availableModels {
-		modelSet[availableModel] = true
-	}
-	availableOpenAIModels := make([]OpenAIModels, 0)
-	for _, model := range models {
-		if _, ok := modelSet[model.Id]; ok {
-			modelSet[model.Id] = false
+	availableOpenAIModels := make([]OpenAIModels, 0, len(availableModels))
+	for _, modelName := range availableModels {
+		if model, ok := modelsMap[modelName]; ok {
 			availableOpenAIModels = append(availableOpenAIModels, model)
-		}
-	}
-	for modelName, ok := range modelSet {
-		if ok {
+		} else {
+			// Model not in models map, create entry on the fly
 			availableOpenAIModels = append(availableOpenAIModels, OpenAIModels{
 				Id:      modelName,
 				Object:  "model",

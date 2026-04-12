@@ -59,6 +59,13 @@ func GetMaxUserId() int {
 	return user.Id
 }
 
+// GetUsersWithEmail returns all enabled users that have an email set
+func GetUsersWithEmail() ([]*User, error) {
+	var users []*User
+	err := DB.Where("email IS NOT NULL AND email != '' AND email != '' AND status = ?", UserStatusEnabled).Find(&users).Error
+	return users, err
+}
+
 func GetAllUsers(startIdx int, num int, order string) (users []*User, err error) {
 	fmt.Printf("[DEBUG] GetAllUsers called: startIdx=%d, num=%d, order=%s\n", startIdx, num, order)
 

@@ -151,6 +151,10 @@ func AddToken(c *gin.Context) {
 		Models:         token.Models,
 		Subnet:         token.Subnet,
 	}
+	// Default to unlimited (never expire) if not specified
+	if cleanToken.ExpiredTime == 0 {
+		cleanToken.ExpiredTime = -1
+	}
 	err = cleanToken.Insert()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -188,8 +192,10 @@ func DeleteToken(c *gin.Context) {
 func UpdateToken(c *gin.Context) {
 	userId := c.GetInt(ctxkey.Id)
 	statusOnly := c.Query("status_only")
+	tokenId, _ := strconv.Atoi(c.Param("id"))
 	token := model.Token{}
 	err := c.ShouldBindJSON(&token)
+	fmt.Printf("DEBUG BindJSON: token.Status=%d, token.RemainQuota=%d\n", token.Status, token.RemainQuota)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -205,7 +211,7 @@ func UpdateToken(c *gin.Context) {
 		})
 		return
 	}
-	cleanToken, err := model.GetTokenByIds(token.Id, userId)
+	cleanToken, err := model.GetTokenByIds(tokenId, userId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -234,7 +240,10 @@ func UpdateToken(c *gin.Context) {
 	} else {
 		// If you add more fields, please also update token.Update() and this function
 		cleanToken.Name = token.Name
-		cleanToken.ExpiredTime = token.ExpiredTime
+		// Only update expired_time if explicitly provided (not 0)
+		if token.ExpiredTime != 0 {
+			cleanToken.ExpiredTime = token.ExpiredTime
+		}
 		cleanToken.RemainQuota = token.RemainQuota
 		cleanToken.UnlimitedQuota = token.UnlimitedQuota
 		cleanToken.Models = token.Models
@@ -242,7 +251,12 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.RateLimitRpm = token.RateLimitRpm
 		cleanToken.RateLimitTpm = token.RateLimitTpm
 		cleanToken.RateLimitConcurrent = token.RateLimitConcurrent
+		// Only update status if explicitly provided (status > 0)
+		if token.Status > 0 {
+			cleanToken.Status = token.Status
+		}
 	}
+	fmt.Printf("DEBUG before Update: Id=%d, RemainQuota=%d, Status=%d, cleanToken.Status=%d\n", cleanToken.Id, cleanToken.RemainQuota, token.Status, cleanToken.Status)
 	err = cleanToken.Update()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

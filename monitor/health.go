@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
+	"github.com/pagoda-inference/one-api/relay/channeltype"
 )
 
 // ChannelHealthStatus represents the health status of a channel
@@ -60,9 +62,18 @@ func (hc *HealthChecker) Start() {
 	ticker := time.NewTicker(hc.interval)
 	defer ticker.Stop()
 
+	// Use dynamic interval - re-read config each tick
+	currentInterval := hc.interval
 	for {
 		select {
 		case <-ticker.C:
+			// Re-check interval from config in case it changed
+			newInterval := time.Duration(config.HealthCheckInterval) * time.Second
+			if newInterval != currentInterval {
+				currentInterval = newInterval
+				ticker.Reset(newInterval)
+				logger.SysLog(fmt.Sprintf("health checker interval updated to: %v", newInterval))
+			}
 			hc.checkAllChannels()
 		case <-hc.stopChan:
 			logger.SysLog("health checker stopped")
@@ -126,7 +137,12 @@ func (hc *HealthChecker) checkChannel(channel *model.Channel) {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com"
 	}
-	checkURL := fmt.Sprintf("%s%s", baseURL, hc.checkPath)
+	// For OpenAI Compatible, strip /v1 from checkPath to avoid double /v1
+	checkPath := hc.checkPath
+	if channel.Type == channeltype.OpenAICompatible {
+		checkPath = strings.TrimPrefix(checkPath, "/v1")
+	}
+	checkURL := fmt.Sprintf("%s%s", baseURL, checkPath)
 
 	// Create request
 	req, err := http.NewRequestWithContext(ctx, "GET", checkURL, nil)

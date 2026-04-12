@@ -459,11 +459,22 @@ func UpdateSelf(c *gin.Context) {
 		return
 	}
 
+	myId := c.GetInt(ctxkey.Id)
+	originUser, err := model.GetUserById(myId, false)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
 	cleanUser := model.User{
-		Id:          c.GetInt(ctxkey.Id),
+		Id:          myId,
 		Username:    user.Username,
 		Password:    user.Password,
 		DisplayName: user.DisplayName,
+		Email:       user.Email,
 	}
 	if user.Password == "$I_LOVE_U" {
 		user.Password = "" // rollback to what it should be
@@ -476,6 +487,11 @@ func UpdateSelf(c *gin.Context) {
 			"message": err.Error(),
 		})
 		return
+	}
+
+	// If root user updated email, update global config
+	if originUser.Role == model.RoleRootUser && user.Email != "" && user.Email != originUser.Email {
+		config.RootUserEmail = user.Email
 	}
 
 	c.JSON(http.StatusOK, gin.H{

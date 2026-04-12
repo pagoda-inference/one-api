@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Collapse } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Collapse, Empty } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
-import { getInvoices, createInvoice, getTopupOrders, Invoice, TopupOrder } from '../services/api'
+import { getInvoices, createInvoice, getTopupOrders, Invoice, TopupOrder, User } from '../services/api'
 
 const { Panel } = Collapse
 const { TextArea } = Input
 const Invoices: React.FC = () => {
   const [loading, setLoading] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [orders, setOrders] = useState<TopupOrder[]>([])
   const [modalVisible, setModalVisible] = useState(false)
@@ -15,19 +16,43 @@ const Invoices: React.FC = () => {
   const [form] = Form.useForm()
 
   useEffect(() => {
+    checkUserRole()
     loadData()
   }, [])
+
+  const checkUserRole = () => {
+    const userInfoStr = localStorage.getItem('user_info')
+    if (userInfoStr) {
+      try {
+        const userInfo: User = JSON.parse(userInfoStr)
+        setIsAdmin((userInfo.role ?? 0) >= 10)
+      } catch (error) {
+        console.error('Failed to parse user info:', error)
+      }
+    }
+  }
 
   const loadData = async () => {
     try {
       setLoading(true)
       const [invoicesRes, ordersRes] = await Promise.all([
-        getInvoices({ limit: 50 }),
+        getInvoices({ limit: 100 }),
         getTopupOrders({ status: 'paid', limit: 100 })
       ])
 
       setInvoices(invoicesRes.data.data || [])
-      setOrders(ordersRes.data.data.orders || [])
+      setOrders(ordersRes.data.data?.orders || [])
+
+      // Check role from localStorage directly
+      const userInfoStr = localStorage.getItem('user_info')
+      if (userInfoStr) {
+        try {
+          const userInfo: User = JSON.parse(userInfoStr)
+          setIsAdmin((userInfo.role ?? 0) >= 10)
+        } catch (error) {
+          console.error('Failed to parse user info:', error)
+        }
+      }
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
@@ -83,14 +108,14 @@ const Invoices: React.FC = () => {
       title: '关联订单',
       dataIndex: 'order_ids',
       key: 'order_ids',
-      render: (ids: string) => ids.split(',').length + ' 个订单'
+      render: (ids: string) => ids?.split(',').length + ' 个订单' || '-'
     },
     { title: '状态', dataIndex: 'status', key: 'status', render: getStatusTag },
     {
       title: '申请时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (v: number) => new Date(v * 1000).toLocaleString()
+      render: (v: number) => v ? new Date(v * 1000).toLocaleString() : '-'
     }
   ]
 
@@ -112,6 +137,28 @@ const Invoices: React.FC = () => {
 
   const paidOrders = orders.filter(o => o.status === 'paid')
 
+  // Admin view: only show invoice records
+  if (isAdmin) {
+    return (
+      <div>
+        <Card title="发票记录">
+          {invoices.length > 0 ? (
+            <Table
+              dataSource={invoices}
+              columns={columns}
+              rowKey="id"
+              loading={loading}
+              pagination={{ pageSize: 20 }}
+            />
+          ) : (
+            <Empty description="暂无发票记录" />
+          )}
+        </Card>
+      </div>
+    )
+  }
+
+  // User view: show invoice UI and records
   return (
     <div>
       <Card

@@ -30,7 +30,7 @@ func GetMarketModels(c *gin.Context) {
 	if keyword != "" {
 		models, err = model.SearchModels(keyword, modelType, limit, offset)
 	} else {
-		models, err = model.GetActiveModels(modelType, limit, offset)
+		models, err = model.GetAllModels(modelType, limit, offset)
 	}
 
 	if err != nil {
@@ -41,7 +41,7 @@ func GetMarketModels(c *gin.Context) {
 		return
 	}
 
-	total, _ := model.CountActiveModels(modelType)
+	total, _ := model.CountAllModels(modelType)
 
 	// Format response
 	data := make([]gin.H, len(models))

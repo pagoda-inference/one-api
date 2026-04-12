@@ -5,6 +5,7 @@ import (
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/helper"
 	"github.com/pagoda-inference/one-api/model"
+	"github.com/pagoda-inference/one-api/relay/channeltype"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,6 +36,11 @@ func GetAllChannels(c *gin.Context) {
 			"message": err.Error(),
 		})
 		return
+	}
+
+	// Add type_name to each channel
+	for _, ch := range channels {
+		ch.TypeName = channeltype.GetTypeName(ch.Type)
 	}
 
 	// Get total count for pagination

@@ -208,18 +208,49 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	return token
 }
 
+// TokenSum represents separate token counts
+type TokenSum struct {
+	PromptTokens     int64 `gorm:"column:prompt_tokens"`
+	CompletionTokens int64 `gorm:"column:completion_tokens"`
+}
+
+func SumUsedTokenSeparate(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string) (tokens TokenSum) {
+	ifnull := "ifnull"
+	if common.UsingPostgreSQL {
+		ifnull = "COALESCE"
+	}
+	tx := LOG_DB.Table("logs").Select(fmt.Sprintf("%s(sum(prompt_tokens),0) as prompt_tokens, %s(sum(completion_tokens),0) as completion_tokens", ifnull, ifnull))
+	if username != "" {
+		tx = tx.Where("username = ?", username)
+	}
+	if tokenName != "" {
+		tx = tx.Where("token_name = ?", tokenName)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	if modelName != "" {
+		tx = tx.Where("model_name = ?", modelName)
+	}
+	tx.Where("type = ?", LogTypeConsume).Scan(&tokens)
+	return tokens
+}
+
 func DeleteOldLog(targetTimestamp int64) (int64, error) {
 	result := LOG_DB.Where("created_at < ?", targetTimestamp).Delete(&Log{})
 	return result.RowsAffected, result.Error
 }
 
 type LogStatistic struct {
-	Day              string `gorm:"column:day"`
-	ModelName        string `gorm:"column:model_name"`
-	RequestCount     int    `gorm:"column:request_count"`
-	Quota            int    `gorm:"column:quota"`
-	PromptTokens     int    `gorm:"column:prompt_tokens"`
-	CompletionTokens int    `gorm:"column:completion_tokens"`
+	Day              string `json:"day" gorm:"column:day"`
+	ModelName        string `json:"model_name" gorm:"column:model_name"`
+	RequestCount     int    `json:"request_count" gorm:"column:request_count"`
+	Quota            int    `json:"quota" gorm:"column:quota"`
+	PromptTokens     int    `json:"prompt_tokens" gorm:"column:prompt_tokens"`
+	CompletionTokens int    `json:"completion_tokens" gorm:"column:completion_tokens"`
 }
 
 func SearchLogsByDayAndModel(userId, start, end int) (LogStatistics []*LogStatistic, err error) {
@@ -277,6 +308,17 @@ type ChannelUsageStatistic struct {
 	Quota            int    `gorm:"column:quota" json:"quota"`
 	PromptTokens     int    `gorm:"column:prompt_tokens" json:"prompt_tokens"`
 	CompletionTokens int    `gorm:"column:completion_tokens" json:"completion_tokens"`
+}
+
+// UserUsageStatistic represents usage statistics by user
+type UserUsageStatistic struct {
+	UserId           int    `gorm:"column:user_id" json:"user_id"`
+	Username        string `gorm:"column:username" json:"username"`
+	DisplayName     string `gorm:"column:display_name" json:"display_name"`
+	RequestCount    int    `gorm:"column:request_count" json:"request_count"`
+	Quota           int64  `gorm:"column:quota" json:"quota"`
+	PromptTokens    int64  `gorm:"column:prompt_tokens" json:"prompt_tokens"`
+	CompletionTokens int64  `gorm:"column:completion_tokens" json:"completion_tokens"`
 }
 
 // GetTokenUsageStatistics returns usage statistics grouped by token
@@ -360,6 +402,34 @@ func GetChannelUsageStatistics(userId int, startTimestamp, endTimestamp int64) (
 	if userId > 0 {
 		query = query.Where("user_id = ?", userId)
 	}
+	if startTimestamp > 0 {
+		query = query.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp > 0 {
+		query = query.Where("created_at <= ?", endTimestamp)
+	}
+
+	err := query.Scan(&stats).Error
+	return stats, err
+}
+
+// GetUserUsageStatistics returns usage statistics grouped by user
+func GetUserUsageStatistics(startTimestamp, endTimestamp int64) ([]*UserUsageStatistic, error) {
+	var stats []*UserUsageStatistic
+
+	query := LOG_DB.Table("logs").
+		Select(`
+			user_id,
+			username,
+			COUNT(1) as request_count,
+			SUM(quota) as quota,
+			SUM(prompt_tokens) as prompt_tokens,
+			SUM(completion_tokens) as completion_tokens
+		`).
+		Where("type = ?", LogTypeConsume).
+		Group("user_id, username").
+		Order("quota DESC")
+
 	if startTimestamp > 0 {
 		query = query.Where("created_at >= ?", startTimestamp)
 	}

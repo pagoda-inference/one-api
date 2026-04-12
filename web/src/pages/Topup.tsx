@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, InputNumber, Select, Button, Table, Tag, Modal, message, Result } from 'antd'
+import { Row, Col, Card, InputNumber, Select, Button, Table, Tag, Modal, message, Result, Empty } from 'antd'
 import { WechatOutlined, AlipayOutlined, CreditCardOutlined } from '@ant-design/icons'
-import { getTopupOrders, createTopupOrder, cancelTopupOrder, TopupOrder } from '../services/api'
+import { getTopupOrders, createTopupOrder, cancelTopupOrder, TopupOrder, User } from '../services/api'
 
 const { Option } = Select
 
 const Topup: React.FC = () => {
   const [loading, setLoading] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [orders, setOrders] = useState<TopupOrder[]>([])
   const [amount, setAmount] = useState<number>(100)
   const [payMethod, setPayMethod] = useState<string>('alipay')
@@ -14,14 +15,38 @@ const Topup: React.FC = () => {
   const [createdOrder, setCreatedOrder] = useState<TopupOrder | null>(null)
 
   useEffect(() => {
+    checkUserRole()
     loadOrders()
   }, [])
+
+  const checkUserRole = () => {
+    const userInfoStr = localStorage.getItem('user_info')
+    if (userInfoStr) {
+      try {
+        const userInfo: User = JSON.parse(userInfoStr)
+        setIsAdmin((userInfo.role ?? 0) >= 10)
+      } catch (error) {
+        console.error('Failed to parse user info:', error)
+      }
+    }
+  }
 
   const loadOrders = async () => {
     try {
       setLoading(true)
-      const res = await getTopupOrders({ limit: 20 })
-      setOrders(res.data.data.orders || [])
+      const res = await getTopupOrders({ limit: 100 })
+      setOrders(res.data.data?.orders || res.data.data || [])
+
+      // Check role from localStorage directly
+      const userInfoStr = localStorage.getItem('user_info')
+      if (userInfoStr) {
+        try {
+          const userInfo: User = JSON.parse(userInfoStr)
+          setIsAdmin((userInfo.role ?? 0) >= 10)
+        } catch (error) {
+          console.error('Failed to parse user info:', error)
+        }
+      }
     } catch (error) {
       console.error('Failed to load orders:', error)
     } finally {
@@ -88,7 +113,7 @@ const Topup: React.FC = () => {
       title: '获得额度',
       dataIndex: 'quota',
       key: 'quota',
-      render: (v: number) => v.toLocaleString()
+      render: (v: number) => v?.toLocaleString() || '-'
     },
     {
       title: '支付方式',
@@ -105,21 +130,58 @@ const Topup: React.FC = () => {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (v: number) => new Date(v * 1000).toLocaleString()
+      render: (v: number) => v ? new Date(v * 1000).toLocaleString() : '-'
     },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: any, record: TopupOrder) => (
-        record.status === 'pending' && (
-          <Button size="small" danger onClick={() => handleCancel(record.id)}>
-            取消
-          </Button>
+    ...(isAdmin ? [
+      {
+        title: '操作',
+        key: 'action',
+        width: 100,
+        render: (_: any, record: TopupOrder) => (
+          record.status === 'pending' && (
+            <Button size="small" danger onClick={() => handleCancel(record.id)}>
+              取消
+            </Button>
+          )
         )
-      )
-    }
+      }
+    ] : [
+      {
+        title: '操作',
+        key: 'action',
+        render: (_: any, record: TopupOrder) => (
+          record.status === 'pending' && (
+            <Button size="small" danger onClick={() => handleCancel(record.id)}>
+              取消
+            </Button>
+          )
+        )
+      }
+    ])
   ]
 
+  // Admin view: only show recharge records
+  if (isAdmin) {
+    return (
+      <div>
+        <Card title="充值记录">
+          {orders.length > 0 ? (
+            <Table
+              dataSource={orders}
+              columns={columns}
+              rowKey="id"
+              loading={loading}
+              pagination={{ pageSize: 20 }}
+            />
+          ) : (
+            <Empty description="暂无充值记录" />
+          )}
+        </Card>
+      </div>
+    )
+  }
+
+  // User view: show recharge UI and records
   return (
     <div>
       <Row gutter={[16, 16]}>
@@ -242,7 +304,7 @@ const Topup: React.FC = () => {
             subTitle={`订单号: ${createdOrder.id}`}
             extra={[
               <p key="amount">充值金额: <strong>¥{createdOrder.amount}</strong></p>,
-              <p key="quota">获得额度: <strong>{createdOrder.quota.toLocaleString()} quota</strong></p>,
+              <p key="quota">获得额度: <strong>{createdOrder.quota?.toLocaleString()} quota</strong></p>,
               <p key="expire">请在 {createdOrder.expired_at ? new Date(createdOrder.expired_at * 1000).toLocaleString() : '24小时内'} 前完成支付</p>
             ]}
           />

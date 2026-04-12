@@ -1,7 +1,6 @@
 package meta
 
 import (
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -49,7 +48,7 @@ func GetByContext(c *gin.Context) *Meta {
 		ModelMapping:       c.GetStringMapString(ctxkey.ModelMapping),
 		OriginModelName:    c.GetString(ctxkey.RequestModel),
 		BaseURL:            c.GetString(ctxkey.BaseURL),
-		APIKey:             strings.TrimPrefix(c.Request.Header.Get("Authorization"), "Bearer "),
+		APIKey:             c.GetString("channel_api_key"),
 		RequestURLPath:     c.Request.URL.String(),
 		ForcedSystemPrompt: c.GetString(ctxkey.SystemPrompt),
 		StartTime:          time.Now(),

@@ -20,6 +20,10 @@ func GetFullRequestURL(baseURL string, requestURL string, channelType int) strin
 	if channelType == channeltype.OpenAICompatible {
 		return fmt.Sprintf("%s%s", strings.TrimSuffix(baseURL, "/"), strings.TrimPrefix(requestURL, "/v1"))
 	}
+	if channelType == channeltype.Custom {
+		// Custom: 透传不拼接，直接使用 base_url
+		return baseURL
+	}
 	fullRequestURL := fmt.Sprintf("%s%s", baseURL, requestURL)
 
 	if strings.HasPrefix(baseURL, "https://gateway.ai.cloudflare.com") {

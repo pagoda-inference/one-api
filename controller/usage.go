@@ -215,13 +215,15 @@ func AdminGetUsageSummary(c *gin.Context) {
 	channelId, _ := strconv.Atoi(c.Query("channel"))
 
 	quota := model.SumUsedQuota(model.LogTypeConsume, startTimestamp, endTimestamp, modelName, "", tokenName, channelId)
-	tokens := model.SumUsedToken(model.LogTypeConsume, startTimestamp, endTimestamp, modelName, "", tokenName)
+	tokens := model.SumUsedTokenSeparate(model.LogTypeConsume, startTimestamp, endTimestamp, modelName, "", tokenName)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"total_quota": quota,
-			"total_tokens": tokens,
+			"total_quota":       quota,
+			"total_tokens":      tokens.PromptTokens + tokens.CompletionTokens,
+			"total_prompt_tokens":     tokens.PromptTokens,
+			"total_completion_tokens":  tokens.CompletionTokens,
 			"period": gin.H{
 				"start": startTimestamp,
 				"end":   endTimestamp,
@@ -230,16 +232,69 @@ func AdminGetUsageSummary(c *gin.Context) {
 	})
 }
 
-// AdminGetUsageByUser handles GET /api/admin/usage/by-user (admin only)
-func AdminGetUsageByUser(c *gin.Context) {
-	_ = c.Query("start")
-	_ = c.Query("end")
+// AdminGetUsageByUsers handles GET /api/admin/usage/by-users (admin only)
+func AdminGetUsageByUsers(c *gin.Context) {
+	startTimestamp := parseTimestamp(c.Query("start"))
+	endTimestamp := parseTimestamp(c.Query("end"))
 
-	// This would require a more complex query to group by user
-	// For now, return a placeholder
+	stats, err := model.GetUserUsageStatistics(startTimestamp, endTimestamp)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to get user usage: " + err.Error(),
+		})
+		return
+	}
+
+	// Enrich with user display names
+	userCache := make(map[int]string)
+	for _, stat := range stats {
+		if _, ok := userCache[stat.UserId]; !ok {
+			user, _ := model.GetUserById(stat.UserId, false)
+			if user != nil {
+				userCache[stat.UserId] = user.DisplayName
+			}
+		}
+		if stat.DisplayName == "" {
+			stat.DisplayName = userCache[stat.UserId]
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Use admin logs API for user-specific usage",
+		"data": gin.H{
+			"users":   stats,
+			"period": gin.H{
+				"start": startTimestamp,
+				"end":   endTimestamp,
+			},
+		},
+	})
+}
+
+// AdminGetUsageByModels handles GET /api/admin/usage/by-models (admin only)
+func AdminGetUsageByModels(c *gin.Context) {
+	startTimestamp := parseTimestamp(c.Query("start"))
+	endTimestamp := parseTimestamp(c.Query("end"))
+
+	stats, err := model.GetModelUsageStatistics(0, startTimestamp, endTimestamp) // 0 means all users
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to get model usage: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"models":  stats,
+			"period": gin.H{
+				"start": startTimestamp,
+				"end":   endTimestamp,
+			},
+		},
 	})
 }
 

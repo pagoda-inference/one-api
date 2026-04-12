@@ -56,6 +56,9 @@ const ModelMarket: React.FC = () => {
         )
       }
 
+      // Filter out disabled models (only show active and maintenance)
+      allModels = allModels.filter((m: Model) => m.status !== 'disabled')
+
       setModels(allModels)
       setGroups(groupsRes.data.data || [])
       setStats(statsRes.data.data)
@@ -249,18 +252,22 @@ const ModelMarket: React.FC = () => {
   )
 
   // Model Card Component
-  const ModelCard = ({ model }: { model: Model }) => (
+  const ModelCard = ({ model }: { model: Model }) => {
+    const isMaintenance = model.status === 'maintenance'
+    return (
     <Card
-      hoverable
-      onClick={() => showModelDetail(model)}
+      hoverable={!isMaintenance}
+      onClick={() => !isMaintenance && showModelDetail(model)}
       className="model-card"
       style={{
         borderRadius: 12,
-        border: 'none',
+        border: isMaintenance ? '2px solid #faad14' : 'none',
         boxShadow: '0 2px 8px var(--shadow)',
         overflow: 'hidden',
         transition: 'all 0.3s',
-        background: 'var(--bg-card)'
+        background: isMaintenance ? 'var(--bg-card)' : 'var(--bg-card)',
+        opacity: isMaintenance ? 0.75 : 1,
+        cursor: isMaintenance ? 'not-allowed' : 'pointer'
       }}
       styles={{ body: { padding: 16, background: 'var(--bg-card)' } }}
     >
@@ -332,6 +339,20 @@ const ModelMarket: React.FC = () => {
                 企业专属
               </Tag>
             )}
+            {isMaintenance && (
+              <Tag
+                style={{
+                  background: '#faad1405',
+                  color: '#faad14',
+                  border: '1px solid #faad14',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  padding: '0 4px'
+                }}
+              >
+                维护中
+              </Tag>
+            )}
           </div>
 
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
@@ -370,18 +391,23 @@ const ModelMarket: React.FC = () => {
       </div>
     </Card>
   )
+  }
 
   // List View
-  const ModelListItem = ({ model }: { model: Model }) => (
+  const ModelListItem = ({ model }: { model: Model }) => {
+    const isMaintenance = model.status === 'maintenance'
+    return (
     <Card
-      hoverable
-      onClick={() => showModelDetail(model)}
+      hoverable={!isMaintenance}
+      onClick={() => !isMaintenance && showModelDetail(model)}
       style={{
         borderRadius: 12,
-        border: 'none',
+        border: isMaintenance ? '2px solid #faad14' : 'none',
         boxShadow: '0 2px 8px var(--shadow)',
         marginBottom: 8,
-        background: 'var(--bg-card)'
+        background: 'var(--bg-card)',
+        opacity: isMaintenance ? 0.75 : 1,
+        cursor: isMaintenance ? 'not-allowed' : 'pointer'
       }}
       styles={{ body: { padding: '12px 16px', background: 'var(--bg-card)' } }}
     >
@@ -425,6 +451,11 @@ const ModelMarket: React.FC = () => {
             {model.is_trial && (
               <Tag style={{ background: '#f6ffed', color: '#52c41a', border: 'none', borderRadius: 4, fontSize: 10 }}>试用</Tag>
             )}
+            {isMaintenance && (
+              <Tag style={{ background: '#faad1405', color: '#faad14', border: '1px solid #faad14', borderRadius: 4, fontSize: 10 }}>
+                维护中
+              </Tag>
+            )}
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{model.provider}</span>
           </div>
         </div>
@@ -442,6 +473,7 @@ const ModelMarket: React.FC = () => {
       </div>
     </Card>
   )
+  }
 
   return (
     <div>
@@ -574,9 +606,9 @@ const ModelMarket: React.FC = () => {
                       styles={{ body: { padding: 16, background: 'var(--bg-card)' } }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        {group.icon_url ? (
+                        {group.logo_url ? (
                           <img
-                            src={group.icon_url}
+                            src={group.logo_url}
                             alt={group.name}
                             style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 12 }}
                             onError={(e) => {

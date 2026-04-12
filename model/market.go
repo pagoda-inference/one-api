@@ -161,6 +161,20 @@ func DeleteMarketModel(id string) error {
 	return DB.Delete(&ModelInfo{}, "id = ?", id).Error
 }
 
+// GetAllModels retrieves all models without status filter (for marketplace display)
+func GetAllModels(modelType string, limit int, offset int) ([]*ModelInfo, error) {
+	var models []*ModelInfo
+	query := DB
+	if modelType != "" {
+		query = query.Where("model_type = ?", modelType)
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	err := query.Order("sort_order ASC, id ASC").Limit(limit).Offset(offset).Find(&models).Error
+	return models, err
+}
+
 // GetActiveModels retrieves all active models
 func GetActiveModels(modelType string, limit int, offset int) ([]*ModelInfo, error) {
 	var models []*ModelInfo
@@ -222,10 +236,22 @@ func CountActiveModels(modelType string) (int64, error) {
 	return count, err
 }
 
+// CountAllModels counts all models without status filter
+func CountAllModels(modelType string) (int64, error) {
+	var count int64
+	query := DB.Model(&ModelInfo{})
+	if modelType != "" {
+		query = query.Where("model_type = ?", modelType)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
 // CalculateQuota calculates quota cost for a model
+// InputPrice and OutputPrice are in yuan per 1000 tokens
 func (m *ModelInfo) CalculateQuota(promptTokens, completionTokens int) int64 {
-	inputQuota := int64(float64(promptTokens) * m.InputPrice)
-	outputQuota := int64(float64(completionTokens) * m.OutputPrice)
+	inputQuota := int64(float64(promptTokens) * m.InputPrice / 1000)
+	outputQuota := int64(float64(completionTokens) * m.OutputPrice / 1000)
 	return inputQuota + outputQuota
 }
 

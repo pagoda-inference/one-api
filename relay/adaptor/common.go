@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/client"
+	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/relay/meta"
 	"io"
 	"net/http"
@@ -31,6 +32,7 @@ func DoRequestHelper(a Adaptor, c *gin.Context, meta *meta.Meta, requestBody io.
 	if err != nil {
 		return nil, fmt.Errorf("setup request header failed: %w", err)
 	}
+	logger.Debugf(c.Request.Context(), "DoRequest URL: %s, Auth: %s", fullRequestURL, req.Header.Get("Authorization"))
 	resp, err := DoRequest(c, req)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)
