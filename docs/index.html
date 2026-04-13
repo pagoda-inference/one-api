@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BEDI 宝塔 API 文档</title>
+  <meta name="description" content="BEDI 宝塔 API 用户手册和运维指南">
+
+  <!-- Theme (light) -->
+  <link
+    rel="stylesheet"
+    media="(prefers-color-scheme: light)"
+    href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.css"
+  >
+  <!-- Theme (dark) -->
+  <link
+    rel="stylesheet"
+    media="(prefers-color-scheme: dark)"
+    href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple-dark.css"
+  >
+
+  <!-- Sidebar Collapse -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-sidebar-collapse/dist/sidebar.min.css" />
+
+  <!-- Custom Styles -->
+  <style>
+    :root {
+      --theme-color: #667eea;
+      --theme-hue: 265;
+    }
+    /* Add arrow to first item (首页) */
+    .sidebar-nav > ul > li:first-child::before {
+      content: '';
+      display: block;
+      position: absolute;
+      top: 11px;
+      left: -12px;
+      height: 6px;
+      width: 6px;
+      border-right: 1px solid #505d6b;
+      border-bottom: 1px solid #505d6b;
+      transform: rotate(-45deg);
+    }
+    /* Sidebar footer */
+    .sidebar-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 220px;
+      padding: 16px;
+      background: var(--bg-primary);
+      border-top: 1px solid var(--border-color);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .sidebar-footer a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      margin-right: 12px;
+      transition: color 0.2s;
+    }
+    .sidebar-footer a:hover {
+      color: var(--theme-color);
+    }
+    .sidebar-footer .version {
+      margin-top: 8px;
+      color: var(--text-tertiary);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">加载中...</div>
+
+  <script>
+    window.$docsify = {
+      name: '<img src="./images/baota.jpeg" width="70" style="vertical-align: middle;"> BEDI 宝塔 API',
+      repo: 'https://github.com/pagoda-inference/one-api',
+      loadSidebar: true,
+      subMaxLevel: 0,
+      auto2top: true,
+      search: {
+        maxAge: 86400000,
+        paths: 'auto',
+        placeholder: '搜索',
+        noData: '未找到结果'
+      },
+      pagination: {
+        previousText: '上一章',
+        nextText: '下一章',
+        crossChapter: true
+      },
+      themeable: {
+        readyTransition: true,
+        responsiveTables: true
+      }
+    };
+  </script>
+
+  <!-- Required -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-sidebar-collapse/dist/docsify-sidebar-collapse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/js/docsify-themeable.min.js"></script>
+
+  <!-- Plugins -->
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-pagination@2/dist/docsify-pagination.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-copy-code"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-tabs/dist/docsify-tabs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/zoom-image.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-plugin-flexible-alerts@1/dist/docsify-plugin-flexible-alerts.min.js"></script>
+</body>
+</html>

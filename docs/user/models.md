@@ -1,0 +1,169 @@
+# 模型广场
+
+模型广场展示所有可用的 AI 模型，支持浏览、搜索和试用。
+
+---
+
+## 模型列表
+
+### 对话模型 (Chat)
+
+| 模型 ID | 说明 |
+|:--------|:-----|
+| bedi/glm-4.7 | GLM-4.7 对话模型 |
+| bedi/minimax-m2.5 | MiniMax M2.5 对话模型 |
+| bedi/kimi-k2.5 | Kimi K2.5 对话模型 |
+| bedi/deepseek-v3.1 | DeepSeek V3.1 对话模型 |
+| bedi/qwen3-235b-a22b | Qwen3 235B 大规模对话模型 |
+| bedi/qwen3-14b | Qwen3 14B 对话模型 |
+| bedi/qwen3-32b | Qwen3 32B 对话模型 |
+| bedi/qwen3-4b-instruct-2507 | Qwen3 4B 指令模型 |
+| bedi/qwen3-8b | Qwen3 8B 对话模型 |
+| bedi/qwen2.5-7b-instruct | Qwen2.5 7B 指令模型 |
+| bedi/qwen2.5-72b-instruct | Qwen2.5 72B 指令模型 |
+| bedi/deepseek-r1-distill-qwen-7b | DeepSeek R1 蒸馏 Qwen 7B |
+| bedi/deepseek-r1-distill-qwen-14b | DeepSeek R1 蒸馏 Qwen 14B |
+| bedi/deepseek-r1-distill-qwen-32b | DeepSeek R1 蒸馏 Qwen 32B |
+| bedi/qwq-32b | QwQ 32B 推理模型 |
+
+
+### 视觉模型 (Vision)
+
+| 模型 ID | 说明 |
+|:--------|:-----|
+| bedi/qwen2.5-vl-72b-instruct | Qwen2.5 VL 72B 指令模型 |
+| bedi/qwen3-vl-30b-a3b-instruct | Qwen3 VL 30B 指令模型 |
+| bedi/qwen3-vl-8b | Qwen3 VL 8B 对话模型 |
+| bedi/qwen2.5-vl-7b | Qwen2.5 VL 7B 对话模型 |
+
+### Embedding 模型
+
+| 模型 ID | 说明 |
+|:--------|:-----|
+| bedi/bge-m3 | BGE-M3 多语言向量化模型 |
+| bedi/qwen3-embedding-0.6b | Qwen3 Embedding 0.6B |
+| bedi/qwen3-embedding-8b | Qwen3 Embedding 8B |
+
+### Reranker 模型
+
+| 模型 ID | 说明 |
+|:--------|:-----|
+| bedi/bge-reranker | BGE Reranker 重排序模型 |
+| bedi/qwen3-reranker-0.6b | Qwen3 Reranker 0.6B |
+| bedi/qwen3-reranker-8b | Qwen3 Reranker 8B |
+
+### OCR 模型
+
+| 模型 ID | 说明 |
+|:--------|:-----|
+| bedi/ocrflux-3b | OCRFLUX 3B 文字识别 |
+| bedi/mineru | Mineru 文档解析 |
+
+---
+
+## 筛选模型
+
+### 按类型筛选
+
+| 类型 | 说明 |
+|:-----|:-----|
+| 对话模型 | 文本对话生成 |
+| 视觉模型 | 图文理解 |
+| Embedding | 文本向量化 |
+| Reranker | 文本重排序 |
+| OCR | 文字识别/文档解析 |
+
+### 按供应商筛选
+
+支持按 **Provider（供应商）** 分组浏览，当前只有一个供应商 **BEDI**。
+
+---
+
+## 搜索模型
+
+在搜索框中输入关键词搜索：
+
+- 模型名称
+- 模型 ID
+- 供应商名称
+
+---
+
+## 查看模型详情
+
+点击模型卡片打开详情面板：
+
+### 基本信息
+
+| 字段 | 说明 |
+|:-----|:-----|
+| 模型 ID | 唯一标识，API 调用时使用 |
+| 供应商 | 模型提供方 |
+| 类型 | 模型分类 |
+| 上下文长度 | 最大输入 Token 数 |
+| 输入价格 | 元 / 千 Token |
+| 输出价格 | 元 / 千 Token |
+
+### 能力标签
+
+模型支持的能力会以标签展示，如：`chat` `vision` `function_call` 等。
+
+---
+
+## 价格计算器
+
+在模型详情页使用价格计算器：
+
+1. 输入 **输入 Token 数**（如：1000）
+2. 输入 **输出 Token 数**（如：500）
+3. 系统自动计算预计消耗额度
+
+**计算公式：**
+
+```
+消耗额度 = (输入 Token × 输入价格 + 输出 Token × 输出价格) / 1000
+```
+
+---
+
+## 试用模型
+
+部分模型支持免费试用：
+
+| 试用条件 | 说明 |
+|:---------|:-----|
+| 试用额度 | 每个模型有限试用 Token 数量 |
+| 试用次数 | 每个用户只能开启一次试用 |
+| 有效期 | 试用额度有使用期限 |
+
+### 试用流程
+
+1. 点击模型卡片上的 **试用** 按钮
+2. 阅读试用说明
+3. 点击 **开启试用**
+4. 使用试用额度进行测试
+
+> [!NOTE]
+> 试用额度用完或过期后，如需继续使用请充值。
+
+---
+
+## 使用示例
+
+```python
+import openai
+
+openai.api_key = "your-api-key"
+openai.api_base = "https://baotaai.bedicloud.net/v1"
+
+response = openai.ChatCompletion.create(
+    model="glm-4",
+    messages=[
+        {"role": "system", "content": "你是一个有用的助手"},
+        {"role": "user", "content": "你好"}
+    ],
+    temperature=0.7
+)
+
+print(response.choices[0].message.content)
+```
