@@ -326,6 +326,13 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               onClick={toggleTheme}
               style={{ fontSize: 16, color: 'var(--text-primary)' }}
             />
+            <Button
+              type="link"
+              onClick={() => window.open('https://baotaai.bedicloud.net/guide', '_blank')}
+              style={{ color: 'var(--text-primary)', fontSize: 14 }}
+            >
+              文档
+            </Button>
 
             <Dropdown
               menu={{ items: userMenuItems, onClick: onUserMenuClick }}

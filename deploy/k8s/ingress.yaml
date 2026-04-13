@@ -20,6 +20,13 @@ spec:
     - host: baotaai.bedicloud.net
       http:
         paths:
+          - path: /guide
+            pathType: Prefix
+            backend:
+              service:
+                name: docs-site
+                port:
+                  number: 80
           - backend:
               service:
                 name: one-api

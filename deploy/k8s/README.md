@@ -168,3 +168,46 @@ kubectl rollout restart deployment/one-api -n baota
 - Redis: `10.1.112.239:34000`
 
 使用宝塔面板创建和管理数据库和 Redis 实例。
+
+---
+
+## 文档站部署 (docs-site)
+
+文档使用 Docsify 构建，部署在 `/guide` 路径下。
+
+### 构建并推送
+
+```bash
+# 构建 amd64 镜像 (Mac 需要指定平台)
+docker build --platform=linux/amd64 -f Dockerfile.docs -t 10.1.112.238:8443/baota/docs-site:latest .
+
+# 推送
+docker push 10.1.112.238:8443/baota/docs-site:latest
+```
+
+### 部署
+
+```bash
+kubectl apply -f docs-site.yaml
+```
+
+### 验证
+
+```bash
+# 查看 Pod
+kubectl get pods -n baota -l app=docs-site
+
+# 查看日志
+kubectl logs -n baota -l app=docs-site
+```
+
+### 访问
+
+- 文档地址: https://baotaai.bedicloud.net/guide
+- 源文件目录: `docs/`
+
+### 更新流程
+
+1. 修改 `docs/` 下的文档
+2. 重新构建并推送镜像
+3. 执行 `kubectl apply -f docs-site.yaml` 或 `kubectl rollout restart deployment/docs-site -n baota`

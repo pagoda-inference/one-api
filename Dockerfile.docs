@@ -1,0 +1,6 @@
+# Docs Dockerfile (K8s optimized)
+FROM nginx:1.25-alpine
+
+COPY docs/ /usr/share/nginx/html/guide/
+
+EXPOSE 80
