@@ -2,6 +2,7 @@ package model
 
 type Tool struct {
 	Id       string   `json:"id,omitempty"`
+	Index    int      `json:"index"`  // tool_call index in the list (0 is valid)
 	Type     string   `json:"type,omitempty"` // when splicing claude tools stream messages, it is empty
 	Function Function `json:"function"`
 }

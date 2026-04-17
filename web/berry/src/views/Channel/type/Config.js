@@ -20,7 +20,9 @@ const defaultConfig = {
     model_mapping: '模型映射关系',
     system_prompt: '系统提示词',
     groups: '用户组',
-    config: null
+    config: {
+      hide_upstream_model: '隐藏上游模型'
+    }
   },
   prompt: {
     type: '请选择渠道类型',
@@ -33,7 +35,9 @@ const defaultConfig = {
       '请输入要修改的模型映射关系，格式为：api请求模型ID:实际转发给渠道的模型ID，使用JSON数组表示，例如：{"gpt-3.5": "gpt-35"}',
     system_prompt:"此项可选，用于强制设置给定的系统提示词，请配合自定义模型 & 模型重定向使用，首先创建一个唯一的自定义模型名称并在上面填入，之后将该自定义模型重定向映射到该渠道一个原生支持的模型此项可选，用于强制设置给定的系统提示词，请配合自定义模型 & 模型重定向使用，首先创建一个唯一的自定义模型名称并在上面填入，之后将该自定义模型重定向映射到该渠道一个原生支持的模型",
     groups: '请选择该渠道所支持的用户组',
-    config: null
+    config: {
+      hide_upstream_model: '开启后，响应中的模型名称将替换为用户请求时的原始模型名'
+    }
   },
   modelGroup: 'openai'
 };

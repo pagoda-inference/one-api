@@ -77,9 +77,10 @@ type UsageOrResponseText struct {
 }
 
 type SlimTextResponse struct {
+	Model       string               `json:"model,omitempty"`
 	Choices     []TextResponseChoice `json:"choices"`
 	model.Usage `json:"usage"`
-	Error       model.Error `json:"error"`
+	Error       *model.Error         `json:"error,omitempty"`
 }
 
 type TextResponseChoice struct {
@@ -106,8 +107,8 @@ type EmbeddingResponseItem struct {
 type EmbeddingResponse struct {
 	Object      string                  `json:"object"`
 	Data        []EmbeddingResponseItem `json:"data"`
-	Model       string                  `json:"model"`
-	model.Usage `json:"usage"`
+	Model       string                  `json:"model,omitempty"`
+	model.Usage `json:"usage,omitempty"`
 }
 
 type ImageData struct {
@@ -138,8 +139,28 @@ type ChatCompletionsStreamResponse struct {
 }
 
 type CompletionsStreamResponse struct {
+	Model   string `json:"model,omitempty"`
 	Choices []struct {
 		Text         string `json:"text"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
+}
+
+// RerankResponse represents a rerank response from compatible backends
+type RerankResponse struct {
+	Id     string         `json:"id"`
+	Model  string         `json:"model"`
+	Usage  *model.Usage   `json:"usage"`
+	Results []RerankResult `json:"results"`
+}
+
+type RerankResult struct {
+	Index          int           `json:"index"`
+	Document       RerankDocument `json:"document"`
+	RelevanceScore float64      `json:"relevance_score"`
+}
+
+type RerankDocument struct {
+	Text       string `json:"text"`
+	MultiModal *any   `json:"multi_modal,omitempty"`
 }

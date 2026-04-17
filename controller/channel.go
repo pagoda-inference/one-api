@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/helper"
+	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
 	"github.com/pagoda-inference/one-api/relay/channeltype"
 	"net/http"
@@ -82,7 +83,7 @@ func GetChannel(c *gin.Context) {
 		})
 		return
 	}
-	channel, err := model.GetChannelById(id, false)
+	channel, err := model.GetChannelById(id, true)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -181,13 +182,22 @@ func UpdateChannel(c *gin.Context) {
 		})
 		return
 	}
+	logger.Debugf(c.Request.Context(), "UpdateChannel received: id=%d, config='%s'", channel.Id, channel.Config)
 	// If key is empty (user didn't provide a new key), preserve the existing key
 	if channel.Key == "" {
-		existingChannel, err := model.GetChannelById(channel.Id, false)
+		existingChannel, err := model.GetChannelById(channel.Id, true)
 		if err == nil && existingChannel != nil {
 			channel.Key = existingChannel.Key
 		}
 	}
+	// If config is empty, preserve the existing config
+	if channel.Config == "" {
+		existingChannel, err := model.GetChannelById(channel.Id, true)
+		if err == nil && existingChannel != nil {
+			channel.Config = existingChannel.Config
+		}
+	}
+	logger.Debugf(c.Request.Context(), "UpdateChannel after preserve: id=%d, config='%s'", channel.Id, channel.Config)
 	err = channel.Update()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Row, Col, Card, Table, Statistic, Spin, Progress, Tag, Tabs, Button, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, message, Divider, Switch } from 'antd'
 import { DollarOutlined, UserOutlined, ApiOutlined, RiseOutlined, SafetyCertificateOutlined, DashboardOutlined, LineChartOutlined, PlusOutlined, EditOutlined, SaveOutlined, SettingOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
-import { getOpsStats, getChannelHealth, getAlertConfig, updateAlertConfig, exportReport, getOpsUsers, updateUser, getChannels, createChannel, updateChannel, deleteChannel, getProviders, getOptions, updateOption, OpsStats, ChannelHealth, AlertConfig, Channel, Provider } from '../services/api'
+import { getOpsStats, getChannelHealth, getAlertConfig, updateAlertConfig, exportReport, getOpsUsers, updateUser, getChannels, createChannel, updateChannel, deleteChannel, getProviders, getOptions, updateOption, getChannel, OpsStats, ChannelHealth, AlertConfig, Channel, Provider } from '../services/api'
 
 const { TabPane } = Tabs
 
@@ -35,6 +35,8 @@ const OpsDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [settingForm] = Form.useForm()
   const [settingSaving, setSettingSaving] = useState(false)
+  const [originalKey, setOriginalKey] = useState('')
+  const [channelConfig, setChannelConfig] = useState('')
   const [, setSettings] = useState({
     QuotaForNewUser: 0,
     QuotaForInviter: 0,
@@ -162,17 +164,24 @@ const OpsDashboard: React.FC = () => {
     setChannelModalVisible(true)
   }
 
-  const handleEditChannel = (record: Channel) => {
+  const handleEditChannel = async (record: Channel) => {
     setEditingChannel(record)
+    // 获取完整渠道信息（包含真实 key）
+    const res = await getChannel(record.id)
+    if (!res.data.success) {
+      message.error('获取渠道信息失败')
+      return
+    }
+    const fullRecord = res.data.data
     // Parse models string and model_mapping JSON into modelMappings array format for the form
     let modelMappings: { client: string; upstream: string }[] = []
-    if (record.models && record.models.trim()) {
-      const modelList = record.models.split(',').filter(Boolean)
+    if (fullRecord.models && fullRecord.models.trim()) {
+      const modelList = fullRecord.models.split(',').filter(Boolean)
       // Parse model_mapping JSON to get upstream names
       let mappingObj: Record<string, string> = {}
       try {
-        if (record.model_mapping) {
-          mappingObj = JSON.parse(record.model_mapping)
+        if (fullRecord.model_mapping) {
+          mappingObj = JSON.parse(fullRecord.model_mapping)
         }
       } catch (e) {
         console.error('Failed to parse model_mapping:', e)
@@ -182,9 +191,22 @@ const OpsDashboard: React.FC = () => {
         upstream: mappingObj[client.trim()] || ''
       }))
     }
-    channelForm.setFieldsValue({ ...record, modelMappings })
-    // 如果是编辑模式，用占位符触发 Input.Password 显示掩码
-    channelForm.setFieldsValue({ key: '********' })
+    // Parse config JSON to get hide_upstream_model setting
+    let hideUpstreamModel = false
+    try {
+      if (fullRecord.config) {
+        const configObj = JSON.parse(fullRecord.config)
+        hideUpstreamModel = configObj.hide_upstream_model || false
+      }
+    } catch (e) {
+      console.error('Failed to parse config:', e)
+    }
+    channelForm.setFieldsValue({ ...fullRecord, modelMappings, hide_upstream_model: hideUpstreamModel })
+    // 保存原始 key 和 config 用于提交时比较
+    setOriginalKey(fullRecord.key || '')
+    setChannelConfig(fullRecord.config || '{}')
+    console.log('Loaded channel config:', fullRecord.config)
+    console.log('Parsed hide_upstream_model:', hideUpstreamModel)
     loadProviders()
     setChannelModalVisible(true)
   }
@@ -206,6 +228,8 @@ const OpsDashboard: React.FC = () => {
   const handleChannelSubmit = async () => {
     try {
       const values = await channelForm.validateFields()
+      console.log('channelConfig state:', channelConfig)
+      console.log('hide_upstream_model from form:', values.hide_upstream_model)
 
       // Process model mappings: extract client models and build mapping JSON
       let models = ''
@@ -222,16 +246,32 @@ const OpsDashboard: React.FC = () => {
         modelMapping = JSON.stringify(mappingObj)
       }
 
+      // Build config JSON - merge with existing config to preserve other fields
+      let configObj: Record<string, any> = {}
+      try {
+        if (channelConfig) {
+          configObj = JSON.parse(channelConfig)
+        }
+      } catch (e) {
+        console.error('Failed to parse config:', e)
+      }
+      if (values.hide_upstream_model !== undefined) {
+        configObj.hide_upstream_model = values.hide_upstream_model
+      }
+      const config = JSON.stringify(configObj)
+      console.log('Final config being sent:', config)
+
       const payload = {
         ...values,
         models,
         model_mapping: modelMapping,
+        config,
       }
       delete payload.modelMappings
+      delete payload.hide_upstream_model
 
       // 如果是编辑模式且用户没有输入新 key，则不发送 key 字段，避免覆盖原有值
-      // 如果 key 是占位符，说明用户没改，删除不发送
-      if (editingChannel && (!values.key || values.key === '********')) {
+      if (editingChannel && (values.key === originalKey || !values.key)) {
         delete payload.key
       }
 
@@ -876,6 +916,10 @@ const OpsDashboard: React.FC = () => {
               ]}
               placeholder="选择状态"
             />
+          </Form.Item>
+          <Form.Item name="hide_upstream_model" label="隐藏上游模型" valuePropName="checked">
+            <Switch onChange={(checked) => channelForm.setFieldValue('hide_upstream_model', checked)} />
+            <span style={{ marginLeft: 8, color: '#999' }}>开启后，API 返回的模型名将替换为客户端请求的模型名</span>
           </Form.Item>
         </Form>
       </Modal>

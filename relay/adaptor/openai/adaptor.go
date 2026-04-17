@@ -109,7 +109,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, meta *meta.Meta, requestBody io.Read
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, meta *meta.Meta) (usage *model.Usage, err *model.ErrorWithStatusCode) {
 	if meta.IsStream {
 		var responseText string
-		err, responseText, usage = StreamHandler(c, resp, meta.Mode)
+		err, responseText, usage = StreamHandler(c, resp, meta.Mode, meta.OriginModelName, meta.HideUpstreamModel)
 		if usage == nil || usage.TotalTokens == 0 {
 			usage = ResponseText2Usage(responseText, meta.ActualModelName, meta.PromptTokens)
 		}
@@ -122,9 +122,9 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, meta *meta.Met
 		case relaymode.ImagesGenerations:
 			err, _ = ImageHandler(c, resp)
 		case relaymode.Embeddings:
-			err = EmbeddingHandler(c, resp, meta.ActualModelName)
+			err = EmbeddingHandler(c, resp, meta.ActualModelName, meta.OriginModelName, meta.HideUpstreamModel)
 		default:
-			err, usage = Handler(c, resp, meta.PromptTokens, meta.ActualModelName)
+			err, usage = Handler(c, resp, meta.PromptTokens, meta.ActualModelName, meta.OriginModelName, meta.HideUpstreamModel)
 		}
 	}
 	return

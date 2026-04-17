@@ -24,7 +24,7 @@ const (
 	dataPrefixLength = len(dataPrefix)
 )
 
-func StreamHandler(c *gin.Context, resp *http.Response, relayMode int) (*model.ErrorWithStatusCode, string, *model.Usage) {
+func StreamHandler(c *gin.Context, resp *http.Response, relayMode int, originModelName string, hideUpstreamModel bool) (*model.ErrorWithStatusCode, string, *model.Usage) {
 	responseText := ""
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Split(bufio.ScanLines)
@@ -59,7 +59,14 @@ func StreamHandler(c *gin.Context, resp *http.Response, relayMode int) (*model.E
 				// but for empty choice and no usage, we should not pass it to client, this is for azure
 				continue // just ignore empty choice
 			}
-			render.StringData(c, data)
+			// If hideUpstreamModel is enabled, replace the model name
+			if hideUpstreamModel && originModelName != "" {
+				streamResponse.Model = originModelName
+				modifiedData := dataPrefix + toJson(streamResponse)
+				render.StringData(c, modifiedData)
+			} else {
+				render.StringData(c, data)
+			}
 			for _, choice := range streamResponse.Choices {
 				responseText += conv.AsString(choice.Delta.Content)
 			}
@@ -67,12 +74,19 @@ func StreamHandler(c *gin.Context, resp *http.Response, relayMode int) (*model.E
 				usage = streamResponse.Usage
 			}
 		case relaymode.Completions:
-			render.StringData(c, data)
 			var streamResponse CompletionsStreamResponse
 			err := json.Unmarshal([]byte(data[dataPrefixLength:]), &streamResponse)
 			if err != nil {
 				logger.SysError("error unmarshalling stream response: " + err.Error())
 				continue
+			}
+			// If hideUpstreamModel is enabled, replace the model name
+			if hideUpstreamModel && originModelName != "" {
+				streamResponse.Model = originModelName
+				modifiedData := dataPrefix + toJson(streamResponse)
+				render.StringData(c, modifiedData)
+			} else {
+				render.StringData(c, data)
 			}
 			for _, choice := range streamResponse.Choices {
 				responseText += choice.Text
@@ -96,8 +110,7 @@ func StreamHandler(c *gin.Context, resp *http.Response, relayMode int) (*model.E
 	return nil, responseText, usage
 }
 
-func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName string) (*model.ErrorWithStatusCode, *model.Usage) {
-	var textResponse SlimTextResponse
+func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName string, originModelName string, hideUpstreamModel bool) (*model.ErrorWithStatusCode, *model.Usage) {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return ErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError), nil
@@ -106,53 +119,101 @@ func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName st
 	if err != nil {
 		return ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
 	}
-	err = json.Unmarshal(responseBody, &textResponse)
-	if err != nil {
-		return ErrorWrapper(err, "unmarshal_response_body_failed", http.StatusInternalServerError), nil
-	}
-	if textResponse.Error.Type != "" {
-		return &model.ErrorWithStatusCode{
-			Error:      textResponse.Error,
-			StatusCode: resp.StatusCode,
-		}, nil
-	}
-	// Reset response body
-	resp.Body = io.NopCloser(bytes.NewBuffer(responseBody))
 
-	// We shouldn't set the header before we parse the response body, because the parse part may fail.
-	// And then we will have to send an error response, but in this case, the header has already been set.
-	// So the HTTPClient will be confused by the response.
-	// For example, Postman will report error, and we cannot check the response at all.
+	// Try SlimTextResponse first (chat completions)
+	var textResponse SlimTextResponse
+	if err := json.Unmarshal(responseBody, &textResponse); err == nil {
+		if textResponse.Error != nil && textResponse.Error.Type != "" {
+			return &model.ErrorWithStatusCode{
+				Error:      *textResponse.Error,
+				StatusCode: resp.StatusCode,
+			}, nil
+		}
+
+		// If hideUpstreamModel is enabled, replace the model name
+		outputBody := responseBody
+		if hideUpstreamModel && originModelName != "" {
+			textResponse.Model = originModelName
+			outputBody, err = json.Marshal(textResponse)
+			if err != nil {
+				return ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
+			}
+		}
+
+		// Reset response body
+		resp.Body = io.NopCloser(bytes.NewBuffer(outputBody))
+
+		for k, v := range resp.Header {
+			c.Writer.Header().Set(k, v[0])
+		}
+		c.Writer.WriteHeader(resp.StatusCode)
+		_, err = io.Copy(c.Writer, resp.Body)
+		if err != nil {
+			return ErrorWrapper(err, "copy_response_body_failed", http.StatusInternalServerError), nil
+		}
+		err = resp.Body.Close()
+		if err != nil {
+			return ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+		}
+
+		if textResponse.Usage.TotalTokens == 0 || (textResponse.Usage.PromptTokens == 0 && textResponse.Usage.CompletionTokens == 0) {
+			completionTokens := 0
+			for _, choice := range textResponse.Choices {
+				completionTokens += CountTokenText(choice.Message.StringContent(), modelName)
+			}
+			textResponse.Usage = model.Usage{
+				PromptTokens:     promptTokens,
+				CompletionTokens: completionTokens,
+				TotalTokens:      promptTokens + completionTokens,
+			}
+		}
+		return nil, &textResponse.Usage
+	}
+
+	// Try RerankResponse
+	var rerankResponse RerankResponse
+	if err := json.Unmarshal(responseBody, &rerankResponse); err == nil {
+		// Rerank response - if hideUpstreamModel is enabled, replace the model name
+		if hideUpstreamModel && originModelName != "" {
+			rerankResponse.Model = originModelName
+			responseBody, err = json.Marshal(rerankResponse)
+			if err != nil {
+				return ErrorWrapper(err, "marshal_rerank_response_failed", http.StatusInternalServerError), nil
+			}
+		}
+
+		resp.Body = io.NopCloser(bytes.NewBuffer(responseBody))
+
+		for k, v := range resp.Header {
+			c.Writer.Header().Set(k, v[0])
+		}
+		c.Writer.WriteHeader(resp.StatusCode)
+		_, err = io.Copy(c.Writer, resp.Body)
+		if err != nil {
+			return ErrorWrapper(err, "copy_response_body_failed", http.StatusInternalServerError), nil
+		}
+		err = resp.Body.Close()
+		if err != nil {
+			return ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
+		}
+		return nil, rerankResponse.Usage
+	}
+
+	// Fallback: unmarshal failed for both types, just pass through
 	for k, v := range resp.Header {
 		c.Writer.Header().Set(k, v[0])
 	}
 	c.Writer.WriteHeader(resp.StatusCode)
-	_, err = io.Copy(c.Writer, resp.Body)
+	_, err = c.Writer.Write(responseBody)
 	if err != nil {
-		return ErrorWrapper(err, "copy_response_body_failed", http.StatusInternalServerError), nil
+		return ErrorWrapper(err, "write_response_body_failed", http.StatusInternalServerError), nil
 	}
-	err = resp.Body.Close()
-	if err != nil {
-		return ErrorWrapper(err, "close_response_body_failed", http.StatusInternalServerError), nil
-	}
-
-	if textResponse.Usage.TotalTokens == 0 || (textResponse.Usage.PromptTokens == 0 && textResponse.Usage.CompletionTokens == 0) {
-		completionTokens := 0
-		for _, choice := range textResponse.Choices {
-			completionTokens += CountTokenText(choice.Message.StringContent(), modelName)
-		}
-		textResponse.Usage = model.Usage{
-			PromptTokens:     promptTokens,
-			CompletionTokens: completionTokens,
-			TotalTokens:      promptTokens + completionTokens,
-		}
-	}
-	return nil, &textResponse.Usage
+	return nil, nil
 }
 
 // EmbeddingHandler handles embedding responses, especially for TGI backends
 // that return array format [[0.1, 0.2, ...]] instead of OpenAI format
-func EmbeddingHandler(c *gin.Context, resp *http.Response, modelName string) *model.ErrorWithStatusCode {
+func EmbeddingHandler(c *gin.Context, resp *http.Response, modelName string, originModelName string, hideUpstreamModel bool) *model.ErrorWithStatusCode {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return ErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
@@ -165,7 +226,12 @@ func EmbeddingHandler(c *gin.Context, resp *http.Response, modelName string) *mo
 	// Try to unmarshal as OpenAI format first
 	var openaiResponse EmbeddingResponse
 	if err := json.Unmarshal(responseBody, &openaiResponse); err == nil {
-		// Already in OpenAI format, just copy headers and body
+		// Already in OpenAI format
+		// If hideUpstreamModel is enabled, replace the model name
+		if hideUpstreamModel && originModelName != "" {
+			openaiResponse.Model = originModelName
+			responseBody, _ = json.Marshal(openaiResponse)
+		}
 		for k, v := range resp.Header {
 			c.Writer.Header().Set(k, v[0])
 		}
@@ -184,9 +250,14 @@ func EmbeddingHandler(c *gin.Context, resp *http.Response, modelName string) *mo
 	}
 
 	// Convert to OpenAI embedding response format
+	// Use originModelName if hideUpstreamModel is enabled, otherwise use modelName
+	respModel := modelName
+	if hideUpstreamModel && originModelName != "" {
+		respModel = originModelName
+	}
 	openaiResp := EmbeddingResponse{
 		Object: "list",
-		Model:  modelName,
+		Model:  respModel,
 	}
 	for i, embedding := range tgiEmbedding {
 		openaiResp.Data = append(openaiResp.Data, EmbeddingResponseItem{
@@ -211,4 +282,10 @@ func EmbeddingHandler(c *gin.Context, resp *http.Response, modelName string) *mo
 		return ErrorWrapper(err, "write_response_body_failed", http.StatusInternalServerError)
 	}
 	return nil
+}
+
+// toJson marshals a value to JSON string
+func toJson(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
 }

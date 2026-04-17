@@ -22,7 +22,8 @@ import {
   Autocomplete,
   FormHelperText,
   Switch,
-  Checkbox
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 
 import { Formik } from 'formik';
@@ -555,8 +556,23 @@ const EditModal = ({ open, channelId, onCancel, onOk }) => {
                 </>
               )}
 
+              <FormControl fullWidth sx={{ ...theme.typography.otherInput }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={values.config?.hide_upstream_model || false}
+                      onChange={(e) => {
+                        setFieldValue('config', { ...values.config, hide_upstream_model: e.target.checked });
+                      }}
+                    />
+                  }
+                  label="隐藏上游模型"
+                />
+                <FormHelperText>开启后，响应中的模型名称将替换为用户请求时的原始模型名</FormHelperText>
+              </FormControl>
+
               {inputLabel.config &&
-                Object.keys(inputLabel.config).map((configName) => {
+                Object.keys(inputLabel.config).filter(configName => configName !== 'hide_upstream_model').map((configName) => {
                   return (
                     <FormControl key={'config.' + configName} fullWidth sx={{ ...theme.typography.otherInput }}>
                       <TextField

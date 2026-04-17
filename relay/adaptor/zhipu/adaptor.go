@@ -98,9 +98,9 @@ func (a *Adaptor) DoRequest(c *gin.Context, meta *meta.Meta, requestBody io.Read
 
 func (a *Adaptor) DoResponseV4(c *gin.Context, resp *http.Response, meta *meta.Meta) (usage *model.Usage, err *model.ErrorWithStatusCode) {
 	if meta.IsStream {
-		err, _, usage = openai.StreamHandler(c, resp, meta.Mode)
+		err, _, usage = openai.StreamHandler(c, resp, meta.Mode, meta.OriginModelName, meta.HideUpstreamModel)
 	} else {
-		err, usage = openai.Handler(c, resp, meta.PromptTokens, meta.ActualModelName)
+		err, usage = openai.Handler(c, resp, meta.PromptTokens, meta.ActualModelName, meta.OriginModelName, meta.HideUpstreamModel)
 	}
 	return
 }

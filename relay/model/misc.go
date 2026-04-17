@@ -15,10 +15,10 @@ type CompletionTokensDetails struct {
 }
 
 type Error struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Param   string `json:"param"`
-	Code    any    `json:"code"`
+	Message string `json:"message,omitempty"`
+	Type    string `json:"type,omitempty"`
+	Param   string `json:"param,omitempty"`
+	Code    any    `json:"code,omitempty"`
 }
 
 type ErrorWithStatusCode struct {

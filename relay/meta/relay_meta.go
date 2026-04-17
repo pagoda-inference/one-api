@@ -34,6 +34,7 @@ type Meta struct {
 	PromptTokens       int // only for DoResponse
 	ForcedSystemPrompt string
 	StartTime          time.Time
+	HideUpstreamModel  bool
 }
 
 func GetByContext(c *gin.Context) *Meta {
@@ -56,6 +57,7 @@ func GetByContext(c *gin.Context) *Meta {
 	cfg, ok := c.Get(ctxkey.Config)
 	if ok {
 		meta.Config = cfg.(model.ChannelConfig)
+		meta.HideUpstreamModel = meta.Config.HideUpstreamModel
 	}
 	if meta.BaseURL == "" {
 		meta.BaseURL = channeltype.ChannelBaseURLs[meta.ChannelType]
