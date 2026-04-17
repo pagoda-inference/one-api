@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -227,14 +228,20 @@ func EmbeddingHandler(c *gin.Context, resp *http.Response, modelName string, ori
 	var openaiResponse EmbeddingResponse
 	if err := json.Unmarshal(responseBody, &openaiResponse); err == nil {
 		// Already in OpenAI format
-		// If hideUpstreamModel is enabled, replace the model name
-		if hideUpstreamModel && originModelName != "" {
-			openaiResponse.Model = originModelName
-			responseBody, _ = json.Marshal(openaiResponse)
+		// If hideUpstreamModel is enabled, replace the model name using string replacement
+		// to avoid marshal/unmarshal issues with large embedding arrays
+		if hideUpstreamModel && originModelName != "" && openaiResponse.Model != "" {
+			responseBodyStr := string(responseBody)
+			// Handle both "model":"value" and "model": "value" formats
+			responseBodyStr = strings.ReplaceAll(responseBodyStr, fmt.Sprintf(`"model":"%s"`, openaiResponse.Model), fmt.Sprintf(`"model":"%s"`, originModelName))
+			responseBodyStr = strings.ReplaceAll(responseBodyStr, fmt.Sprintf(`"model": "%s"`, openaiResponse.Model), fmt.Sprintf(`"model": "%s"`, originModelName))
+			responseBody = []byte(responseBodyStr)
 		}
 		for k, v := range resp.Header {
 			c.Writer.Header().Set(k, v[0])
 		}
+		// Delete Content-Length header since body was modified
+		c.Writer.Header().Del("Content-Length")
 		c.Writer.WriteHeader(resp.StatusCode)
 		_, err = c.Writer.Write(responseBody)
 		if err != nil {

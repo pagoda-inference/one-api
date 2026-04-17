@@ -76,6 +76,7 @@ func RelayTextHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	}
 
 	// do request
+	logger.Debugf(ctx, "DoRequest: APIType=%d, Mode=%d, ChannelType=%d", meta.APIType, meta.Mode, meta.ChannelType)
 	resp, err := adaptor.DoRequest(c, meta, requestBody)
 	if err != nil {
 		logger.Errorf(ctx, "DoRequest failed: %s", err.Error())
