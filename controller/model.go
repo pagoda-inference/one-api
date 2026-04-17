@@ -132,15 +132,31 @@ func ListAllModels(c *gin.Context) {
 func ListModels(c *gin.Context) {
 	ctx := c.Request.Context()
 	var availableModels []string
+	userId := c.GetInt(ctxkey.Id)
+
+	// Get user's team IDs for visibility filtering
+	tenantIds, _ := model.GetUserTenantIds(userId)
+
+	// Get all market models to check visibility
+	allMarketModels, _ := model.GetAllMarketModels()
+	visibleToTeamsMap := make(map[string]string) // model_id -> visible_to_teams
+	for _, m := range allMarketModels {
+		visibleToTeamsMap[m.Id] = m.VisibleToTeams
+	}
+
 	if c.GetString(ctxkey.AvailableModels) != "" {
 		availableModels = strings.Split(c.GetString(ctxkey.AvailableModels), ",")
 	} else {
-		userId := c.GetInt(ctxkey.Id)
 		userGroup, _ := model.CacheGetUserGroup(userId)
 		availableModels, _ = model.CacheGetGroupModels(ctx, userGroup)
 	}
 	availableOpenAIModels := make([]OpenAIModels, 0, len(availableModels))
 	for _, modelName := range availableModels {
+		// Check visibility: public models (visibleToTeams="") or user's team is in visibleToTeams
+		visibleToTeams := visibleToTeamsMap[modelName]
+		if !isModelVisibleToUser(visibleToTeams, tenantIds) {
+			continue // Skip models not visible to user
+		}
 		if model, ok := modelsMap[modelName]; ok {
 			availableOpenAIModels = append(availableOpenAIModels, model)
 		} else {
@@ -161,8 +177,39 @@ func ListModels(c *gin.Context) {
 	})
 }
 
+// isModelVisibleToUser checks if a model is visible to a user based on visibleToTeams
+// visibleToTeams format: ",1,2,3," or "" (empty means public)
+func isModelVisibleToUser(visibleToTeams string, tenantIds []int) bool {
+	if visibleToTeams == "" {
+		return true // Public model
+	}
+	for _, tid := range tenantIds {
+		if strings.Contains(visibleToTeams, fmt.Sprintf(",%d,", tid)) {
+			return true
+		}
+	}
+	return false
+}
+
 func RetrieveModel(c *gin.Context) {
 	modelId := c.Param("model")
+	userId := c.GetInt(ctxkey.Id)
+	tenantIds, _ := model.GetUserTenantIds(userId)
+
+	// Check visibility
+	marketModel, err := model.GetModelById(modelId)
+	if err == nil && !isModelVisibleToUser(marketModel.VisibleToTeams, tenantIds) {
+		c.JSON(200, gin.H{
+			"error": relaymodel.Error{
+				Message: fmt.Sprintf("The model '%s' does not exist", modelId),
+				Type:    "invalid_request_error",
+				Param:   "model",
+				Code:    "model_not_found",
+			},
+		})
+		return
+	}
+
 	if model, ok := modelsMap[modelId]; ok {
 		c.JSON(200, model)
 	} else {

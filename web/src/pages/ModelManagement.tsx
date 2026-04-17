@@ -383,6 +383,10 @@ const ModelManagement: React.FC = () => {
             </Form.Item>
           </Row>
 
+          <Form.Item name="visible_to_teams" label="可见团队" tooltip="留空为公共模型，非空如 ,1,2, 表示只有团队1、2可见">
+            <Input placeholder=",1,2,3, 格式，留空表示所有用户可见" />
+          </Form.Item>
+
           <Form.Item name="icon_url" label="Logo URL">
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space>

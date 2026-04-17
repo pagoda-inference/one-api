@@ -51,6 +51,7 @@ export interface Model {
   is_trial?: boolean
   trial_quota?: number
   sla?: string
+  visible_to_teams?: string
 }
 
 export interface ModelGroup {
@@ -593,6 +594,7 @@ export interface ModelItem {
   sla: string
   rate_limit_rpm: number
   rate_limit_tpm: number
+  visible_to_teams: string
   created_at: number
   updated_at: number
 }

@@ -3,7 +3,8 @@ import { Row, Col, Card, Input, Select, Tag, Button, Drawer, Descriptions, Stati
 import {
   SearchOutlined, RobotOutlined, SyncOutlined,
   ExperimentOutlined, AppstoreOutlined, BarsOutlined,
-  ThunderboltOutlined, PictureOutlined, AudioOutlined, FileTextOutlined
+  ThunderboltOutlined, PictureOutlined, AudioOutlined, FileTextOutlined,
+  LockOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../contexts/ThemeContext'
@@ -337,6 +338,21 @@ const ModelMarket: React.FC = () => {
                 }}
               >
                 企业专属
+              </Tag>
+            )}
+            {model.visible_to_teams && model.visible_to_teams !== '' && (
+              <Tag
+                style={{
+                  background: '#722ed115',
+                  color: '#722ed1',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  padding: '0 4px'
+                }}
+                icon={<LockOutlined />}
+              >
+                团队私有
               </Tag>
             )}
             {isMaintenance && (

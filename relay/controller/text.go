@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -46,6 +47,14 @@ func RelayTextHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	if err != nil {
 		logger.Warnf(ctx, "model not found: %s, using default price 0", textRequest.Model)
 		modelInfo = nil
+	}
+	// check model visibility
+	if modelInfo != nil && modelInfo.VisibleToTeams != "" {
+		tenantIds, _ := model.GetUserTenantIds(meta.UserId)
+		if !isModelVisibleToUser(modelInfo.VisibleToTeams, tenantIds) {
+			logger.Warnf(ctx, "model %s is not visible to user %d", textRequest.Model, meta.UserId)
+			return openai.ErrorWrapper(fmt.Errorf("model not visible to user"), "model_not_visible", http.StatusForbidden)
+		}
 	}
 	inputPrice := 0.0
 	outputPrice := 0.0
@@ -174,4 +183,18 @@ func getRequestBody(c *gin.Context, meta *meta.Meta, textRequest *relaymodel.Gen
 	logger.Debugf(c.Request.Context(), "converted request: \n%s", string(jsonData))
 	requestBody = bytes.NewBuffer(jsonData)
 	return requestBody, nil
+}
+
+// isModelVisibleToUser checks if a model is visible to a user based on visibleToTeams
+// visibleToTeams format: ",1,2,3," or "" (empty means public)
+func isModelVisibleToUser(visibleToTeams string, tenantIds []int) bool {
+	if visibleToTeams == "" {
+		return true // Public model
+	}
+	for _, tid := range tenantIds {
+		if strings.Contains(visibleToTeams, fmt.Sprintf(",%d,", tid)) {
+			return true
+		}
+	}
+	return false
 }

@@ -29,6 +29,7 @@ type ModelInfo struct {
 	SLA          string   `json:"sla" gorm:"size:32;default:standard"` // SLA等级: standard/premium/enterprise
 	RateLimitRPM int      `json:"rate_limit_rpm" gorm:"default:0"`       // 模型级别 RPM 限流 (0=不限)
 	RateLimitTPM int      `json:"rate_limit_tpm" gorm:"default:0"`       // 模型级别 TPM 限流 (0=不限)
+	VisibleToTeams string `json:"visible_to_teams" gorm:"type:text"`      // 可见团队，格式",1,2,3,"，空=公共模型
 	CreatedAt    int64    `json:"created_at" gorm:"bigint"`
 	UpdatedAt    int64    `json:"updated_at" gorm:"bigint"`
 }

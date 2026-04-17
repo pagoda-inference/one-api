@@ -84,6 +84,19 @@ func GetUserTenants(userId int) ([]*UserTenantRole, error) {
 	return roles, err
 }
 
+// GetUserTenantIds returns all tenant IDs a user belongs to
+func GetUserTenantIds(userId int) ([]int, error) {
+	roles, err := GetUserTenants(userId)
+	if err != nil {
+		return nil, err
+	}
+	tenantIds := make([]int, 0, len(roles))
+	for _, role := range roles {
+		tenantIds = append(tenantIds, role.TenantId)
+	}
+	return tenantIds, nil
+}
+
 // GetTenantById returns tenant by ID
 func GetTenantById(id int) (*Tenant, error) {
 	var tenant Tenant
