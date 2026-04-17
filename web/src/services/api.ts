@@ -671,6 +671,15 @@ export const deleteProvider = (id: number) =>
 export const getProviderStatuses = () =>
   api.get<{ success: boolean; data: { value: string; label: string }[] }>('/admin/providers/statuses')
 
+// Team (Tenant) APIs
+export interface SimpleTenant {
+  id: number
+  name: string
+}
+
+export const getAllTenants = () =>
+  api.get<{ success: boolean; data: SimpleTenant[] }>('/admin/tenants')
+
 // Option APIs for system settings
 export const getOptions = () =>
   api.get<{ success: boolean; data: { key: string; value: string }[] }>('/option/')

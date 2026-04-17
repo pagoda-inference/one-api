@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, Upload, message, Popconfirm, Row } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, DatabaseOutlined, PictureOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { listModels, createModel, updateModel, deleteModel, batchDeleteModels, uploadModelLogo, getModelTypes, getModelStatuses, getProviders, listLogos, deleteLogo, ModelItem, Provider } from '../services/api'
+import { listModels, createModel, updateModel, deleteModel, batchDeleteModels, uploadModelLogo, getModelTypes, getModelStatuses, getProviders, listLogos, deleteLogo, getAllTenants, ModelItem, Provider, SimpleTenant } from '../services/api'
 
 const { TextArea } = Input
 
@@ -20,6 +20,23 @@ const ModelManagement: React.FC = () => {
   const [providers, setProviders] = useState<Provider[]>([])
   const [logos, setLogos] = useState<{ name: string; url: string }[]>([])
   const [showLogoModal, setShowLogoModal] = useState(false)
+  const [tenants, setTenants] = useState<SimpleTenant[]>([])
+
+  useEffect(() => {
+    loadModels()
+    loadTenants()
+  }, [])
+
+  const loadTenants = async () => {
+    try {
+      const res = await getAllTenants()
+      if (res.data.success) {
+        setTenants(res.data.data || [])
+      }
+    } catch (error) {
+      console.error('Failed to load tenants:', error)
+    }
+  }
 
   useEffect(() => {
     loadModels()
@@ -383,8 +400,20 @@ const ModelManagement: React.FC = () => {
             </Form.Item>
           </Row>
 
-          <Form.Item name="visible_to_teams" label="可见团队" tooltip="留空为公共模型，非空如 ,1,2, 表示只有团队1、2可见">
-            <Input placeholder=",1,2,3, 格式，留空表示所有用户可见" />
+          <Form.Item
+            name="visible_to_teams"
+            label="可见团队"
+            tooltip="不选择表示公共模型，选择团队则只有这些团队可见"
+            valuePropName="value"
+            getValueProps={(value) => ({ value: value ? value.split(',').filter(Boolean).map(Number) : [] })}
+            getValueFromEvent={(values) => values && values.length > 0 ? ',' + values.join(',') + ',' : ''}
+          >
+            <Select
+              mode="multiple"
+              allowClear
+              placeholder="不选择表示所有用户可见"
+              options={tenants.map(t => ({ value: t.id, label: t.name }))}
+            />
           </Form.Item>
 
           <Form.Item name="icon_url" label="Logo URL">

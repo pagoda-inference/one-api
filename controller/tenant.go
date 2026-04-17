@@ -170,6 +170,36 @@ func GetTenant(c *gin.Context) {
 	})
 }
 
+// GetAllTenantsForAdmin handles GET /api/admin/tenants (for admin use like model visibility config)
+func GetAllTenantsForAdmin(c *gin.Context) {
+	userRole := c.GetInt(ctxkey.Role)
+	if userRole != model.RoleRootUser {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Admin access required"})
+		return
+	}
+
+	tenants, err := model.GetAllTenants()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to get tenants"})
+		return
+	}
+
+	// Return simple list with just id and name
+	type SimpleTenant struct {
+		Id   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	result := make([]SimpleTenant, 0, len(tenants))
+	for _, t := range tenants {
+		result = append(result, SimpleTenant{Id: t.Id, Name: t.Name})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
 // UpdateTenant handles PUT /api/tenant/:id
 func UpdateTenant(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
