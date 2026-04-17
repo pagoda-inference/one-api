@@ -200,6 +200,26 @@ func GetAllTenantsForAdmin(c *gin.Context) {
 	})
 }
 
+// DeleteTenant handles DELETE /api/admin/tenants/:id
+func DeleteTenant(c *gin.Context) {
+	userRole := c.GetInt(ctxkey.Role)
+	if userRole != model.RoleRootUser {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Admin access required"})
+		return
+	}
+
+	tenantId, _ := strconv.Atoi(c.Param("id"))
+	if err := model.DeleteTenant(tenantId); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete tenant: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Tenant deleted successfully",
+	})
+}
+
 // UpdateTenant handles PUT /api/tenant/:id
 func UpdateTenant(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))

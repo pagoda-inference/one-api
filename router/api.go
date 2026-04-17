@@ -173,6 +173,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.GET("/system/health", controller.GetSystemHealth)
 			adminRoute.GET("/reports/export", controller.ExportReport)
 			adminRoute.GET("/tenants", controller.GetAllTenantsForAdmin)
+			adminRoute.DELETE("/tenants/:id", controller.DeleteTenant)
 
 			// Model management routes
 			adminRoute.GET("/models", controller.AdminListModels)

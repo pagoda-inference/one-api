@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Row, Col, Card, Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, message, Popconfirm, Tabs, Statistic } from 'antd'
 import { TeamOutlined, UserOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, AuditOutlined } from '@ant-design/icons'
-import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, getOpsUsers, Tenant, TenantUser, AuditLog, getAllCompanies, getDepartments, createCompany, createDepartment, Company, Department } from '../services/api'
+import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, getOpsUsers, Tenant, TenantUser, AuditLog, getAllCompanies, getDepartments, createCompany, createDepartment, deleteTenant, Company, Department } from '../services/api'
 
 const { Option } = Select
 const { TabPane } = Tabs
@@ -145,6 +145,23 @@ const Teams: React.FC = () => {
       }
     } catch (error: any) {
       message.error(error.response?.data?.message || '创建失败')
+    }
+  }
+
+  const handleDeleteTenant = async (tenantId: number) => {
+    try {
+      const res = await deleteTenant(tenantId)
+      if (res.data.success) {
+        message.success('团队删除成功')
+        loadTenants()
+        if (currentTenant?.id === tenantId) {
+          setCurrentTenant(null)
+        }
+      } else {
+        message.error(res.data.message || '删除失败')
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || '删除失败')
     }
   }
 
@@ -388,6 +405,18 @@ const Teams: React.FC = () => {
                   <TeamOutlined />
                   <span style={{ fontWeight: currentTenant?.id === t.id ? 'bold' : 'normal' }}>{t.name}</span>
                   <Tag>{t.code}</Tag>
+                  {isRoot && (
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      icon={<DeleteOutlined />}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteTenant(t.id)
+                      }}
+                    />
+                  )}
                 </Space>
               </Card>
             ))}

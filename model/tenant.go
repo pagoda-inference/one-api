@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pagoda-inference/one-api/common/helper"
@@ -110,8 +112,31 @@ func GetTenantById(id int) (*Tenant, error) {
 // GetAllTenants returns all tenants (for root user)
 func GetAllTenants() ([]*Tenant, error) {
 	var tenants []*Tenant
-	err := DB.Order("id ASC").Find(&tenants).Error
+	err := DB.Where("status != ?", TenantStatusDeleted).Order("id ASC").Find(&tenants).Error
 	return tenants, err
+}
+
+// DeleteTenant deletes a tenant and cleans up related data
+func DeleteTenant(tenantId int) error {
+	// 1. Delete all user_tenant_roles for this tenant
+	if err := DB.Where("tenant_id = ?", tenantId).Delete(&UserTenantRole{}).Error; err != nil {
+		return err
+	}
+
+	// 2. Clean up model_info.visible_to_teams that references this tenant
+	// Get all models with this tenant in visible_to_teams
+	var models []*ModelInfo
+	if err := DB.Where("visible_to_teams LIKE ?", "%,"+fmt.Sprintf("%d", tenantId)+",%").Find(&models).Error; err != nil {
+		return err
+	}
+	// Remove this tenant from visible_to_teams
+	for _, m := range models {
+		newVisible := strings.ReplaceAll(m.VisibleToTeams, ","+fmt.Sprintf("%d", tenantId)+",", ",")
+		DB.Model(m).Update("visible_to_teams", newVisible)
+	}
+
+	// 3. Delete the tenant
+	return DB.Delete(&Tenant{}, "id = ?", tenantId).Error
 }
 
 // GetTenantByCode returns tenant by code

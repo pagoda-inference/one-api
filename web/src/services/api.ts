@@ -680,6 +680,9 @@ export interface SimpleTenant {
 export const getAllTenants = () =>
   api.get<{ success: boolean; data: SimpleTenant[] }>('/admin/tenants')
 
+export const deleteTenant = (id: number) =>
+  api.delete<{ success: boolean; message?: string }>(`/admin/tenants/${id}`)
+
 // Option APIs for system settings
 export const getOptions = () =>
   api.get<{ success: boolean; data: { key: string; value: string }[] }>('/option/')
