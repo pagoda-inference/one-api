@@ -283,6 +283,8 @@ func EmbeddingHandler(c *gin.Context, resp *http.Response, modelName string, ori
 			c.Writer.Header().Set(k, v[0])
 		}
 	}
+	// Delete Content-Length header since body was modified
+	c.Writer.Header().Del("Content-Length")
 	c.Writer.WriteHeader(http.StatusOK)
 	_, err = c.Writer.Write(respBody)
 	if err != nil {
