@@ -306,7 +306,7 @@ func GetChannelHealth(c *gin.Context) {
 		Status       string  `json:"status"`
 		Type         int     `json:"type"`
 		TypeName     string  `json:"type_name"`
-		Group        string  `json:"group"`
+		Provider     string  `json:"provider"`
 		BaseURL      string  `json:"base_url"`
 		SuccessRate  float64 `json:"success_rate"`
 		AvgLatency   int64   `json:"avg_latency"`
@@ -325,7 +325,7 @@ func GetChannelHealth(c *gin.Context) {
 			Status:     strconv.Itoa(ch.Status),
 			Type:       ch.Type,
 			TypeName:   channeltype.GetTypeName(ch.Type),
-			Group:      ch.Group,
+			Provider:   ch.Provider,
 			BaseURL:    ch.GetBaseURL(),
 			Priority:   int(ch.GetPriority()),
 			IsEnabled:  ch.Status == model.ChannelStatusEnabled,

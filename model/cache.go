@@ -181,14 +181,14 @@ func InitChannelCache() {
 	DB.Find(&abilities)
 	groups := make(map[string]bool)
 	for _, ability := range abilities {
-		groups[ability.Group] = true
+		groups[ability.Provider] = true
 	}
 	newGroup2model2channels := make(map[string]map[string][]*Channel)
 	for group := range groups {
 		newGroup2model2channels[group] = make(map[string][]*Channel)
 	}
 	for _, channel := range channels {
-		groups := strings.Split(channel.Group, ",")
+		groups := strings.Split(channel.Provider, ",")
 		for _, group := range groups {
 			models := strings.Split(channel.Models, ",")
 			for _, model := range models {

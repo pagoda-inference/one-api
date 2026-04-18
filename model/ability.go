@@ -12,7 +12,7 @@ import (
 )
 
 type Ability struct {
-	Group     string `json:"group" gorm:"type:varchar(32);primaryKey;autoIncrement:false"`
+	Provider  string `json:"provider" gorm:"type:varchar(32);primaryKey;autoIncrement:false"`
 	Model     string `json:"model" gorm:"primaryKey;autoIncrement:false"`
 	ChannelId int    `json:"channel_id" gorm:"primaryKey;autoIncrement:false;index"`
 	Enabled   bool   `json:"enabled"`
@@ -21,10 +21,10 @@ type Ability struct {
 
 func GetRandomSatisfiedChannel(group string, model string, ignoreFirstPriority bool) (*Channel, error) {
 	ability := Ability{}
-	groupCol := "`group`"
+	groupCol := "`provider`"
 	trueVal := "1"
 	if common.UsingPostgreSQL {
-		groupCol = `"group"`
+		groupCol = `"provider"`
 		trueVal = "true"
 	}
 
@@ -53,12 +53,12 @@ func GetRandomSatisfiedChannel(group string, model string, ignoreFirstPriority b
 func (channel *Channel) AddAbilities() error {
 	models_ := strings.Split(channel.Models, ",")
 	models_ = utils.DeDuplication(models_)
-	groups_ := strings.Split(channel.Group, ",")
+	groups_ := strings.Split(channel.Provider, ",")
 	abilities := make([]Ability, 0, len(models_))
 	for _, model := range models_ {
 		for _, group := range groups_ {
 			ability := Ability{
-				Group:     group,
+				Provider:  group,
 				Model:     model,
 				ChannelId: channel.Id,
 				Enabled:   channel.Status == ChannelStatusEnabled,
@@ -101,10 +101,10 @@ func GetGroupModels(ctx context.Context, group string) ([]string, error) {
 		group = "bedi"
 	}
 
-	groupCol := "`group`"
+	groupCol := "`provider`"
 	trueVal := "1"
 	if common.UsingPostgreSQL {
-		groupCol = `"group"`
+		groupCol = `"provider"`
 		trueVal = "true"
 	}
 
