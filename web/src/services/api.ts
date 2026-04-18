@@ -424,7 +424,7 @@ export const deleteChannel = (id: number) =>
 export const testChannel = (id: number) =>
   api.get<{ success: boolean; message?: string }>(`/channel/test/${id}`)
 
-export const getOpsUsers = (params?: { limit?: number; offset?: number }) =>
+export const getOpsUsers = (params?: { limit?: number; offset?: number; keyword?: string }) =>
   api.get('/admin/ops/users', { params })
 
 export const updateUser = (id: number, data: { group?: string; quota?: number; role?: number; status?: number }) =>

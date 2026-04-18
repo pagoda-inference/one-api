@@ -90,7 +90,7 @@ func GetOpsStats(c *gin.Context) {
 	stats.ActiveUsers = len(activeUserSet)
 
 	// Total quota - sum of all users' quota
-	allUsers, _ := model.GetAllUsers(0, 10000, "")
+	allUsers, _ := model.GetAllUsers(0, 10000, "", "")
 	var totalQuota int64
 	for _, u := range allUsers {
 		totalQuota += u.Quota
@@ -265,7 +265,7 @@ func GetOpsUsage(c *gin.Context) {
 	}
 
 	// Get all users with usage
-	users, _ := model.GetAllUsers(0, 1000, "")
+	users, _ := model.GetAllUsers(0, 1000, "", "")
 	userUsageMap := make(map[int]*UserUsage)
 
 	for _, u := range users {
@@ -382,23 +382,25 @@ func GetOpsUsers(c *gin.Context) {
 
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	offset, _ := strconv.Atoi(c.Query("offset"))
-	fmt.Printf("[DEBUG GetOpsUsers] limit=%d, offset=%d\n", limit, offset)
-	if limit <= 0 || limit > 100 {
-		limit = 20
+	keyword := c.Query("keyword")
+	fmt.Printf("[DEBUG GetOpsUsers] limit=%d, offset=%d, keyword=%s\n", limit, offset, keyword)
+	if limit <= 0 || limit > 1000 {
+		limit = 1000 // Increased to allow fetching more users for search
 	}
 	if offset < 0 {
 		offset = 0
 	}
 
-	users, err := model.GetAllUsers(offset, limit, "")
+	users, err := model.GetAllUsers(offset, limit, "", keyword)
 	fmt.Printf("[DEBUG GetOpsUsers] after GetAllUsers: users=%d, err=%v\n", len(users), err)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to get users"})
 		return
 	}
 
-	total, _ := model.CountUsers()
-	fmt.Printf("[DEBUG GetOpsUsers] total=%d\n", total)
+	// Note: total count with keyword filter would require a separate count query
+	// For now, we just return the filtered count as total
+	total := len(users)
 
 	// Enrich with usage data
 	type EnrichedUser struct {

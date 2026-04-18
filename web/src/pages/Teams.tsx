@@ -157,6 +157,9 @@ const Teams: React.FC = () => {
         if (currentTenant?.id === tenantId) {
           setCurrentTenant(null)
         }
+        if (selectedCompanyId) {
+          loadDepartments(selectedCompanyId)
+        }
       } else {
         message.error(res.data.message || '删除失败')
       }
@@ -184,19 +187,9 @@ const Teams: React.FC = () => {
   const searchUsers = async (keyword: string) => {
     try {
       setUserSearchLoading(true)
-      const res = await getOpsUsers({ limit: 50, offset: 0 })
+      const res = await getOpsUsers({ limit: 1000, offset: 0, keyword })
       if (res.data.success) {
-        const users = res.data.data.users || []
-        if (keyword) {
-          const kw = keyword.toLowerCase()
-          setAllUsers(users.filter((u: any) =>
-            u.username?.toLowerCase().includes(kw) ||
-            u.email?.toLowerCase().includes(kw) ||
-            u.display_name?.toLowerCase().includes(kw)
-          ))
-        } else {
-          setAllUsers(users)
-        }
+        setAllUsers(res.data.data.users || [])
       }
     } catch (error) {
       console.error('Failed to search users:', error)
@@ -348,8 +341,8 @@ const Teams: React.FC = () => {
                     创建公司
                   </Button>
                 ) : (
-                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)}>
-                    创建团队
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateDeptModalVisible(true)}>
+                    创建部门
                   </Button>
                 )}
               </>
@@ -381,7 +374,7 @@ const Teams: React.FC = () => {
                     <div key={d.id}>
                       <div style={{ fontWeight: 600, color: '#666', padding: '4px 0', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span>{d.name}</span>
-                        <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setCreateDeptModalVisible(true)} />
+                        <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)} />
                       </div>
                       {tenants.filter(t => t.department_id === d.id).map(t => (
                         <Card key={t.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === t.id ? '#e6f7ff' : '#fafafa' }}
@@ -390,6 +383,9 @@ const Teams: React.FC = () => {
                             <TeamOutlined />
                             <span style={{ fontWeight: currentTenant?.id === t.id ? 'bold' : 'normal' }}>{t.name}</span>
                             <Tag>{t.code}</Tag>
+                            <Popconfirm title="确定删除此团队？" onConfirm={(e) => { e?.stopPropagation(); handleDeleteTenant(t.id) }} onCancel={(e) => e?.stopPropagation()}>
+                              <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+                            </Popconfirm>
                           </Space>
                         </Card>
                       ))}
@@ -405,18 +401,6 @@ const Teams: React.FC = () => {
                   <TeamOutlined />
                   <span style={{ fontWeight: currentTenant?.id === t.id ? 'bold' : 'normal' }}>{t.name}</span>
                   <Tag>{t.code}</Tag>
-                  {isRoot && (
-                    <Button
-                      type="text"
-                      danger
-                      size="small"
-                      icon={<DeleteOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteTenant(t.id)
-                      }}
-                    />
-                  )}
                 </Space>
               </Card>
             ))}

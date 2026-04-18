@@ -29,6 +29,7 @@ type ModelRequest struct {
 	SortOrder     int     `json:"sort_order"`
 	RateLimitRPM  int     `json:"rate_limit_rpm"`
 	RateLimitTPM  int     `json:"rate_limit_tpm"`
+	VisibleToTeams string  `json:"visible_to_teams"`
 }
 
 type UploadLogoResponse struct {
@@ -93,6 +94,7 @@ func CreateModel(c *gin.Context) {
 		SortOrder:    req.SortOrder,
 		RateLimitRPM: req.RateLimitRPM,
 		RateLimitTPM: req.RateLimitTPM,
+		VisibleToTeams: req.VisibleToTeams,
 		CreatedAt:    time.Now().Unix(),
 		UpdatedAt:    time.Now().Unix(),
 	}
@@ -157,6 +159,10 @@ func UpdateModel(c *gin.Context) {
 		return
 	}
 
+	// 保存旧的 sort_order，用于后续判断是否需要重排
+	oldSortOrder := m.SortOrder
+	newSortOrder := oldSortOrder
+
 	// 更新字段
 	if req.Name != "" {
 		m.Name = req.Name
@@ -185,6 +191,7 @@ func UpdateModel(c *gin.Context) {
 		m.IconUrl = req.IconUrl
 	}
 	if req.SortOrder >= 0 {
+		newSortOrder = req.SortOrder
 		m.SortOrder = req.SortOrder
 	}
 	if req.RateLimitRPM >= 0 {
@@ -193,7 +200,25 @@ func UpdateModel(c *gin.Context) {
 	if req.RateLimitTPM >= 0 {
 		m.RateLimitTPM = req.RateLimitTPM
 	}
+	if req.VisibleToTeams != "" {
+		m.VisibleToTeams = req.VisibleToTeams
+	}
 	m.UpdatedAt = time.Now().Unix()
+
+	// 如果 sort_order 发生了变化，需要重排其他模型
+	if newSortOrder != oldSortOrder && newSortOrder > 0 {
+		if newSortOrder > oldSortOrder {
+			// 将 >= oldSortOrder+1 且 <= newSortOrder 的模型往后移动一位
+			model.DB.Model(&model.ModelInfo{}).
+				Where("sort_order > ? AND sort_order <= ?", oldSortOrder, newSortOrder).
+				Update("sort_order", gorm.Expr("sort_order - 1"))
+		} else {
+			// 将 >= newSortOrder 且 < oldSortOrder 的模型往前移动一位
+			model.DB.Model(&model.ModelInfo{}).
+				Where("sort_order >= ? AND sort_order < ?", newSortOrder, oldSortOrder).
+				Update("sort_order", gorm.Expr("sort_order + 1"))
+		}
+	}
 
 	err = m.Update()
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"gorm.io/gorm"
+
 	"github.com/pagoda-inference/one-api/common/helper"
 )
 
@@ -157,9 +159,28 @@ func GetAllMarketModels() ([]*ModelInfo, error) {
 	return models, err
 }
 
-// DeleteMarketModel deletes a model by ID
+// DeleteMarketModel deletes a model by ID and reorders subsequent models
 func DeleteMarketModel(id string) error {
-	return DB.Delete(&ModelInfo{}, "id = ?", id).Error
+	// Get the sort_order of the model being deleted
+	var model ModelInfo
+	if err := DB.First(&model, "id = ?", id).Error; err != nil {
+		return err
+	}
+	deletedSortOrder := model.SortOrder
+
+	// Delete the model
+	if err := DB.Delete(&ModelInfo{}, "id = ?", id).Error; err != nil {
+		return err
+	}
+
+	// Reorder: decrease sort_order by 1 for all models with sort_order > deleted model's sort_order
+	if deletedSortOrder > 0 {
+		DB.Model(&ModelInfo{}).
+			Where("sort_order > ?", deletedSortOrder).
+			Update("sort_order", gorm.Expr("sort_order - 1"))
+	}
+
+	return nil
 }
 
 // GetAllModels retrieves all models without status filter (for marketplace display)

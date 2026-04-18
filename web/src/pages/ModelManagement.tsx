@@ -405,7 +405,7 @@ const ModelManagement: React.FC = () => {
             label="可见团队"
             tooltip="不选择表示公共模型，选择团队则只有这些团队可见"
             valuePropName="value"
-            getValueProps={(value) => ({ value: value ? value.split(',').filter(Boolean).map(Number) : [] })}
+            getValueProps={(value) => ({ value: value ? value.split(',').filter(Boolean).map((v: string) => Number(v)) : [] })}
             getValueFromEvent={(values) => values && values.length > 0 ? ',' + values.join(',') + ',' : ''}
           >
             <Select

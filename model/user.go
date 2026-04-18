@@ -66,14 +66,20 @@ func GetUsersWithEmail() ([]*User, error) {
 	return users, err
 }
 
-func GetAllUsers(startIdx int, num int, order string) (users []*User, err error) {
-	fmt.Printf("[DEBUG] GetAllUsers called: startIdx=%d, num=%d, order=%s\n", startIdx, num, order)
+func GetAllUsers(startIdx int, num int, order string, keyword string) (users []*User, err error) {
+	fmt.Printf("[DEBUG] GetAllUsers called: startIdx=%d, num=%d, order=%s, keyword=%s\n", startIdx, num, order, keyword)
 
 	// Initialize explicitly to avoid nil slice issues
 	users = make([]*User, 0, num)
 
 	// Build base query
 	query := DB.Table("users").Where("status != ?", UserStatusDeleted)
+
+	// Apply keyword search
+	if keyword != "" {
+		kw := "%" + keyword + "%"
+		query = query.Where("username LIKE ? OR email LIKE ? OR display_name LIKE ?", kw, kw, kw)
+	}
 
 	// Apply ordering
 	switch order {

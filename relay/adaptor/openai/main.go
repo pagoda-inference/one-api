@@ -139,6 +139,8 @@ func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName st
 			if err != nil {
 				return ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
 			}
+			// Delete Content-Length since body size changed after model name replacement
+			delete(resp.Header, "Content-Length")
 		}
 
 		// Reset response body
@@ -181,6 +183,8 @@ func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName st
 			if err != nil {
 				return ErrorWrapper(err, "marshal_rerank_response_failed", http.StatusInternalServerError), nil
 			}
+			// Delete Content-Length since body size changed after model name replacement
+			delete(resp.Header, "Content-Length")
 		}
 
 		resp.Body = io.NopCloser(bytes.NewBuffer(responseBody))
