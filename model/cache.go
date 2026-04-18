@@ -190,6 +190,13 @@ func InitChannelCache() {
 	for _, channel := range channels {
 		groups := strings.Split(channel.Provider, ",")
 		for _, group := range groups {
+			if group == "" {
+				continue
+			}
+			// Ensure group exists in map (may not be in abilities yet)
+			if _, ok := newGroup2model2channels[group]; !ok {
+				newGroup2model2channels[group] = make(map[string][]*Channel)
+			}
 			models := strings.Split(channel.Models, ",")
 			for _, model := range models {
 				if _, ok := newGroup2model2channels[group][model]; !ok {
