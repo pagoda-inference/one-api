@@ -445,7 +445,7 @@ const OpsDashboard: React.FC = () => {
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: '名称', dataIndex: 'name', key: 'name' },
     { title: '类型', dataIndex: 'type_name', key: 'type_name' },
-    { title: 'Provider', dataIndex: 'group', key: 'group', width: 100 },
+    { title: 'Provider', dataIndex: 'provider', key: 'provider', width: 100 },
     { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
     {
       title: '成功率',
@@ -617,7 +617,7 @@ const OpsDashboard: React.FC = () => {
                 { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
                 { title: '名称', dataIndex: 'name', key: 'name' },
                 { title: '类型', dataIndex: 'type_name', key: 'type_name' },
-                { title: 'Group', dataIndex: 'group', key: 'group', width: 100 },
+                { title: 'Provider', dataIndex: 'provider', key: 'provider', width: 100 },
                 { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
                 { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
                 { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? <Tag color="green">启用</Tag> : v === 2 ? <Tag color="red">禁用</Tag> : <Tag>未知</Tag> },
@@ -851,7 +851,7 @@ const OpsDashboard: React.FC = () => {
           <Form.Item name="base_url" label="Base URL" rules={[{ required: true, message: '请输入Base URL' }]}>
             <Input placeholder="如: https://api.bedicloud.net/v1" />
           </Form.Item>
-          <Form.Item name="group" label="Provider" rules={[{ required: true, message: '请选择Provider' }]}>
+          <Form.Item name="provider" label="Provider" rules={[{ required: true, message: '请选择Provider' }]}>
             <Select
               showSearch
               allowClear

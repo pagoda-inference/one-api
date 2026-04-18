@@ -152,6 +152,8 @@ export interface ChannelHealth {
   name: string
   status: string
   type: number
+  type_name: string
+  provider: string
   base_url: string
   balance: number
   success_rate: number
@@ -395,7 +397,7 @@ export interface Channel {
   balance: number
   balance_updated_time: number
   models: string
-  group: string
+  provider: string
   used_quota: number
   model_mapping: string
   priority: number
