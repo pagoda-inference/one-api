@@ -130,47 +130,39 @@ func ListAllModels(c *gin.Context) {
 }
 
 func ListModels(c *gin.Context) {
-	ctx := c.Request.Context()
-	var availableModels []string
 	userId := c.GetInt(ctxkey.Id)
 
 	// Get user's team IDs for visibility filtering
 	tenantIds, _ := model.GetUserTenantIds(userId)
 
-	// Get all market models to check visibility
-	allMarketModels, _ := model.GetAllMarketModels()
-	visibleToTeamsMap := make(map[string]string) // model_id -> visible_to_teams
-	for _, m := range allMarketModels {
-		visibleToTeamsMap[m.Id] = m.VisibleToTeams
+	// Get all active models from model_info directly (no longer依赖 abilities 表)
+	allMarketModels, err := model.GetActiveModels("", 0, 0)
+	if err != nil {
+		allMarketModels, _ = model.GetAllMarketModels()
 	}
 
-	if c.GetString(ctxkey.AvailableModels) != "" {
-		availableModels = strings.Split(c.GetString(ctxkey.AvailableModels), ",")
-	} else {
-		userGroup, _ := model.CacheGetUserGroup(userId)
-		availableModels, _ = model.CacheGetGroupModels(ctx, userGroup)
-	}
-	availableOpenAIModels := make([]OpenAIModels, 0, len(availableModels))
-	for _, modelName := range availableModels {
+	// Build model list with visibility filtering
+	availableOpenAIModels := make([]OpenAIModels, 0, len(allMarketModels))
+	for _, m := range allMarketModels {
 		// Check visibility: public models (visibleToTeams="") or user's team is in visibleToTeams
-		visibleToTeams := visibleToTeamsMap[modelName]
-		if !isModelVisibleToUser(visibleToTeams, tenantIds) {
+		if !isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
 			continue // Skip models not visible to user
 		}
-		if model, ok := modelsMap[modelName]; ok {
+		if model, ok := modelsMap[m.Id]; ok {
 			availableOpenAIModels = append(availableOpenAIModels, model)
 		} else {
 			// Model not in models map, create entry on the fly
 			availableOpenAIModels = append(availableOpenAIModels, OpenAIModels{
-				Id:      modelName,
+				Id:      m.Id,
 				Object:  "model",
 				Created: 1626777600,
-				OwnedBy: "custom",
-				Root:    modelName,
+				OwnedBy: m.Provider,
+				Root:    m.Id,
 				Parent:  nil,
 			})
 		}
 	}
+
 	c.JSON(200, gin.H{
 		"object": "list",
 		"data":   availableOpenAIModels,
@@ -226,28 +218,30 @@ func RetrieveModel(c *gin.Context) {
 }
 
 func GetUserAvailableModels(c *gin.Context) {
-	ctx := c.Request.Context()
 	id := c.GetInt(ctxkey.Id)
-	userGroup, err := model.CacheGetUserGroup(id)
+
+	// Get user's team IDs for visibility filtering
+	tenantIds, _ := model.GetUserTenantIds(id)
+
+	// Get all active models from model_info directly
+	models, err := model.GetActiveModels("", 0, 0)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
-		return
+		models, _ = model.GetAllMarketModels()
 	}
-	models, err := model.CacheGetGroupModels(ctx, userGroup)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": err.Error(),
-		})
-		return
+
+	// Filter by visibility
+	var visibleModels []string
+	for _, m := range models {
+		if !isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+			continue
+		}
+		visibleModels = append(visibleModels, m.Id)
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    models,
+		"data":    visibleModels,
 	})
 	return
 }
