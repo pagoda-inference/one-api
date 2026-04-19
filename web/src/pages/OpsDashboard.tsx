@@ -602,7 +602,7 @@ const OpsDashboard: React.FC = () => {
               ]}
               rowKey="id"
               loading={usersLoading}
-              pagination={{ pageSize: 20, total: usersTotal, showTotal: (total) => t('ops.total_records', { count: total }) }}
+              pagination={{ pageSize: 20, total: usersTotal, showTotal: (total) => t('ops.total_records').replace('{count}', String(total)) }}
               onChange={(pagination) => loadUsers(((pagination.current || 1) - 1) * 20, 20)}
             />
           </Card>
@@ -639,7 +639,7 @@ const OpsDashboard: React.FC = () => {
               ]}
               rowKey="id"
               loading={channelsLoading}
-              pagination={{ pageSize: 10, total: channelsTotal, showTotal: (total) => t('ops.total_records', { count: total }) }}
+              pagination={{ pageSize: 10, total: channelsTotal, showTotal: (total) => t('ops.total_records').replace('{count}', String(total)) }}
               onChange={(pagination) => loadChannels(((pagination.current || 1) - 1) * 10, 10)}
             />
           </Card>
@@ -652,7 +652,7 @@ const OpsDashboard: React.FC = () => {
               columns={channelColumns}
               rowKey="id"
               size="small"
-              pagination={{ pageSize: 10, total: channelHealth.length, showTotal: (total) => t('ops.total_records', { count: total }) }}
+              pagination={{ pageSize: 10, total: channelHealth.length, showTotal: (total) => t('ops.total_records').replace('{count}', String(total)) }}
             />
           </Card>
         </TabPane>

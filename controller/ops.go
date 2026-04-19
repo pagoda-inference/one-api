@@ -398,9 +398,12 @@ func GetOpsUsers(c *gin.Context) {
 		return
 	}
 
-	// Note: total count with keyword filter would require a separate count query
-	// For now, we just return the filtered count as total
-	total := len(users)
+	// Get total count with the same keyword filter
+	total, err := model.GetTotalUsersCount(keyword)
+	if err != nil {
+		fmt.Printf("[DEBUG GetOpsUsers] failed to get total count: %v\n", err)
+		total = int64(len(users))
+	}
 
 	// Enrich with usage data
 	type EnrichedUser struct {

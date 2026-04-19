@@ -231,7 +231,8 @@ const ProviderManagement: React.FC = () => {
         dataSource={providers}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => t('provider.total_records', { total }) }}
+        scroll={{ x: true }}
+        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => t('provider.total_records').replace('{total}', String(total)) }}
       />
 
       <Modal

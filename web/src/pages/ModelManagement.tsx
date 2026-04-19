@@ -200,9 +200,9 @@ const ModelManagement: React.FC = () => {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'active': return t('modelManagement.status_active')
+      case 'active': return t('modelManagement.status_online')
       case 'maintenance': return t('modelManagement.status_maintenance')
-      case 'disabled': return t('modelManagement.status_disabled')
+      case 'disabled': return t('modelManagement.status_offline')
       default: return status
     }
   }
@@ -325,7 +325,7 @@ const ModelManagement: React.FC = () => {
           onChange: (keys) => setSelectedRowKeys(keys as string[]),
         }}
         scroll={{ x: true }}
-        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => t('common.total_records', { total }) }}
+        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => t('modelManagement.total_records').replace('{total}', String(total)) }}
       />
 
       <Modal

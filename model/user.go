@@ -66,6 +66,18 @@ func GetUsersWithEmail() ([]*User, error) {
 	return users, err
 }
 
+// GetTotalUsersCount returns the total count of users (excluding deleted) with optional keyword filter
+func GetTotalUsersCount(keyword string) (int64, error) {
+	var count int64
+	query := DB.Table("users").Where("status != ?", UserStatusDeleted)
+	if keyword != "" {
+		kw := "%" + keyword + "%"
+		query = query.Where("username LIKE ? OR email LIKE ? OR display_name LIKE ?", kw, kw, kw)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
 func GetAllUsers(startIdx int, num int, order string, keyword string) (users []*User, err error) {
 	fmt.Printf("[DEBUG] GetAllUsers called: startIdx=%d, num=%d, order=%s, keyword=%s\n", startIdx, num, order, keyword)
 

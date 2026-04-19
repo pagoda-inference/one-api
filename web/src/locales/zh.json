@@ -369,7 +369,8 @@
     "update_failed": "更新失败",
     "create_failed": "创建失败",
     "delete_failed": "删除失败",
-    "total_records": "共 {count} 条"
+    "total_records": "共 {count} 条",
+    "total_records_with_total": "共 {total} 条"
   },
   "invoice": {
     "invoice_record": "发票记录",
