@@ -4,60 +4,41 @@
 
 ---
 
-## 模型列表
+## 获取模型列表
 
-### 对话模型 (Chat)
+模型列表通过 API 动态获取：
 
-| 模型 ID | 说明 |
-|:--------|:-----|
-| bedi/glm-4.7 | GLM-4.7 对话模型 |
-| bedi/minimax-m2.5 | MiniMax M2.5 对话模型 |
-| bedi/kimi-k2.5 | Kimi K2.5 对话模型 |
-| bedi/deepseek-v3.1 | DeepSeek V3.1 对话模型 |
-| bedi/qwen3-235b-a22b | Qwen3 235B 大规模对话模型 |
-| bedi/qwen3-14b | Qwen3 14B 对话模型 |
-| bedi/qwen3-32b | Qwen3 32B 对话模型 |
-| bedi/qwen3-4b-instruct-2507 | Qwen3 4B 指令模型 |
-| bedi/qwen3-8b | Qwen3 8B 对话模型 |
-| bedi/qwen2.5-7b-instruct | Qwen2.5 7B 指令模型 |
-| bedi/qwen2.5-72b-instruct | Qwen2.5 72B 指令模型 |
-| bedi/deepseek-r1-distill-qwen-7b | DeepSeek R1 蒸馏 Qwen 7B |
-| bedi/deepseek-r1-distill-qwen-14b | DeepSeek R1 蒸馏 Qwen 14B |
-| bedi/deepseek-r1-distill-qwen-32b | DeepSeek R1 蒸馏 Qwen 32B |
-| bedi/qwq-32b | QwQ 32B 推理模型 |
+```bash
+curl https://your-domain.com/v1/models \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
 
+响应示例：
 
-### 视觉模型 (Vision)
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "bedi/glm-4",
+      "object": "model",
+      "name": "GLM-4 对话模型",
+      "provider": "bedi",
+      "type": "chat"
+    },
+    {
+      "id": "bedi/bge-m3",
+      "object": "model",
+      "name": "BGE-M3 向量化模型",
+      "provider": "bedi",
+      "type": "embedding"
+    }
+  ]
+}
+```
 
-| 模型 ID | 说明 |
-|:--------|:-----|
-| bedi/qwen2.5-vl-72b-instruct | Qwen2.5 VL 72B 指令模型 |
-| bedi/qwen3-vl-30b-a3b-instruct | Qwen3 VL 30B 指令模型 |
-| bedi/qwen3-vl-8b | Qwen3 VL 8B 对话模型 |
-| bedi/qwen2.5-vl-7b | Qwen2.5 VL 7B 对话模型 |
-
-### Embedding 模型
-
-| 模型 ID | 说明 |
-|:--------|:-----|
-| bedi/bge-m3 | BGE-M3 多语言向量化模型 |
-| bedi/qwen3-embedding-0.6b | Qwen3 Embedding 0.6B |
-| bedi/qwen3-embedding-8b | Qwen3 Embedding 8B |
-
-### Reranker 模型
-
-| 模型 ID | 说明 |
-|:--------|:-----|
-| bedi/bge-reranker | BGE Reranker 重排序模型 |
-| bedi/qwen3-reranker-0.6b | Qwen3 Reranker 0.6B |
-| bedi/qwen3-reranker-8b | Qwen3 Reranker 8B |
-
-### OCR 模型
-
-| 模型 ID | 说明 |
-|:--------|:-----|
-| bedi/ocrflux-3b | OCRFLUX 3B 文字识别 |
-| bedi/mineru | Mineru 文档解析 |
+> [!NOTE]
+> 具体模型列表由管理员配置，请以实际 API 返回为准。
 
 ---
 
@@ -67,15 +48,15 @@
 
 | 类型 | 说明 |
 |:-----|:-----|
-| 对话模型 | 文本对话生成 |
-| 视觉模型 | 图文理解 |
-| Embedding | 文本向量化 |
-| Reranker | 文本重排序 |
-| OCR | 文字识别/文档解析 |
+| chat | 文本对话生成 |
+| vlm | 视觉模型（图文理解）|
+| embedding | 文本向量化 |
+| reranker | 文本重排序 |
+| ocr | 文字识别/文档解析 |
 
 ### 按供应商筛选
 
-支持按 **Provider（供应商）** 分组浏览，当前只有一个供应商 **BEDI**。
+支持按 **Provider（供应商）** 分组浏览。
 
 ---
 
@@ -157,7 +138,7 @@ openai.api_key = "your-api-key"
 openai.api_base = "https://baotaai.bedicloud.net/v1"
 
 response = openai.ChatCompletion.create(
-    model="glm-4",
+    model="bedi/glm-4",
     messages=[
         {"role": "system", "content": "你是一个有用的助手"},
         {"role": "user", "content": "你好"}
