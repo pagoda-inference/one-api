@@ -33,7 +33,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/lark-apps", controller.GetEnabledLarkOAuthApps)
 		apiRouter.GET("/oauth/wechat/bind", middleware.CriticalRateLimit(), middleware.UserAuth(), auth.WeChatBind)
 		apiRouter.GET("/oauth/email/bind", middleware.CriticalRateLimit(), middleware.UserAuth(), controller.EmailBind)
-		apiRouter.POST("/topup", middleware.AdminAuth(), controller.AdminTopUp)
+		apiRouter.POST("/topup", middleware.AdminTokenAuth(), controller.AdminTopUp)
 
 		// Payment callback routes (no auth - called by payment providers)
 		apiRouter.POST("/callback/alipay", controller.AlipayNotify)
@@ -101,7 +101,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		// Admin market routes
 		adminMarketRoute := apiRouter.Group("/admin/market")
-		adminMarketRoute.Use(middleware.AdminAuth())
+		adminMarketRoute.Use(middleware.AdminTokenAuth())
 		{
 			adminMarketRoute.POST("/pricing", controller.SetModelPricing)
 			// ModelGroup CRUD is deprecated - use channels.group for provider concept
@@ -149,7 +149,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		// Admin routes
 		adminRoute := apiRouter.Group("/admin")
-		adminRoute.Use(middleware.AdminAuth())
+		adminRoute.Use(middleware.AdminTokenAuth())
 		{
 			adminRoute.GET("/", controller.GetAllUsers)
 			adminRoute.GET("/search", controller.SearchUsers)
@@ -213,7 +213,7 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.PUT("/", controller.UpdateOption)
 		}
 		channelRoute := apiRouter.Group("/channel")
-		channelRoute.Use(middleware.AdminAuth())
+		channelRoute.Use(middleware.AdminTokenAuth())
 		{
 			channelRoute.GET("/", controller.GetAllChannels)
 			channelRoute.GET("/groups", controller.GetDistinctChannelGroups)
@@ -240,7 +240,7 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 		}
 		redemptionRoute := apiRouter.Group("/redemption")
-		redemptionRoute.Use(middleware.AdminAuth())
+		redemptionRoute.Use(middleware.AdminTokenAuth())
 		{
 			redemptionRoute.GET("/", controller.GetAllRedemptions)
 			redemptionRoute.GET("/search", controller.SearchRedemptions)
@@ -250,11 +250,11 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
 		}
 		logRoute := apiRouter.Group("/log")
-		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
-		logRoute.DELETE("/", middleware.AdminAuth(), controller.DeleteHistoryLogs)
-		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
+		logRoute.GET("/", middleware.AdminTokenAuth(), controller.GetAllLogs)
+		logRoute.DELETE("/", middleware.AdminTokenAuth(), controller.DeleteHistoryLogs)
+		logRoute.GET("/stat", middleware.AdminTokenAuth(), controller.GetLogsStat)
 		logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
-		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)
+		logRoute.GET("/search", middleware.AdminTokenAuth(), controller.SearchAllLogs)
 		logRoute.GET("/self", middleware.UserAuth(), controller.GetUserLogs)
 		logRoute.GET("/self/search", middleware.UserAuth(), controller.SearchUserLogs)
 		usageRoute := apiRouter.Group("/usage")
@@ -275,7 +275,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminUsageRoute.GET("/by-models", controller.AdminGetUsageByModels)
 		}
 		groupRoute := apiRouter.Group("/group")
-		groupRoute.Use(middleware.AdminAuth())
+		groupRoute.Use(middleware.AdminTokenAuth())
 		{
 			groupRoute.GET("/", controller.GetGroups)
 		}
