@@ -11,7 +11,7 @@
 
 ### Admin Token（推荐）
 
-用于计量类 API：
+可用于所有 Admin API（包括计量、用户、渠道、模型管理等）：
 
 ```http
 Authorization: Bearer {your_admin_token}
@@ -242,7 +242,7 @@ GET /api/admin/channels/health
         "status": "1",
         "type": 50,
         "type_name": "OpenAI兼容",
-        "group": "bedi",
+        "provider": "bedi",
         "base_url": "https://api.bedicloud.net/v1",
         "success_rate": 99.5,
         "avg_latency": 150,
@@ -561,9 +561,6 @@ PUT /api/option/
 ---
 
 ## 计量 API（Admin Token）
-
-> [!NOTE]
-> 计量类 API 使用独立的 Admin Token 认证，与登录态不同。
 
 ### 用量汇总
 
