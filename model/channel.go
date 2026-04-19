@@ -152,7 +152,7 @@ func (channel *Channel) Insert() error {
 
 func (channel *Channel) Update() error {
 	var err error
-	err = DB.Model(channel).Select("name", "type", "base_url", "key", "status", "models", "group", "priority", "model_mapping", "config", "system_prompt", "balance", "used_quota", "other", "weight", "response_time", "test_time").Updates(channel).Error
+	err = DB.Model(channel).Select("name", "type", "base_url", "key", "status", "models", "provider", "priority", "model_mapping", "config", "system_prompt", "balance", "used_quota", "other", "weight", "response_time", "test_time").Updates(channel).Error
 	if err != nil {
 		return err
 	}

@@ -24,6 +24,9 @@ func GetMarketModels(c *gin.Context) {
 		offset = 0
 	}
 
+	userId := c.GetInt(ctxkey.Id)
+	tenantIds, _ := model.GetUserTenantIds(userId)
+
 	var err error
 	var models []*model.ModelInfo
 
@@ -41,23 +44,26 @@ func GetMarketModels(c *gin.Context) {
 		return
 	}
 
-	total, _ := model.CountAllModels(modelType)
-
-	// Format response
-	data := make([]gin.H, len(models))
-	for i, m := range models {
-		data[i] = formatModelInfo(m)
+	// Format response with visibility filtering
+	data := make([]gin.H, 0, len(models))
+	for _, m := range models {
+		// Check visibility: public models (visibleToTeams="") or user's team is in visibleToTeams
+		if !isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+			continue // Skip models not visible to user
+		}
+		data = append(data, formatModelInfo(m))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
 			"models": data,
-			"total":  total,
+			"total":  len(data),
 			"limit":  limit,
 			"offset": offset,
 		},
 	})
+	return
 }
 
 // GetMarketModel handles GET /api/market/models/:id
