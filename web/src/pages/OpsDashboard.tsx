@@ -512,7 +512,7 @@ const OpsDashboard: React.FC = () => {
               precision={1}
             />
             <div style={{ marginTop: 8, color: '#666', fontSize: 12 }}>
-              {t('ops.channels_online', { count: enabledCount, total: totalChannels })}
+              {t('ops.channels_online').replace('{count}', String(enabledCount)).replace('{total}', String(totalChannels))}
             </div>
           </Card>
         </Col>
