@@ -1,12 +1,16 @@
 package controller
 
 import (
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
+	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
-	"net/http"
-	"strconv"
 )
 
 func GetAllLogs(c *gin.Context) {
@@ -166,4 +170,40 @@ func DeleteHistoryLogs(c *gin.Context) {
 		"data":    count,
 	})
 	return
+}
+
+// StartLogCleanupWorker 启动日志清理定时任务
+func StartLogCleanupWorker() {
+	if config.LogRetentionDays <= 0 {
+		return
+	}
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			CleanupOldLogs()
+		}
+	}()
+	logger.SysLog("Log cleanup worker started, retention: " + fmt.Sprintf("%d", config.LogRetentionDays) + " days")
+}
+
+// CleanupOldLogs 清理超期日志
+func CleanupOldLogs() {
+	if config.LogRetentionDays <= 0 {
+		return
+	}
+	targetTimestamp := time.Now().Unix() - int64(config.LogRetentionDays)*86400
+
+	// 1. 先存档（清理前把累计总额保存）
+	if err := model.ArchiveUsageBefore(targetTimestamp); err != nil {
+		logger.SysError("Failed to archive usage: " + err.Error())
+	}
+
+	// 2. 再清理
+	count, err := model.DeleteOldLog(targetTimestamp)
+	if err != nil {
+		logger.SysError("Log cleanup failed: " + err.Error())
+	} else if count > 0 {
+		logger.SysLog(fmt.Sprintf("Log cleanup: deleted %d records before %s", count, time.Unix(targetTimestamp, 0).Format("2006-01-02")))
+	}
 }

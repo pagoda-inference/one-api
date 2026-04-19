@@ -217,6 +217,15 @@ func AdminGetUsageSummary(c *gin.Context) {
 	quota := model.SumUsedQuota(model.LogTypeConsume, startTimestamp, endTimestamp, modelName, "", tokenName, channelId)
 	tokens := model.SumUsedTokenSeparate(model.LogTypeConsume, startTimestamp, endTimestamp, modelName, "", tokenName)
 
+	// If querying all-time (no start timestamp), add archived data
+	if startTimestamp == 0 {
+		if archived, err := model.GetArchivedUsage(); err == nil {
+			quota += int64(archived.TotalQuota)
+			tokens.PromptTokens += archived.PromptTokens
+			tokens.CompletionTokens += archived.CompletionTokens
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{

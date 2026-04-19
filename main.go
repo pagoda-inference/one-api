@@ -108,6 +108,8 @@ func main() {
 
 	// Start payment cleanup worker
 	controller.StartPaymentCleanupWorker()
+	// Start log cleanup worker
+	controller.StartLogCleanupWorker()
 	if config.PaymentEnabled {
 		logger.SysLog(fmt.Sprintf("payment enabled: exchange_rate=%.2f", config.PaymentExchangeRate))
 	}

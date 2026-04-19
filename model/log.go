@@ -244,6 +244,58 @@ func DeleteOldLog(targetTimestamp int64) (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
+type UsageArchive struct {
+	Id                int   `gorm:"primarykey"`
+	ArchivedAt        int64 `gorm:"bigint"`
+	TotalQuota        int64 `gorm:"default:0"`
+	TotalTokens       int64 `gorm:"default:0"`
+	PromptTokens      int64 `gorm:"default:0"`
+	CompletionTokens  int64 `gorm:"default:0"`
+}
+
+func (UsageArchive) TableName() string {
+	return "usage_archives"
+}
+
+// ArchiveUsageBefore archives cumulative usage before targetTimestamp
+func ArchiveUsageBefore(targetTimestamp int64) error {
+	var result struct {
+		TotalQuota        int64
+		TotalTokens       int64
+		PromptTokens      int64
+		CompletionTokens  int64
+	}
+
+	err := LOG_DB.Model(&Log{}).
+		Where("created_at < ? AND type = ?", targetTimestamp, LogTypeConsume).
+		Select("COALESCE(SUM(quota),0) as total_quota, COALESCE(SUM(prompt_tokens+completion_tokens),0) as total_tokens, COALESCE(SUM(prompt_tokens),0) as prompt_tokens, COALESCE(SUM(completion_tokens),0) as completion_tokens").
+		Scan(&result).Error
+	if err != nil {
+		return err
+	}
+
+	if result.TotalQuota > 0 || result.TotalTokens > 0 {
+		archive := &UsageArchive{
+			ArchivedAt:        helper.GetTimestamp(),
+			TotalQuota:        result.TotalQuota,
+			TotalTokens:       result.TotalTokens,
+			PromptTokens:      result.PromptTokens,
+			CompletionTokens:  result.CompletionTokens,
+		}
+		return LOG_DB.Create(archive).Error
+	}
+	return nil
+}
+
+// GetArchivedUsage returns the sum of all archived usage
+func GetArchivedUsage() (UsageArchive, error) {
+	var result UsageArchive
+	err := LOG_DB.Model(&UsageArchive{}).
+		Select("COALESCE(SUM(total_quota),0) as total_quota, COALESCE(SUM(total_tokens),0) as total_tokens, COALESCE(SUM(prompt_tokens),0) as prompt_tokens, COALESCE(SUM(completion_tokens),0) as completion_tokens").
+		Scan(&result).Error
+	return result, err
+}
+
 type LogStatistic struct {
 	Day              string `json:"day" gorm:"column:day"`
 	ModelName        string `json:"model_name" gorm:"column:model_name"`
