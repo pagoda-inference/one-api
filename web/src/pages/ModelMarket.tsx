@@ -4,13 +4,83 @@ import {
   SearchOutlined, RobotOutlined, SyncOutlined,
   ExperimentOutlined, AppstoreOutlined, BarsOutlined,
   ThunderboltOutlined, PictureOutlined, AudioOutlined, FileTextOutlined,
-  LockOutlined
+  LockOutlined, CopyOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../contexts/ThemeContext'
 import { getMarketModels, getMarketStats, getMarketGroups, getModelTrial, startModelTrial, calculatePrice, Model, ModelGroup, MarketStats } from '../services/api'
 
 const { Search } = Input
+
+// 根据模型类型生成示例代码
+const getModelExample = (modelId: string, modelType: string): string => {
+  const apiBase = 'https://baotaAI.bedicloud.net/v1'
+
+  // MinerU special case
+  if (modelId.toLowerCase().includes('mineru')) {
+    return `curl -X POST ${apiBase}/file_parse \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -F "files=@/path/to/document.pdf" \\
+  -F "model=${modelId}"`
+  }
+
+  switch (modelType) {
+    case 'embedding':
+      return `import openai
+openai.api_key = "your-api-key"
+openai.api_base = "${apiBase}"
+
+response = openai.Embedding.create(
+    model="${modelId}",
+    input="Hello world"
+)
+print(response['data'][0]['embedding'])`
+
+    case 'reranker':
+      return `curl -X POST ${apiBase}/rerank \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${modelId}",
+    "query": "Hello world",
+    "documents": ["Hello world", "Goodbye world"]
+  }'`
+
+    case 'image':
+      return `import openai
+openai.api_key = "your-api-key"
+openai.api_base = "${apiBase}"
+
+response = openai.Image.create(
+    model="${modelId}",
+    prompt="A cute puppy"
+)
+print(response['data'][0]['url'])`
+
+    case 'audio':
+      return `import openai
+openai.api_key = "your-api-key"
+openai.api_base = "${apiBase}"
+
+with open("audio.mp3", "rb") as f:
+    response = openai.Audio.transcribe(
+        model="${modelId}",
+        file=f
+    )
+print(response['text'])`
+
+    default: // chat, vlm, ocr, video, other
+      return `import openai
+openai.api_key = "your-api-key"
+openai.api_base = "${apiBase}"
+
+response = openai.ChatCompletion.create(
+    model="${modelId}",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(response['choices'][0]['message']['content'])`
+  }
+}
 
 const ModelMarket: React.FC = () => {
   const { t } = useTranslation()
@@ -810,6 +880,18 @@ const ModelMarket: React.FC = () => {
 
             <Card
               title="使用示例"
+              extra={
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => {
+                    navigator.clipboard.writeText(getModelExample(selectedModel.id, selectedModel.model_type))
+                    message.success('已复制')
+                  }}
+                >
+                  复制
+                </Button>
+              }
               style={{ borderRadius: 12 }}
               styles={{ header: { borderRadius: '12px 12px 0 0' } }}
             >
@@ -822,14 +904,7 @@ const ModelMarket: React.FC = () => {
                 fontFamily: 'Monaco, Consolas, monospace',
                 overflow: 'auto'
               }}>
-{`import openai
-openai.api_key = "your-api-key"
-openai.api_base = "https://baotaai.bedicloud.net/v1"
-
-response = openai.ChatCompletion.create(
-    model="${selectedModel.id}",
-    messages=[{"role": "user", "content": "Hello!"}]
-)`}
+{getModelExample(selectedModel.id, selectedModel.model_type)}
               </pre>
             </Card>
           </div>

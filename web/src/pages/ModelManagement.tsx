@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, Upload, message, Popconfirm, Row } from 'antd'
+import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, Upload, message, Popconfirm, Row, Checkbox } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, DatabaseOutlined, PictureOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { listModels, createModel, updateModel, deleteModel, batchDeleteModels, uploadModelLogo, getModelTypes, getModelStatuses, getProviders, listLogos, deleteLogo, getAllTenants, ModelItem, Provider, SimpleTenant } from '../services/api'
@@ -388,6 +388,10 @@ const ModelManagement: React.FC = () => {
 
           <Form.Item name="status" label="状态">
             <Select options={modelStatuses} placeholder="选择状态" />
+          </Form.Item>
+
+          <Form.Item name="is_trial" valuePropName="checked">
+            <Checkbox>支持试用</Checkbox>
           </Form.Item>
 
           <Row gutter={16}>
