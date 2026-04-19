@@ -1,5 +1,6 @@
 * 用户手册
 
+  * [AI Agent 开发](/user/SKILL)
   * [首页](/user/)
   * [账户管理](/user/account)
   * [模型广场](/user/models)
@@ -10,3 +11,4 @@
   * [发票管理](/user/invoices)
   * [系统通知](/user/notifications)
   * [签到奖励](/user/signin)
+  * [团队管理](/user/teams)

@@ -6,6 +6,7 @@
 
 | 章节 | 说明 |
 |------|------|
+| [AI Agent 开发](/user/SKILL) | 构建 AI Agent 指南 |
 | [账户管理](/user/account) | 登录方式、个人信息、修改密码 |
 | [模型广场](/user/models) | 浏览、搜索、试用 AI 模型 |
 | [API Keys](/user/api-keys) | 创建、管理 API 访问密钥 |

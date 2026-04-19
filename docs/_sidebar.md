@@ -4,6 +4,7 @@
   * [运维手册](README#运维手册)
 
 * 用户手册
+  * [AI Agent 开发](user/SKILL)
   * [账户管理](user/account)
   * [模型广场](user/models)
   * [API Keys](user/api-keys)
@@ -15,6 +16,7 @@
   * [签到奖励](user/signin)
 
 * 运维手册
+  * [AI Agent 运营](ops/SKILL)
   * [运营管理](ops/operator)
   * [模型管理](ops/models)
   * [Provider 管理](ops/providers)

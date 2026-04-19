@@ -9,6 +9,7 @@
 ### 用户手册
 
 - [用户手册首页](user/) - 面向终端用户的使用指南
+- [AI Agent 开发](user/SKILL) - 构建 AI Agent 指南（SDK、Function Calling、Streaming）
 - [账户管理](user/account) - 登录、注册、修改密码
 - [模型广场](user/models) - 浏览和试用 AI 模型
 - [API Keys](user/api-keys) - API 密钥管理
@@ -23,6 +24,7 @@
 ### 运维手册
 
 - [运维手册首页](ops/) - 面向运维人员的管理指南
+- [AI Agent 运营](ops/SKILL) - 运维 AI Agent 指南（Channel、Model、Quota 管理）
 - [运营管理](ops/operator) - 营收概览、用户管理、渠道管理、配额设置、系统设置
 - [模型管理](ops/models) - 模型列表和价格
 - [Provider 管理](ops/providers) - Provider 实体管理
