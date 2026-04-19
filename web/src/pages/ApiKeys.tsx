@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Popconfirm, Row, Col, Switch, Select } from 'antd'
 import { PlusOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, EyeInvisibleOutlined, EditOutlined } from '@ant-design/icons'
 import { getTokens, createToken, deleteToken, updateToken, getMarketModels } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 interface Token {
   id: number
@@ -22,6 +23,7 @@ interface Token {
 }
 
 const ApiKeys: React.FC = () => {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [tokens, setTokens] = useState<Token[]>([])
   const [modalVisible, setModalVisible] = useState(false)
@@ -60,7 +62,7 @@ const ApiKeys: React.FC = () => {
       // Transform data to match Token interface
       const tokenData = (res.data.data || []).map((t: any) => ({
         id: t.id,
-        name: t.name || '未命名',
+        name: t.name || t('common.no_data'),
         key: t.key ? `sk-${t.key.substring(0, 8)}...` : '',  // 用于显示
         fullKey: t.key ? `sk-${t.key}` : '',  // 用于复制
         status: t.status === 1 ? 'active' : 'disabled',
@@ -90,12 +92,12 @@ const ApiKeys: React.FC = () => {
         name: values.name,
         models: values.models?.join(','),
       })
-      message.success('API Key 创建成功')
+      message.success(t('token.api_key_created'))
       setModalVisible(false)
       form.resetFields()
       loadTokens()
     } catch (error) {
-      message.error('创建失败')
+      message.error(t('token.create_failed'))
     } finally {
       setCreateLoading(false)
     }
@@ -127,27 +129,27 @@ const ApiKeys: React.FC = () => {
         rate_limit_concurrent: values.rate_limit_concurrent,
         models: values.models?.join(','),
       })
-      message.success('更新成功')
+      message.success(t('token.update_success'))
       setEditModalVisible(false)
       loadTokens()
     } catch (error) {
-      message.error('更新失败')
+      message.error(t('token.update_failed'))
     }
   }
 
   const handleDelete = async (id: number) => {
     try {
       await deleteToken(id)
-      message.success('已删除')
+      message.success(t('token.deleted'))
       loadTokens()
     } catch (error) {
-      message.error('删除失败')
+      message.error(t('token.delete_failed'))
     }
   }
 
   const copyKey = (key: string) => {
     navigator.clipboard.writeText(key)
-    message.success('已复制到剪贴板')
+    message.success(t('token.copy_success'))
   }
 
   const formatQuota = (quota: number) => {
@@ -161,9 +163,9 @@ const ApiKeys: React.FC = () => {
   }
 
   const columns = [
-    { title: '名称', dataIndex: 'name', key: 'name' },
+    { title: t('common.name'), dataIndex: 'name', key: 'name' },
     {
-      title: 'API Key',
+      title: t('token.api_key'),
       dataIndex: 'key',
       key: 'key',
       render: (key: string, record: Token) => (
@@ -182,13 +184,13 @@ const ApiKeys: React.FC = () => {
       )
     },
     {
-      title: '已用额度',
+      title: t('token.used_quota'),
       dataIndex: 'used_quota',
       key: 'used_quota',
       render: (v: number) => formatQuota(v)
     },
     {
-      title: '剩余额度',
+      title: t('token.remaining_quota'),
       dataIndex: 'remain_quota',
       key: 'remain_quota',
       render: (v: number) => (
@@ -198,29 +200,29 @@ const ApiKeys: React.FC = () => {
       )
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
         <Tag color={status === 'active' ? 'green' : 'red'}>
-          {status === 'active' ? '启用' : '禁用'}
+          {status === 'active' ? t('channel.enabled') : t('channel.disabled')}
         </Tag>
       )
     },
     {
-      title: '创建时间',
+      title: t('token.created_time'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (v: number) => new Date(v * 1000).toLocaleString()
     },
     {
-      title: '最近使用',
+      title: t('token.last_used'),
       dataIndex: 'accessed_at',
       key: 'accessed_at',
-      render: (v: number) => v > 0 ? new Date(v * 1000).toLocaleString() : '从未使用'
+      render: (v: number) => v > 0 ? new Date(v * 1000).toLocaleString() : t('token.never_used')
     },
     {
-      title: '限流(RPM/TPM/并发)',
+      title: t('token.rate_limit_rpm_tpm'),
       key: 'rate_limit',
       render: (_: any, record: Token) => {
         const rpm = record.rate_limit_rpm || 0
@@ -229,20 +231,20 @@ const ApiKeys: React.FC = () => {
         const parts = []
         if (rpm > 0) parts.push(`RPM:${rpm}`)
         if (tpm > 0) parts.push(`TPM:${tpm}`)
-        if (concurrent > 0) parts.push(`并发:${concurrent}`)
-        return parts.length > 0 ? <Tag>{parts.join(' / ')}</Tag> : <Tag color="green">无限制</Tag>
+        if (concurrent > 0) parts.push(`${t('token.concurrent')}:${concurrent}`)
+        return parts.length > 0 ? <Tag>{parts.join(' / ')}</Tag> : <Tag color="green">{t('token.unlimited')}</Tag>
       }
     },
     {
-      title: '允许模型',
+      title: t('token.allowed_models'),
       key: 'models',
       render: (_: any, record: Token) => {
         if (!record.models) {
-          return <Tag color="blue">全部模型</Tag>
+          return <Tag color="blue">{t('token.all_models')}</Tag>
         }
         const modelList = record.modelNames
         if (modelList.length === 0) {
-          return <Tag color="blue">全部模型</Tag>
+          return <Tag color="blue">{t('token.all_models')}</Tag>
         }
         if (modelList.length > 3) {
           return <Tag>{modelList.slice(0, 3).join(', ')}...</Tag>
@@ -251,21 +253,21 @@ const ApiKeys: React.FC = () => {
       }
     },
     {
-      title: '操作',
+      title: t('common.action'),
       key: 'action',
       render: (_: any, record: Token) => (
         <Space>
           <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Popconfirm
-            title="确定要删除这个API Key吗？"
+            title={t('token.confirm_delete_key')}
             onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button type="text" danger size="small" icon={<DeleteOutlined />}>
-              删除
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -276,10 +278,10 @@ const ApiKeys: React.FC = () => {
   return (
     <div>
       <Card
-        title="API Keys"
+        title={t('menu.tokens')}
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
-            创建新的 Key
+            {t('token.create_new_api_key')}
           </Button>
         }
       >
@@ -292,9 +294,9 @@ const ApiKeys: React.FC = () => {
         />
       </Card>
 
-      <Card title="使用说明" style={{ marginTop: 16 }}>
+      <Card title={t('token.usage_instructions')} style={{ marginTop: 16 }}>
         <div style={{ color: '#666' }}>
-          <h4>API Key 使用方法</h4>
+          <h4>{t('token.api_key_usage_method')}</h4>
           <pre style={{ background: '#f5f5f5', padding: 16, borderRadius: 8 }}>
 {`import openai
 openai.api_key = "your-api-key"
@@ -306,18 +308,18 @@ response = openai.ChatCompletion.create(
 )`}
           </pre>
 
-          <h4 style={{ marginTop: 16 }}>注意事项</h4>
+          <h4 style={{ marginTop: 16 }}>{t('token.notes')}</h4>
           <ul>
-            <li>API Key 可显示，请妥善保管</li>
-            <li>每个Key都有独立的额度限制</li>
-            <li>可以设置Key的使用模型限制</li>
-            <li>建议定期轮换Key以保障安全</li>
+            <li>{t('token.api_key_display_warning')}</li>
+            <li>{t('token.each_key_independent_quota')}</li>
+            <li>{t('token.can_set_model_restrictions')}</li>
+            <li>{t('token.rotate_keys_regularly')}</li>
           </ul>
         </div>
       </Card>
 
       <Modal
-        title="创建新的 API Key"
+        title={t('token.create_new_api_key')}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
@@ -325,19 +327,19 @@ response = openai.ChatCompletion.create(
         <Form form={form} onFinish={handleCreate} layout="vertical">
           <Form.Item
             name="name"
-            label="Key 名称"
-            rules={[{ required: true, message: '请输入Key名称' }]}
+            label={t('token.key_name')}
+            rules={[{ required: true, message: t('token.enter_key_name') }]}
           >
-            <Input placeholder="如: 开发环境 Key" />
+            <Input placeholder={t('token.like_dev_env_key')} />
           </Form.Item>
           <Form.Item
             name="models"
-            label="允许模型"
-            tooltip="不选择则表示允许所有模型"
+            label={t('token.allowed_models')}
+            tooltip={t('token.no_selection_allow_all')}
           >
             <Select
               mode="multiple"
-              placeholder="不选择则允许所有模型"
+              placeholder={t('token.no_selection_allow_all')}
               allowClear
               options={availableModels.map(m => ({ label: m.name, value: m.id }))}
               style={{ width: '100%' }}
@@ -347,10 +349,10 @@ response = openai.ChatCompletion.create(
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={createLoading}>
-                创建
+                {t('common.add')}
               </Button>
               <Button onClick={() => setModalVisible(false)}>
-                取消
+                {t('common.cancel')}
               </Button>
             </Space>
           </Form.Item>
@@ -358,55 +360,55 @@ response = openai.ChatCompletion.create(
       </Modal>
 
       <Modal
-        title="编辑 API Key"
+        title={t('channel.edit_channel')}
         open={editModalVisible}
         onCancel={() => setEditModalVisible(false)}
         footer={null}
       >
         <Form form={editForm} onFinish={handleUpdate} layout="vertical">
-          <Form.Item name="name" label="Key 名称" rules={[{ required: true, message: '请输入Key名称' }]}>
-            <Input placeholder="如: 开发环境 Key" />
+          <Form.Item name="name" label={t('token.key_name')} rules={[{ required: true, message: t('token.enter_key_name') }]}>
+            <Input placeholder={t('token.like_dev_env_key')} />
           </Form.Item>
-          <Form.Item name="models" label="允许模型" tooltip="不选择则表示允许所有模型">
+          <Form.Item name="models" label={t('token.allowed_models')} tooltip={t('token.no_selection_allow_all')}>
             <Select
               mode="multiple"
-              placeholder="不选择则允许所有模型"
+              placeholder={t('token.no_selection_allow_all')}
               allowClear
               options={availableModels.map(m => ({ label: m.name, value: m.id }))}
               style={{ width: '100%' }}
               maxTagCount={3}
             />
           </Form.Item>
-          <Form.Item name="status" label="状态" valuePropName="checked">
-            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+          <Form.Item name="status" label={t('common.status')} valuePropName="checked">
+            <Switch checkedChildren={t('channel.enabled')} unCheckedChildren={t('channel.disabled')} />
           </Form.Item>
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item name="rate_limit_rpm" label="RPM (请求/分钟)">
-                <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+              <Form.Item name="rate_limit_rpm" label={t('token.rpm_limit')}>
+                <InputNumber style={{ width: '100%' }} placeholder={t('token.no_limit')} min={0} />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="rate_limit_tpm" label="TPM (Token/分钟)">
-                <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+              <Form.Item name="rate_limit_tpm" label={t('token.tpm_limit')}>
+                <InputNumber style={{ width: '100%' }} placeholder={t('token.no_limit')} min={0} />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="rate_limit_concurrent" label="并发数">
-                <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+              <Form.Item name="rate_limit_concurrent" label={t('token.concurrent')}>
+                <InputNumber style={{ width: '100%' }} placeholder={t('token.no_limit')} min={0} />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="remain_quota" label="剩余额度">
-            <InputNumber style={{ width: '100%' }} placeholder="-1 = 无限制，0 = 无额度" min={-1} />
+          <Form.Item name="remain_quota" label={t('token.remain_quota')}>
+            <InputNumber style={{ width: '100%' }} placeholder={t('token.negative_unlimited')} min={-1} />
           </Form.Item>
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit">
-                保存
+                {t('common.save')}
               </Button>
               <Button onClick={() => setEditModalVisible(false)}>
-                取消
+                {t('common.cancel')}
               </Button>
             </Space>
           </Form.Item>

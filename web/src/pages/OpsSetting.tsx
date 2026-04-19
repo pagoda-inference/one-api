@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { Row, Col, Card, Form, Input, InputNumber, Button, message, Tabs, Switch } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import { getOptions, updateOption } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { TextArea } = Input
 
 const OpsSetting: React.FC = () => {
+  const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
   const [activeTab, setActiveTab] = useState('quota')
@@ -74,17 +76,17 @@ const OpsSetting: React.FC = () => {
         }
         return updateOption(key, finalValue).then(res => {
           if (!res.data.success) {
-            return Promise.reject(new Error(res.data.message || `更新 ${key} 失败`))
+            return Promise.reject(new Error(res.data.message || `${t('ops.update_failed')}: ${key}`))
           }
           return res
         })
       })
 
       await Promise.all(updatePromises)
-      message.success('设置保存成功')
+      message.success(t('ops.settings_saved_success'))
       loadOptions()
     } catch (error: any) {
-      message.error(error.message || '保存失败')
+      message.error(error.message || t('ops.save_failed'))
       console.error('Save error:', error)
     } finally {
       setSaving(false)
@@ -104,33 +106,33 @@ const OpsSetting: React.FC = () => {
   const tabItems = [
     {
       key: 'quota',
-      label: '配额设置',
+      label: t('ops.quota_settings'),
       children: (
-        <Card title="配额配置" style={{ marginTop: 16 }}>
+        <Card title={t('ops.quota_config')} style={{ marginTop: 16 }}>
           <Row gutter={[16, 16]}>
             <Col span={12}>
-              <Form.Item label="新用户初始配额" name="QuotaForNewUser">
-                <InputNumber style={{ width: '100%' }} placeholder="-1 表示无限额" />
+              <Form.Item label={t('ops.new_user_initial_quota')} name="QuotaForNewUser">
+                <InputNumber style={{ width: '100%' }} placeholder={t('ops.negative_unlimited')} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="预消耗配额" name="PreConsumedQuota">
-                <InputNumber style={{ width: '100%' }} placeholder="请求前预扣除的配额" />
+              <Form.Item label={t('ops.pre_consumed_quota')} name="PreConsumedQuota">
+                <InputNumber style={{ width: '100%' }} placeholder={t('ops.pre_consumed_quota_placeholder')} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="邀请者奖励配额" name="QuotaForInviter">
-                <InputNumber style={{ width: '100%' }} placeholder="邀请者获得的奖励" />
+              <Form.Item label={t('ops.inviter_reward_quota')} name="QuotaForInviter">
+                <InputNumber style={{ width: '100%' }} placeholder={t('ops.inviter_reward_placeholder')} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="被邀请者奖励配额" name="QuotaForInvitee">
-                <InputNumber style={{ width: '100%' }} placeholder="被邀请者获得的奖励" />
+              <Form.Item label={t('ops.invitee_reward_quota')} name="QuotaForInvitee">
+                <InputNumber style={{ width: '100%' }} placeholder={t('ops.invitee_reward_placeholder')} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="配额提醒阈值" name="QuotaRemindThreshold">
-                <InputNumber style={{ width: '100%' }} placeholder="配额低于此值时提醒" />
+              <Form.Item label={t('ops.quota_remind_threshold')} name="QuotaRemindThreshold">
+                <InputNumber style={{ width: '100%' }} placeholder={t('ops.quota_remind_placeholder')} />
               </Form.Item>
             </Col>
           </Row>
@@ -139,13 +141,13 @@ const OpsSetting: React.FC = () => {
     },
     {
       key: 'ratio',
-      label: '倍率设置',
+      label: t('ops.multiplier_settings'),
       children: (
         <>
-          <Card title="分组倍率" style={{ marginTop: 16 }}>
+          <Card title={t('ops.group_multiplier')} style={{ marginTop: 16 }}>
             <Form.Item
               name="GroupRatio"
-              rules={[{ validator: (_, value) => verifyJSON(value) ? Promise.resolve() : Promise.reject('不是合法的 JSON') }]}
+              rules={[{ validator: (_, value) => verifyJSON(value) ? Promise.resolve() : Promise.reject(t('ops.not_valid_json')) }]}
             >
               <TextArea
                 rows={6}
@@ -154,8 +156,7 @@ const OpsSetting: React.FC = () => {
               />
             </Form.Item>
             <div style={{ color: '#999', fontSize: 12 }}>
-              JSON 格式，键为分组名称，值为倍率。例如 {" "}
-              {'{"default": 1.0}'} 表示默认分组倍率为 1.0
+              {t('ops.json_format_example')}
             </div>
           </Card>
 
@@ -164,48 +165,48 @@ const OpsSetting: React.FC = () => {
     },
     {
       key: 'system',
-      label: '系统设置',
+      label: t('ops.system_settings'),
       children: (
         <>
-          <Card title="渠道自动管理" style={{ marginTop: 16 }}>
+          <Card title={t('ops.channel_auto_management')} style={{ marginTop: 16 }}>
             <Row gutter={[16, 16]}>
               <Col span={12}>
-                <Form.Item label="自动禁用渠道" name="AutomaticDisableChannelEnabled" valuePropName="checked">
+                <Form.Item label={t('ops.auto_disable_channel')} name="AutomaticDisableChannelEnabled" valuePropName="checked">
                   <Switch />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="自动启用渠道" name="AutomaticEnableChannelEnabled" valuePropName="checked">
+                <Form.Item label={t('ops.auto_enable_channel')} name="AutomaticEnableChannelEnabled" valuePropName="checked">
                   <Switch />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="渠道禁用阈值(秒)" name="ChannelDisableThreshold">
-                  <InputNumber style={{ width: '100%' }} placeholder="响应时间超过此值自动禁用" />
+                <Form.Item label={t('ops.channel_disable_threshold')} name="ChannelDisableThreshold">
+                  <InputNumber style={{ width: '100%' }} placeholder={t('ops.channel_disable_placeholder')} />
                 </Form.Item>
               </Col>
             </Row>
           </Card>
 
-          <Card title="显示设置" style={{ marginTop: 16 }}>
+          <Card title={t('ops.display_settings')} style={{ marginTop: 16 }}>
             <Row gutter={[16, 16]}>
               <Col span={12}>
-                <Form.Item label="以货币形式显示" name="DisplayInCurrencyEnabled" valuePropName="checked">
+                <Form.Item label={t('ops.display_in_currency')} name="DisplayInCurrencyEnabled" valuePropName="checked">
                   <Switch />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="显示 Token 统计" name="DisplayTokenStatEnabled" valuePropName="checked">
+                <Form.Item label={t('ops.display_token_stat')} name="DisplayTokenStatEnabled" valuePropName="checked">
                   <Switch />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="消费日志" name="LogConsumeEnabled" valuePropName="checked">
+                <Form.Item label={t('ops.consumption_log')} name="LogConsumeEnabled" valuePropName="checked">
                   <Switch />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="重试次数" name="RetryTimes">
+                <Form.Item label={t('ops.retry_times')} name="RetryTimes">
                   <InputNumber style={{ width: '100%' }} min={0} max={10} />
                 </Form.Item>
               </Col>
@@ -220,7 +221,7 @@ const OpsSetting: React.FC = () => {
     <div>
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <h2 style={{ margin: 0 }}>系统设置</h2>
+          <h2 style={{ margin: 0 }}>{t('ops.system_settings')}</h2>
         </Col>
         <Col>
           <Button
@@ -229,7 +230,7 @@ const OpsSetting: React.FC = () => {
             loading={saving}
             onClick={handleSave}
           >
-            保存设置
+            {t('ops.save_settings')}
           </Button>
         </Col>
       </Row>

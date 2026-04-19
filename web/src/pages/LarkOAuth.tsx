@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Spin } from 'antd'
+import { useTranslation } from 'react-i18next'
 
 const LarkOAuth: React.FC = () => {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [status, setStatus] = useState('正在处理飞书登录...')
+  const [status, setStatus] = useState(t('larkOAuth.processing_login'))
   const navigateRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -14,7 +16,7 @@ const LarkOAuth: React.FC = () => {
     const appId = searchParams.get('app_id')
 
     if (!code || !state) {
-      setStatus('参数错误，正在跳转...')
+      setStatus(t('larkOAuth.param_error'))
       setTimeout(() => navigate('/login'), 2000)
       return
     }
@@ -34,7 +36,7 @@ const LarkOAuth: React.FC = () => {
         if (navigateRef.current) return
 
         if (data.success && data.data) {
-          setStatus('登录成功，正在跳转...')
+          setStatus(t('larkOAuth.login_success'))
           // 直接保存用户信息到 localStorage
           localStorage.setItem('user_info', JSON.stringify(data.data))
           // 用用户ID作为token标识
@@ -44,7 +46,7 @@ const LarkOAuth: React.FC = () => {
           // 跳转到 dashboard
           navigate('/dashboard')
         } else {
-          setStatus(data.message || '登录失败，正在跳转...')
+          setStatus(data.message || t('larkOAuth.login_failed'))
           navigateRef.current = '/login'
           setTimeout(() => navigate('/login'), 2000)
         }
@@ -53,7 +55,7 @@ const LarkOAuth: React.FC = () => {
         console.error('OAuth callback error:', err)
         // 如果已经跳转过，不再处理
         if (navigateRef.current) return
-        setStatus('登录失败，正在跳转...')
+        setStatus(t('larkOAuth.login_failed'))
         navigateRef.current = '/login'
         setTimeout(() => navigate('/login'), 2000)
       })

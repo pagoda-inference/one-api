@@ -11,6 +11,7 @@ import React, { useState, useEffect } from 'react'
 import Logo from './components/Logo'
 import { useTheme } from './contexts/ThemeContext'
 import { useLanguage } from './contexts/LanguageContext'
+import { useTranslation } from 'react-i18next'
 
 import Dashboard from './pages/Dashboard'
 import ModelMarket from './pages/ModelMarket'
@@ -37,6 +38,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate()
   const { themeMode, toggleTheme } = useTheme()
   const { language, setLanguage } = useLanguage()
+  const { t } = useTranslation()
   // 同步从 localStorage 初始化，避免首次渲染时 user 为 null
   const [user, setUser] = useState<User | null>(() => {
     const userInfoStr = localStorage.getItem('user_info')
@@ -104,9 +106,9 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const notificationContent = (
     <div style={{ width: 320, maxHeight: 400, overflow: 'auto' }}>
       {notificationLoading ? (
-        <div style={{ padding: 20, textAlign: 'center' }}>加载中...</div>
+        <div style={{ padding: 20, textAlign: 'center' }}>{t('common.loading')}</div>
       ) : notifications.length === 0 ? (
-        <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>暂无通知</div>
+        <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>{t('common.no_notifications')}</div>
       ) : (
         <List
           dataSource={notifications}
@@ -132,21 +134,21 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } catch (e) {}
     localStorage.removeItem('access_token')
     setUser(null)
-    message.success('已退出登录')
+    message.success(t('common.logout_success'))
     navigate('/login')
   }
 
   const userMenuItems = [
-    { key: 'profile', icon: <UserOutlined />, label: '个人中心' },
+    { key: 'profile', icon: <UserOutlined />, label: t('common.personal_center') },
     { type: 'divider' as const },
-    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true }
+    { key: 'logout', icon: <LogoutOutlined />, label: t('common.logout'), danger: true }
   ]
 
   const onUserMenuClick = ({ key }: { key: string }) => {
     if (key === 'logout') {
       Modal.confirm({
-        title: '确认退出',
-        content: '确定要退出登录吗？',
+        title: t('common.confirm_logout'),
+        content: t('common.logout_confirm_message'),
         onOk: handleLogout
       })
     } else if (key === 'profile') {
@@ -156,22 +158,22 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Common menu items for all users
   const commonMenuItems = [
-    { key: '/dashboard', icon: <DashboardOutlined />, label: '数据看板' },
-    { key: '/market', icon: <ShopOutlined />, label: '模型广场' },
-    { key: '/keys', icon: <KeyOutlined />, label: 'API Keys' },
-    { key: '/docs', icon: <ApiOutlined />, label: 'API 文档' },
-    { key: '/usage', icon: <HistoryOutlined />, label: '用量明细' },
-    { key: '/topup', icon: <PlusSquareOutlined />, label: '充值中心' },
-    { key: '/invoices', icon: <FileTextOutlined />, label: '发票管理' },
+    { key: '/dashboard', icon: <DashboardOutlined />, label: t('menu.dashboard') },
+    { key: '/market', icon: <ShopOutlined />, label: t('menu.model_market') },
+    { key: '/keys', icon: <KeyOutlined />, label: t('menu.tokens') },
+    { key: '/docs', icon: <ApiOutlined />, label: t('menu.api_docs') },
+    { key: '/usage', icon: <HistoryOutlined />, label: t('menu.usage_detail') },
+    { key: '/topup', icon: <PlusSquareOutlined />, label: t('menu.topup') },
+    { key: '/invoices', icon: <FileTextOutlined />, label: t('menu.invoice_management') },
   ]
 
   // Admin menu items
   const adminMenuItems = [
-    { key: '/ops', icon: <SettingOutlined />, label: '运营管理' },
-    { key: '/ops/models', icon: <DatabaseOutlined />, label: '模型管理' },
-    { key: '/ops/providers', icon: <CloudServerOutlined />, label: 'Provider 管理' },
-    { key: '/ops/notifications', icon: <BellOutlined />, label: '系统通知' },
-    { key: '/teams', icon: <TeamOutlined />, label: '团队管理' },
+    { key: '/ops', icon: <SettingOutlined />, label: t('menu.ops_dashboard') },
+    { key: '/ops/models', icon: <DatabaseOutlined />, label: t('menu.model_management_admin') },
+    { key: '/ops/providers', icon: <CloudServerOutlined />, label: t('menu.provider_management') },
+    { key: '/ops/notifications', icon: <BellOutlined />, label: t('menu.system_notifications') },
+    { key: '/teams', icon: <TeamOutlined />, label: t('menu.teams') },
   ]
 
   if (!user) {
@@ -191,13 +193,13 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Get greeting based on time
   const getGreeting = () => {
     const hour = new Date().getHours()
-    if (hour < 6) return '凌晨好'
-    if (hour < 9) return '早上好'
-    if (hour < 12) return '上午好'
-    if (hour < 14) return '中午好'
-    if (hour < 18) return '下午好'
-    if (hour < 22) return '晚上好'
-    return '夜里好'
+    if (hour < 6) return t('greeting.dawn')
+    if (hour < 9) return t('greeting.morning')
+    if (hour < 12) return t('greeting.forenoon')
+    if (hour < 14) return t('greeting.noon')
+    if (hour < 18) return t('greeting.afternoon')
+    if (hour < 22) return t('greeting.evening')
+    return t('greeting.night')
   }
 
   return (
@@ -227,7 +229,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           borderBottom: '1px solid var(--border-color)'
         }}>
           {collapsed ? (
-            <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>宝塔</span>
+            <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>{t('common.brand')}</span>
           ) : (
             <div style={{
               display: 'flex',
@@ -235,7 +237,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               gap: 8
             }}>
               <Logo width={90} height={26} />
-              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>BEDI 宝塔</span>
+              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{t('common.brand_full')}</span>
             </div>
           )}
         </div>
@@ -248,7 +250,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               padding: '12px 16px',
               marginBottom: 16
             }}>
-              <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginBottom: 4 }}>账户余额</div>
+              <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginBottom: 4 }}>{t('common.account_balance')}</div>
               <div style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>
                 ¥{(user.quota / 7200).toFixed(2)}
               </div>
@@ -297,7 +299,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <Popover
               content={notificationContent}
-              title="通知"
+              title={t('common.notifications')}
               trigger="click"
               placement="bottomRight"
               arrow={false}
@@ -316,8 +318,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               onChange={(value) => setLanguage(value)}
               style={{ width: 100 }}
               options={[
-                { value: 'zh', label: '中文' },
-                { value: 'en', label: 'English' },
+                { value: 'zh', label: t('common.chinese') },
+                { value: 'en', label: t('common.english') },
               ]}
             />
             <Button
@@ -331,7 +333,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               onClick={() => window.open('https://baotaai.bedicloud.net/guide', '_blank')}
               style={{ color: 'var(--text-primary)', fontSize: 14 }}
             >
-              文档
+              {t('common.docs')}
             </Button>
 
             <Dropdown

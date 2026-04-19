@@ -3,10 +3,12 @@ import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, Upl
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, DatabaseOutlined, PictureOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { listModels, createModel, updateModel, deleteModel, batchDeleteModels, uploadModelLogo, getModelTypes, getModelStatuses, getProviders, listLogos, deleteLogo, getAllTenants, ModelItem, Provider, SimpleTenant } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { TextArea } = Input
 
 const ModelManagement: React.FC = () => {
+  const { t } = useTranslation()
   const [models, setModels] = useState<ModelItem[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -75,7 +77,7 @@ const ModelManagement: React.FC = () => {
         setModels(res.data.data)
       }
     } catch (error) {
-      message.error('加载模型列表失败')
+      message.error(t('modelManagement.load_failed'))
     } finally {
       setLoading(false)
     }
@@ -112,19 +114,19 @@ const ModelManagement: React.FC = () => {
     try {
       const res = await deleteModel(id)
       if (res.data.success) {
-        message.success('删除成功')
+        message.success(t('common.delete_success'))
         loadModels()
       } else {
-        message.error(res.data.message || '删除失败')
+        message.error(res.data.message || t('common.delete_failed'))
       }
     } catch (error) {
-      message.error('删除失败')
+      message.error(t('common.delete_failed'))
     }
   }
 
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      message.warning('请先选择要删除的模型')
+      message.warning(t('modelManagement.select_to_delete'))
       return
     }
     try {
@@ -134,10 +136,10 @@ const ModelManagement: React.FC = () => {
         setSelectedRowKeys([])
         loadModels()
       } else {
-        message.error(res.data.message || '批量删除失败')
+        message.error(res.data.message || t('common.batch_delete_failed'))
       }
     } catch (error) {
-      message.error('批量删除失败')
+      message.error(t('common.batch_delete_failed'))
     }
   }
 
@@ -147,24 +149,24 @@ const ModelManagement: React.FC = () => {
       if (editingModel) {
         const res = await updateModel(editingModel.id, values)
         if (res.data.success) {
-          message.success('更新成功')
+          message.success(t('common.update_success'))
           setModalVisible(false)
           loadModels()
         } else {
-          message.error(res.data.message || '更新失败')
+          message.error(res.data.message || t('common.update_failed'))
         }
       } else {
         const res = await createModel(values)
         if (res.data.success) {
-          message.success('创建成功')
+          message.success(t('common.create_success'))
           setModalVisible(false)
           loadModels()
         } else {
-          message.error(res.data.message || '创建失败')
+          message.error(res.data.message || t('common.create_failed'))
         }
       }
     } catch (error: any) {
-      message.error(editingModel ? '更新失败' : '创建失败')
+      message.error(editingModel ? t('common.update_failed') : t('common.create_failed'))
     }
   }
 
@@ -177,10 +179,10 @@ const ModelManagement: React.FC = () => {
       if (res.data.success) {
         form.setFieldsValue({ icon_url: res.data.data.url })
         setIconPreview(res.data.data.url)
-        message.success('Logo上传成功')
+        message.success(t('modelManagement.logo_upload_success'))
       }
     } catch (error) {
-      message.error('Logo上传失败')
+      message.error(t('modelManagement.logo_upload_failed'))
     } finally {
       setUploadingLogo(false)
     }
@@ -198,21 +200,21 @@ const ModelManagement: React.FC = () => {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'active': return '上线'
-      case 'maintenance': return '维护中'
-      case 'disabled': return '下架'
+      case 'active': return t('modelManagement.status_active')
+      case 'maintenance': return t('modelManagement.status_maintenance')
+      case 'disabled': return t('modelManagement.status_disabled')
       default: return status
     }
   }
 
   const getTypeLabel = (type: string) => {
     const typeMap: Record<string, string> = {
-      'chat': '对话模型',
-      'vlm': '视觉模型',
-      'embedding': 'Embedding',
-      'reranker': 'Reranker',
-      'ocr': 'OCR',
-      'other': '其他'
+      'chat': t('modelManagement.type_chat'),
+      'vlm': t('modelManagement.type_vlm'),
+      'embedding': t('modelManagement.type_embedding'),
+      'reranker': t('modelManagement.type_reranker'),
+      'ocr': t('modelManagement.type_ocr'),
+      'other': t('modelManagement.type_other')
     }
     return typeMap[type] || type
   }
@@ -226,70 +228,70 @@ const ModelManagement: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '模型名称',
+      title: t('modelManagement.model_name'),
       dataIndex: 'name',
       key: 'name',
       width: 150,
     },
     {
-      title: '提供商',
+      title: t('modelManagement.provider'),
       dataIndex: 'provider',
       key: 'provider',
       width: 100,
     },
     {
-      title: '类型',
+      title: t('modelManagement.type'),
       dataIndex: 'model_type',
       key: 'model_type',
       width: 100,
       render: (v: string) => getTypeLabel(v)
     },
     {
-      title: '上下文长度',
+      title: t('modelManagement.context_length'),
       dataIndex: 'context_len',
       key: 'context_len',
       width: 120,
       render: (v: number) => v ? v.toLocaleString() : '-'
     },
     {
-      title: '输入价格',
+      title: t('modelManagement.input_price'),
       dataIndex: 'input_price',
       key: 'input_price',
       width: 100,
       render: (v: number) => v?.toFixed(6) || '0'
     },
     {
-      title: '输出价格',
+      title: t('modelManagement.output_price'),
       dataIndex: 'output_price',
       key: 'output_price',
       width: 100,
       render: (v: number) => v?.toFixed(6) || '0'
     },
     {
-      title: '状态',
+      title: t('modelManagement.status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
       render: (v: string) => <Tag color={getStatusColor(v)}>{getStatusLabel(v)}</Tag>
     },
     {
-      title: '排序',
+      title: t('modelManagement.sort_order'),
       dataIndex: 'sort_order',
       key: 'sort_order',
       width: 80,
     },
     {
-      title: '操作',
+      title: t('modelManagement.action'),
       key: 'action',
       width: 130,
       render: (_, record) => (
         <Space size="small">
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record.id)}>
+          <Popconfirm title={t('modelManagement.confirm_delete')} onConfirm={() => handleDelete(record.id)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -300,15 +302,15 @@ const ModelManagement: React.FC = () => {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}><DatabaseOutlined /> 模型管理</h2>
+        <h2 style={{ margin: 0 }}><DatabaseOutlined /> {t('modelManagement.model_management')}</h2>
         <Space>
           {selectedRowKeys.length > 0 && (
             <Button danger icon={<DeleteOutlined />} onClick={handleBatchDelete}>
-              批量删除 ({selectedRowKeys.length})
+              {t('modelManagement.batch_delete')} ({selectedRowKeys.length})
             </Button>
           )}
           <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            添加模型
+            {t('modelManagement.add_model')}
           </Button>
         </Space>
       </div>
@@ -323,47 +325,47 @@ const ModelManagement: React.FC = () => {
           onChange: (keys) => setSelectedRowKeys(keys as string[]),
         }}
         scroll={{ x: true }}
-        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => t('common.total_records', { total }) }}
       />
 
       <Modal
-        title={editingModel ? '编辑模型' : '添加模型'}
+        title={editingModel ? t('modelManagement.edit_model') : t('modelManagement.add_model_title')}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         width={600}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={form} layout="vertical" initialValues={{ status: 'active' }}>
-          <Form.Item name="id" label="模型ID" rules={[{ required: true, message: '请输入模型ID' }]}>
+          <Form.Item name="id" label={t('modelManagement.model_id')} rules={[{ required: true, message: t('modelManagement.enter_model_id') }]}>
             <Input placeholder="如: Qwen2.5-72B-Instruct 或 deepseek-ai/DeepSeek-R1" />
           </Form.Item>
 
-          <Form.Item name="name" label="模型名称" rules={[{ required: true, message: '请输入模型名称' }]}>
+          <Form.Item name="name" label={t('modelManagement.model_name')} rules={[{ required: true, message: t('modelManagement.enter_model_name') }]}>
             <Input placeholder="如: Qwen2.5-72B-Instruct" />
           </Form.Item>
 
           <Row gutter={16}>
-            <Form.Item name="provider" label="提供商" style={{ flex: 1 }}>
+            <Form.Item name="provider" label={t('modelManagement.provider')} style={{ flex: 1 }}>
               <Select
                 showSearch
-                placeholder="选择 Provider"
+                placeholder={t('modelManagement.select_provider')}
                 options={providers.map(p => ({ value: p.code, label: p.name }))}
               />
             </Form.Item>
 
-            <Form.Item name="model_type" label="模型类型" style={{ flex: 1 }}>
-              <Select options={modelTypes} placeholder="选择模型类型" />
+            <Form.Item name="model_type" label={t('modelManagement.model_type')} style={{ flex: 1 }}>
+              <Select options={modelTypes} placeholder={t('modelManagement.select_model_type')} />
             </Form.Item>
           </Row>
 
-          <Form.Item name="description" label="描述">
-            <TextArea rows={2} placeholder="模型描述信息" />
+          <Form.Item name="description" label={t('modelManagement.description')}>
+            <TextArea rows={2} placeholder={t('modelManagement.model_description_placeholder')} />
           </Form.Item>
 
           <Row gutter={16}>
-            <Form.Item name="context_len" label={form.getFieldValue('model_type') === 'embedding' ? '向量维度' : '上下文长度'} style={{ flex: 1 }}>
+            <Form.Item name="context_len" label={form.getFieldValue('model_type') === 'embedding' ? t('modelManagement.vector_dimension') : t('modelManagement.context_length')} style={{ flex: 1 }}>
               <InputNumber
                 style={{ width: '100%' }}
                 placeholder={form.getFieldValue('model_type') === 'embedding' ? '如: 1536' : '如: 32768'}
@@ -371,43 +373,43 @@ const ModelManagement: React.FC = () => {
               />
             </Form.Item>
 
-            <Form.Item name="sort_order" label="排序" style={{ flex: 1 }}>
-              <InputNumber style={{ width: '100%' }} placeholder="留空自动分配" min={0} />
+            <Form.Item name="sort_order" label={t('modelManagement.sort_order')} style={{ flex: 1 }}>
+              <InputNumber style={{ width: '100%' }} placeholder={t('modelManagement.sort_order_placeholder')} min={0} />
             </Form.Item>
           </Row>
 
           <Row gutter={16}>
-            <Form.Item name="input_price" label="输入价格 (元/千token)" style={{ flex: 1 }}>
+            <Form.Item name="input_price" label={t('modelManagement.input_price')} style={{ flex: 1 }}>
               <InputNumber style={{ width: '100%' }} placeholder="0.000000" min={0} precision={6} />
             </Form.Item>
 
-            <Form.Item name="output_price" label="输出价格 (元/千token)" style={{ flex: 1 }}>
+            <Form.Item name="output_price" label={t('modelManagement.output_price')} style={{ flex: 1 }}>
               <InputNumber style={{ width: '100%' }} placeholder="0.000000" min={0} precision={6} />
             </Form.Item>
           </Row>
 
-          <Form.Item name="status" label="状态">
-            <Select options={modelStatuses} placeholder="选择状态" />
+          <Form.Item name="status" label={t('modelManagement.status')}>
+            <Select options={modelStatuses} placeholder={t('modelManagement.select_status')} />
           </Form.Item>
 
           <Form.Item name="is_trial" valuePropName="checked">
-            <Checkbox>支持试用</Checkbox>
+            <Checkbox>{t('modelManagement.support_trial')}</Checkbox>
           </Form.Item>
 
           <Row gutter={16}>
-            <Form.Item name="rate_limit_rpm" label="RPM限流 (0=不限)" style={{ flex: 1 }}>
+            <Form.Item name="rate_limit_rpm" label={t('modelManagement.rpm_limit')} style={{ flex: 1 }}>
               <InputNumber style={{ width: '100%' }} placeholder="0" min={0} />
             </Form.Item>
 
-            <Form.Item name="rate_limit_tpm" label="TPM限流 (0=不限)" style={{ flex: 1 }}>
+            <Form.Item name="rate_limit_tpm" label={t('modelManagement.tpm_limit')} style={{ flex: 1 }}>
               <InputNumber style={{ width: '100%' }} placeholder="0" min={0} />
             </Form.Item>
           </Row>
 
           <Form.Item
             name="visible_to_teams"
-            label="可见团队"
-            tooltip="不选择表示公共模型，选择团队则只有这些团队可见"
+            label={t('modelManagement.visible_teams')}
+            tooltip={t('modelManagement.visible_teams_tooltip')}
             valuePropName="value"
             getValueProps={(value) => ({ value: value ? value.split(',').filter(Boolean).map((v: string) => Number(v)) : [] })}
             getValueFromEvent={(values) => values && values.length > 0 ? ',' + values.join(',') + ',' : ''}
@@ -415,16 +417,16 @@ const ModelManagement: React.FC = () => {
             <Select
               mode="multiple"
               allowClear
-              placeholder="不选择表示所有用户可见"
+              placeholder={t('modelManagement.visible_teams_placeholder')}
               options={tenants.map(t => ({ value: t.id, label: t.name }))}
             />
           </Form.Item>
 
-          <Form.Item name="icon_url" label="Logo URL">
+          <Form.Item name="icon_url" label={t('modelManagement.logo_url')}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space>
                 <Input
-                  placeholder="Logo URL，如: /logos/qwen.png"
+                  placeholder={t('modelManagement.logo_url_placeholder')}
                   style={{ width: 300 }}
                   value={form.getFieldValue('icon_url')}
                   onChange={(e) => {
@@ -433,12 +435,12 @@ const ModelManagement: React.FC = () => {
                   }}
                 />
                 <Button icon={<PictureOutlined />} onClick={() => setShowLogoModal(true)}>
-                  选择已有Logo
+                  {t('modelManagement.select_existing_logo')}
                 </Button>
               </Space>
               <Upload beforeUpload={handleLogoUpload} showUploadList={false} accept="image/*">
                 <Button icon={<UploadOutlined />} loading={uploadingLogo}>
-                  上传新Logo
+                  {t('modelManagement.upload_new_logo')}
                 </Button>
               </Upload>
               {iconPreview && (
@@ -454,14 +456,14 @@ const ModelManagement: React.FC = () => {
             </Space>
           </Form.Item>
 
-          <Form.Item name="capabilities" label="能力 (JSON)">
+          <Form.Item name="capabilities" label={t('modelManagement.capabilities')}>
             <TextArea rows={2} placeholder='["chat","vision"]' />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="选择Logo"
+        title={t('modelManagement.select_logo')}
         open={showLogoModal}
         onCancel={() => setShowLogoModal(false)}
         footer={null}
@@ -513,18 +515,18 @@ const ModelManagement: React.FC = () => {
                 onClick={(e) => {
                   e.stopPropagation()
                   Modal.confirm({
-                    title: '确定删除此Logo？',
+                    title: t('modelManagement.confirm_delete_logo'),
                     onOk: async () => {
                       try {
                         const res = await deleteLogo(logo.name)
                         if (res.data.success) {
-                          message.success('删除成功')
+                          message.success(t('common.delete_success'))
                           loadLogos()
                         } else {
-                          message.error(res.data.message || '删除失败')
+                          message.error(res.data.message || t('common.delete_failed'))
                         }
                       } catch (error) {
-                        message.error('删除失败')
+                        message.error(t('common.delete_failed'))
                       }
                     },
                   })
@@ -534,7 +536,7 @@ const ModelManagement: React.FC = () => {
           ))}
           {logos.length === 0 && (
             <div style={{ textAlign: 'center', color: '#999', padding: 40, width: '100%' }}>
-              暂无可选的Logo，请先上传
+              {t('modelManagement.no_logos_available')}
             </div>
           )}
         </div>

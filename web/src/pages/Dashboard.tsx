@@ -13,9 +13,11 @@ import {
   getOpsStats, getAdminUsageByModels, User
 } from '../services/api'
 import { message } from 'antd'
+import { useTranslation } from 'react-i18next'
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [dashboardData, setDashboardData] = useState<any>(null)
@@ -101,11 +103,11 @@ const Dashboard: React.FC = () => {
     try {
       setSigningIn(true)
       await signIn()
-      message.success('签到成功！获得 100K 配额奖励')
+      message.success(t('dashboard.sign_in_success'))
       const res = await getSignInRecords()
       setSignInRecords(res.data.data || [])
     } catch (error: any) {
-      message.error(error?.response?.data?.message || '签到失败')
+      message.error(error?.response?.data?.message || t('dashboard.sign_in_failed'))
     } finally {
       setSigningIn(false)
     }
@@ -177,7 +179,7 @@ const Dashboard: React.FC = () => {
     },
     yAxis: {
       type: 'value',
-      name: 'Token数',
+      name: t('dashboard.token_count'),
       nameLocation: 'middle',
       nameGap: 70,
       nameTextStyle: { color: '#8c8c8c', fontSize: 12 },
@@ -209,7 +211,7 @@ const Dashboard: React.FC = () => {
     },
     yAxis: {
       type: 'value',
-      name: 'Token数',
+      name: t('dashboard.token_count'),
       nameLocation: 'middle',
       nameGap: 70,
       nameTextStyle: { color: '#8c8c8c', fontSize: 12 },
@@ -230,17 +232,17 @@ const Dashboard: React.FC = () => {
 
   // Admin tab items (no calendar)
   const adminTabItems = [
-    { key: 'trend', label: '用量趋势' },
-    { key: 'model', label: '模型排行' },
-    { key: 'ranking', label: '调用排行' }
+    { key: 'trend', label: t('dashboard.usage_trend') },
+    { key: 'model', label: t('dashboard.model_ranking') },
+    { key: 'ranking', label: t('dashboard.call_ranking') }
   ]
 
   // User tab items (with calendar)
   const userTabItems = [
-    { key: 'calendar', label: '签到日历' },
-    { key: 'trend', label: '用量趋势' },
-    { key: 'model', label: '模型排行' },
-    { key: 'ranking', label: '调用排行' }
+    { key: 'calendar', label: t('dashboard.sign_in_calendar') },
+    { key: 'trend', label: t('dashboard.usage_trend') },
+    { key: 'model', label: t('dashboard.model_ranking') },
+    { key: 'ranking', label: t('dashboard.call_ranking') }
   ]
 
   // Check if today is signed in
@@ -254,8 +256,8 @@ const Dashboard: React.FC = () => {
           <Card style={{ borderRadius: 12, border: 'none' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <span style={{ fontWeight: 600, fontSize: 16 }}>签到日历</span>
-                <span style={{ marginLeft: 12, color: '#52c41a', fontSize: 14 }}>总额度: ¥{formatMoney(dashboardData?.user?.quota || 0)}</span>
+                <span style={{ fontWeight: 600, fontSize: 16 }}>{t('dashboard.sign_in_calendar')}</span>
+                <span style={{ marginLeft: 12, color: '#52c41a', fontSize: 14 }}>{t('dashboard.total_quota')}: ¥{formatMoney(dashboardData?.user?.quota || 0)}</span>
               </div>
               <Button
                 type="primary"
@@ -264,12 +266,12 @@ const Dashboard: React.FC = () => {
                 disabled={isTodaySignedIn || signingIn}
                 loading={signingIn}
               >
-                {isTodaySignedIn ? '今日已签到' : '立即签到'}
+                {isTodaySignedIn ? t('dashboard.signed_in_today') : t('dashboard.sign_in_now')}
               </Button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
-              {['日', '一', '二', '三', '四', '五', '六'].map(d => (
-                <div key={d} style={{ textAlign: 'center', color: '#8c8c8c', fontSize: 12, padding: 8 }}>{d}</div>
+              {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
+                <div key={i} style={{ textAlign: 'center', color: '#8c8c8c', fontSize: 12, padding: 8 }}>{d}</div>
               ))}
               {(() => {
                 const now = new Date()
@@ -319,40 +321,40 @@ const Dashboard: React.FC = () => {
       case 'trend':
         return (
           <Card style={{ borderRadius: 12, border: 'none' }}>
-            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>最近7天用量趋势</div>
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{t('dashboard.recent_7day_usage_trend')}</div>
             {usageData.length > 0 ? (
               <ReactECharts option={getUsageChartOption()} style={{ height: 300 }} />
             ) : (
-              <Empty description="暂无用量数据" style={{ padding: 60 }} />
+              <Empty description={t('dashboard.no_usage_data')} style={{ padding: 60 }} />
             )}
           </Card>
         )
       case 'model':
         return (
           <Card style={{ borderRadius: 12, border: 'none' }}>
-            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>模型用量排行</div>
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{t('dashboard.model_usage_ranking')}</div>
             {modelUsage.length > 0 ? (
               <ReactECharts option={getModelChartOption()} style={{ height: 300 }} />
             ) : (
-              <Empty description="暂无模型用量" style={{ padding: 60 }} />
+              <Empty description={t('dashboard.no_model_usage')} style={{ padding: 60 }} />
             )}
           </Card>
         )
       case 'ranking':
         return (
           <Card style={{ borderRadius: 12, border: 'none' }}>
-            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>Token消耗排行</div>
+            <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{t('dashboard.token_consumption_ranking')}</div>
             <Table
               dataSource={modelUsage}
               rowKey="model_name"
               pagination={false}
               columns={[
-                { title: '排名', width: 60, render: (_, __, i) => <Badge count={i + 1} style={{ backgroundColor: '#667eea' }} /> },
-                { title: '模型', dataIndex: 'model_name', ellipsis: true },
+                { title: t('dashboard.ranking'), width: 60, render: (_, __, i) => <Badge count={i + 1} style={{ backgroundColor: '#667eea' }} /> },
+                { title: t('dashboard.model'), dataIndex: 'model_name', ellipsis: true },
                 { title: 'Prompt Tokens', dataIndex: 'prompt_tokens', render: (v) => formatQuota(v) },
                 { title: 'Completion Tokens', dataIndex: 'completion_tokens', render: (v) => formatQuota(v) },
                 {
-                  title: '占比',
+                  title: t('dashboard.proportion'),
                   width: 100,
                   render: (_, record) => {
                     const total = modelUsage.reduce((sum: number, r: any) => sum + (r.prompt_tokens || 0) + (r.completion_tokens || 0), 0)
@@ -387,7 +389,7 @@ const Dashboard: React.FC = () => {
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} lg={6}>
             <StatCard
-              title="今日收入"
+              title={t('dashboard.today_revenue')}
               value={`¥${formatMoney(opsStats?.today_revenue || 0)}`}
               suffix=""
               icon={<DollarOutlined style={{ color: '#fff', fontSize: 16 }} />}
@@ -396,7 +398,7 @@ const Dashboard: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <StatCard
-              title="今日用量Token"
+              title={t('dashboard.today_usage_token')}
               value={formatQuota(opsStats?.today_usage_tokens || 0)}
               suffix=""
               icon={<ApiOutlined style={{ color: '#fff', fontSize: 16 }} />}
@@ -405,16 +407,16 @@ const Dashboard: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <StatCard
-              title="活跃用户"
+              title={t('dashboard.active_users')}
               value={opsStats?.active_users || 0}
-              suffix="人"
+              suffix=""
               icon={<UserOutlined style={{ color: '#fff', fontSize: 16 }} />}
               color="#ff4d4f"
             />
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <StatCard
-              title="渠道健康率"
+              title={t('dashboard.channel_health_rate')}
               value={`${(opsStats?.channel_health_rate || 0).toFixed(1)}`}
               suffix="%"
               icon={<TrophyOutlined style={{ color: '#fff', fontSize: 16 }} />}
@@ -427,25 +429,25 @@ const Dashboard: React.FC = () => {
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} sm={12} lg={6}>
             <StatCard
-              title="总用户数"
+              title={t('dashboard.total_users')}
               value={opsStats?.total_users || 0}
-              suffix="人"
+              suffix=""
               icon={<TeamOutlined style={{ color: '#fff', fontSize: 16 }} />}
               color="#13c2c2"
             />
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <StatCard
-              title="总渠道数"
+              title={t('dashboard.total_channels')}
               value={opsStats?.total_channels || 0}
-              suffix="个"
+              suffix=""
               icon={<ApiOutlined style={{ color: '#fff', fontSize: 16 }} />}
               color="#722ed1"
             />
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <StatCard
-              title="总Token消耗"
+              title={t('dashboard.total_token_consumption')}
               value={formatQuota(opsStats?.total_tokens || 0)}
               suffix=""
               icon={<RiseOutlined style={{ color: '#fff', fontSize: 16 }} />}
@@ -454,7 +456,7 @@ const Dashboard: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} lg={6}>
             <StatCard
-              title="总配额"
+              title={t('dashboard.total_quota_all')}
               value={formatQuota(opsStats?.total_quota || 0)}
               suffix=""
               icon={<WalletOutlined style={{ color: '#fff', fontSize: 16 }} />}
@@ -483,29 +485,29 @@ const Dashboard: React.FC = () => {
           {/* Quick Actions */}
           <Col xs={24} lg={8}>
             <Card
-              title="快捷操作"
+              title={t('dashboard.quick_actions')}
               style={{ borderRadius: 12, border: 'none' }}
               styles={{ body: { padding: 16 } }}
             >
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                 <Button icon={<LineChartOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/usage')}>
-                  用量明细
+                  {t('menu.usage_detail')}
                 </Button>
                 <Button icon={<ThunderboltOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/keys')}>
-                  API Keys
+                  {t('menu.tokens')}
                 </Button>
                 <Button icon={<ApiOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/ops')}>
-                  运营管理
+                  {t('menu.ops_dashboard')}
                 </Button>
                 <Button icon={<TeamOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/teams')}>
-                  团队管理
+                  {t('menu.teams')}
                 </Button>
               </div>
             </Card>
 
             {/* Top Models Card */}
             <Card
-              title="用量Top模型"
+              title={t('dashboard.top_models_by_usage')}
               style={{ borderRadius: 12, border: 'none', marginTop: 16 }}
               styles={{ body: { padding: 16 } }}
             >
@@ -515,7 +517,7 @@ const Dashboard: React.FC = () => {
                   <span style={{ color: '#8c8c8c' }}>{formatQuota((m.prompt_tokens || 0) + (m.completion_tokens || 0))}</span>
                 </div>
               ))}
-              {modelUsage.length === 0 && <Empty description="暂无数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+              {modelUsage.length === 0 && <Empty description={t('common.no_data')} image={Empty.PRESENTED_IMAGE_SIMPLE} />}
             </Card>
           </Col>
         </Row>
@@ -530,7 +532,7 @@ const Dashboard: React.FC = () => {
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
-            title="账户余额"
+            title={t('common.account_balance')}
             value={`¥${formatMoney(user.quota || 0)}`}
             suffix=""
             icon={<DollarOutlined style={{ color: '#fff', fontSize: 16 }} />}
@@ -539,16 +541,16 @@ const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
-            title="本月请求数"
+            title={t('dashboard.monthly_requests')}
             value={dashboardData?.usage?.total_requests?.toLocaleString() || '0'}
-            suffix="次"
+            suffix=""
             icon={<ApiOutlined style={{ color: '#fff', fontSize: 16 }} />}
             color="#52c41a"
           />
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
-            title="本月Token消耗"
+            title={t('dashboard.monthly_token_consumption')}
             value={formatQuota(dashboardData?.usage?.total_tokens || 0)}
             suffix=""
             icon={<RiseOutlined style={{ color: '#fff', fontSize: 16 }} />}
@@ -557,9 +559,9 @@ const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <StatCard
-            title="可用模型"
+            title={t('dashboard.available_models')}
             value={marketStats?.total_models || 0}
-            suffix="个"
+            suffix=""
             icon={<TrophyOutlined style={{ color: '#fff', fontSize: 16 }} />}
             color="#faad14"
           />
@@ -586,10 +588,10 @@ const Dashboard: React.FC = () => {
         {/* API Quick Access */}
         <Col xs={24} lg={8}>
           <Card
-            title="API快速访问"
+            title={t('dashboard.api_quick_access')}
             style={{ borderRadius: 12, border: 'none' }}
             styles={{ body: { padding: 16 } }}
-            extra={<Button size="small" type="link" onClick={() => navigate('/keys')}>查看全部</Button>}
+            extra={<Button size="small" type="link" onClick={() => navigate('/keys')}>{t('dashboard.view_all')}</Button>}
           >
             {tokens.slice(0, 3).map((token: any) => (
               <div
@@ -612,7 +614,7 @@ const Dashboard: React.FC = () => {
                       navigator.clipboard.writeText(`sk-${token.key}`)
                     }}
                   >
-                    复制
+                    {t('common.copy')}
                   </Button>
                 </div>
                 <div style={{ fontSize: 12, color: '#8c8c8c', fontFamily: 'monospace' }}>
@@ -622,28 +624,28 @@ const Dashboard: React.FC = () => {
             ))}
 
             {tokens.length === 0 && (
-              <Empty description="暂无API Key" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description={t('dashboard.no_api_key')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
             )}
           </Card>
 
           {/* Quick Actions */}
           <Card
-            title="快捷操作"
+            title={t('dashboard.quick_actions')}
             style={{ borderRadius: 12, border: 'none', marginTop: 16 }}
             styles={{ body: { padding: 16 } }}
           >
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
               <Button icon={<WalletOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/topup')}>
-                充值
+                {t('menu.topup')}
               </Button>
               <Button icon={<LineChartOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/usage')}>
-                用量明细
+                {t('menu.usage_detail')}
               </Button>
               <Button icon={<ThunderboltOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/keys')}>
-                创建Key
+                {t('dashboard.create_key')}
               </Button>
               <Button icon={<ExperimentOutlined />} block style={{ borderRadius: 8, height: 44 }} onClick={() => navigate('/market')}>
-                模型试用
+                {t('dashboard.model_trial')}
               </Button>
             </div>
           </Card>

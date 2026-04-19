@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Collapse, Empty } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { getInvoices, createInvoice, getTopupOrders, Invoice, TopupOrder, User } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { Panel } = Collapse
 const { TextArea } = Input
 const Invoices: React.FC = () => {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -62,7 +64,7 @@ const Invoices: React.FC = () => {
 
   const handleCreate = async (values: any) => {
     if (selectedOrders.length === 0) {
-      message.error('请选择关联订单')
+      message.error(t('invoice.select_order'))
       return
     }
 
@@ -72,13 +74,13 @@ const Invoices: React.FC = () => {
         ...values,
         order_ids: selectedOrders.join(',')
       })
-      message.success('发票申请提交成功')
+      message.success(t('invoice.submit_application') + ' ' + t('common.success'))
       setModalVisible(false)
       form.resetFields()
       setSelectedOrders([])
       loadData()
     } catch (error) {
-      message.error('提交失败')
+      message.error(t('common.operation_failed'))
     } finally {
       setCreateLoading(false)
     }
@@ -86,33 +88,33 @@ const Invoices: React.FC = () => {
 
   const getStatusTag = (status: string) => {
     const map: Record<string, { color: string; text: string }> = {
-      pending: { color: 'orange', text: '待处理' },
-      approved: { color: 'blue', text: '已批准' },
-      issued: { color: 'green', text: '已开票' },
-      rejected: { color: 'red', text: '已驳回' }
+      pending: { color: 'orange', text: t('invoice.status_pending') },
+      approved: { color: 'blue', text: t('invoice.status_approved') },
+      issued: { color: 'green', text: t('invoice.status_issued') },
+      rejected: { color: 'red', text: t('invoice.status_rejected') }
     }
     const s = map[status] || { color: 'gray', text: status }
     return <Tag color={s.color}>{s.text}</Tag>
   }
 
   const columns = [
-    { title: '发票号', dataIndex: 'id', key: 'id' },
-    { title: '发票抬头', dataIndex: 'title', key: 'title' },
+    { title: t('invoice.invoice_id'), dataIndex: 'id', key: 'id' },
+    { title: t('invoice.invoice_title'), dataIndex: 'title', key: 'title' },
     {
-      title: '发票金额',
+      title: t('invoice.invoice_amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (v: number) => `¥${v.toFixed(2)}`
     },
     {
-      title: '关联订单',
+      title: t('invoice.related_orders'),
       dataIndex: 'order_ids',
       key: 'order_ids',
-      render: (ids: string) => ids?.split(',').length + ' 个订单' || '-'
+      render: (ids: string) => ids?.split(',').length + ' orders' || '-'
     },
-    { title: '状态', dataIndex: 'status', key: 'status', render: getStatusTag },
+    { title: t('common.status'), dataIndex: 'status', key: 'status', render: getStatusTag },
     {
-      title: '申请时间',
+      title: t('invoice.create_time'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (v: number) => v ? new Date(v * 1000).toLocaleString() : '-'
@@ -120,15 +122,15 @@ const Invoices: React.FC = () => {
   ]
 
   const orderColumns = [
-    { title: '订单号', dataIndex: 'id', key: 'id' },
+    { title: t('common.type'), dataIndex: 'id', key: 'id' },
     {
-      title: '金额',
+      title: t('topup.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (v: number) => `¥${v.toFixed(2)}`
     },
     {
-      title: '支付时间',
+      title: t('topup.paid'),
       dataIndex: 'paid_at',
       key: 'paid_at',
       render: (v: number) => v ? new Date(v * 1000).toLocaleString() : '-'
@@ -141,7 +143,7 @@ const Invoices: React.FC = () => {
   if (isAdmin) {
     return (
       <div>
-        <Card title="发票记录">
+        <Card title={t('invoice.invoice_record')}>
           {invoices.length > 0 ? (
             <Table
               dataSource={invoices}
@@ -151,7 +153,7 @@ const Invoices: React.FC = () => {
               pagination={{ pageSize: 20 }}
             />
           ) : (
-            <Empty description="暂无发票记录" />
+            <Empty description={t('invoice.no_invoice_records')} />
           )}
         </Card>
       </div>
@@ -162,14 +164,14 @@ const Invoices: React.FC = () => {
   return (
     <div>
       <Card
-        title="发票列表"
+        title={t('invoice.invoice_list')}
         extra={
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => setModalVisible(true)}
           >
-            申请发票
+            {t('invoice.apply_invoice')}
           </Button>
         }
       >
@@ -182,48 +184,48 @@ const Invoices: React.FC = () => {
         />
       </Card>
 
-      <Card title="发票说明" style={{ marginTop: 16 }}>
+      <Card title={t('invoice.invoice_instructions')} style={{ marginTop: 16 }}>
         <Collapse defaultActiveKey={['1']}>
-          <Panel header="开票须知" key="1">
+          <Panel header={t('invoice.billing_notice')} key="1">
             <ul style={{ color: '#666', lineHeight: 2 }}>
-              <li>发票内容为"技术服务费"或"API服务费"</li>
-              <li>发票税率按国家规定执行</li>
-              <li>发票将在申请通过后 3-5 个工作日内开具</li>
-              <li>电子发票将发送至您提供的邮箱</li>
-              <li>纸质发票将在 5-7 个工作日内寄出</li>
+              <li>{t('invoice.billing_content_1')}</li>
+              <li>{t('invoice.tax_rate_note')}</li>
+              <li>{t('invoice.invoice_issued_3_5_days')}</li>
+              <li>{t('invoice.electronic_invoice_sent_email')}</li>
+              <li>{t('invoice.paper_invoice_5_7_days')}</li>
             </ul>
           </Panel>
-          <Panel header="开票流程" key="2">
+          <Panel header={t('invoice.billing_process')} key="2">
             <ol style={{ color: '#666', lineHeight: 2 }}>
-              <li>选择需要开票的充值订单</li>
-              <li>填写发票抬头信息</li>
-              <li>提交申请等待审核</li>
-              <li>审核通过后开具发票</li>
-              <li>收到发票（电子/纸质）</li>
+              <li>{t('invoice.process_step_1')}</li>
+              <li>{t('invoice.process_step_2')}</li>
+              <li>{t('invoice.process_step_3')}</li>
+              <li>{t('invoice.process_step_4')}</li>
+              <li>{t('invoice.process_step_5')}</li>
             </ol>
           </Panel>
-          <Panel header="常见问题" key="3">
+          <Panel header={t('invoice.faq')} key="3">
             <div style={{ color: '#666', lineHeight: 2 }}>
-              <p><strong>Q: 可以开具增值税专用发票吗？</strong></p>
-              <p>A: 目前仅支持开具增值税普通发票</p>
-              <p><strong>Q: 发票可以跨年开具吗？</strong></p>
-              <p>A: 可以，但需在充值当年内申请</p>
-              <p><strong>Q: 发票抬头可以修改吗？</strong></p>
-              <p>A: 已开具的发票抬头无法修改，请仔细核对</p>
+              <p><strong>Q: {t('invoice.q1')}</strong></p>
+              <p>A: {t('invoice.a1')}</p>
+              <p><strong>Q: {t('invoice.q2')}</strong></p>
+              <p>A: {t('invoice.a2')}</p>
+              <p><strong>Q: {t('invoice.q3')}</strong></p>
+              <p>A: {t('invoice.a3')}</p>
             </div>
           </Panel>
         </Collapse>
       </Card>
 
       <Modal
-        title="申请发票"
+        title={t('invoice.apply_invoice')}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         footer={null}
         width={700}
       >
         <Form form={form} onFinish={handleCreate} layout="vertical">
-          <Card title="1. 选择关联订单" size="small" style={{ marginBottom: 16 }}>
+          <Card title={t('invoice.step_1_select_orders')} size="small" style={{ marginBottom: 16 }}>
             <Table
               dataSource={paidOrders}
               columns={orderColumns}
@@ -245,77 +247,73 @@ const Invoices: React.FC = () => {
               })}
             />
             <div style={{ marginTop: 8, color: '#666' }}>
-              已选择 {selectedOrders.length} 个订单，总金额 ¥
-              {orders
-                .filter(o => selectedOrders.includes(o.id))
-                .reduce((sum, o) => sum + o.amount, 0)
-                .toFixed(2)}
+              {t('invoice.orders_selected', { count: selectedOrders.length, amount: orders.filter(o => selectedOrders.includes(o.id)).reduce((sum, o) => sum + o.amount, 0).toFixed(2) })}
             </div>
           </Card>
 
-          <Card title="2. 填写发票信息" size="small">
+          <Card title={t('invoice.step_2_fill_info')} size="small">
             <Form.Item
               name="amount"
-              label="开票金额"
-              rules={[{ required: true, message: '请输入开票金额' }]}
+              label={t('invoice.invoice_amount')}
+              rules={[{ required: true, message: t('invoice.enter_amount') }]}
             >
               <InputNumber
                 style={{ width: '100%' }}
                 min={0.01}
                 max={orders.filter(o => selectedOrders.includes(o.id)).reduce((sum, o) => sum + o.amount, 0)}
                 precision={2}
-                placeholder="请输入开票金额"
+                placeholder={t('invoice.enter_amount')}
               />
             </Form.Item>
 
             <Form.Item
               name="title"
-              label="发票抬头"
-              rules={[{ required: true, message: '请输入发票抬头' }]}
+              label={t('invoice.invoice_title')}
+              rules={[{ required: true, message: t('invoice.enter_title') }]}
             >
-              <Input placeholder="请输入公司或个人名称" />
+              <Input placeholder={t('invoice.enter_title_placeholder')} />
             </Form.Item>
 
             <Form.Item
               name="tax_no"
-              label="纳税人识别号"
-              rules={[{ required: true, message: '请输入纳税人识别号' }]}
+              label={t('invoice.tax_id')}
+              rules={[{ required: true, message: t('invoice.enter_tax_id') }]}
             >
-              <Input placeholder="请输入统一社会信用代码" />
+              <Input placeholder={t('invoice.enter_tax_id_placeholder')} />
             </Form.Item>
 
-            <Form.Item name="address" label="开票地址">
-              <Input placeholder="请输入开票地址（选填）" />
+            <Form.Item name="address" label={t('invoice.billing_address')}>
+              <Input placeholder={t('invoice.billing_address_optional')} />
             </Form.Item>
 
-            <Form.Item name="phone" label="电话">
-              <Input placeholder="请输入联系电话（选填）" />
+            <Form.Item name="phone" label={t('common.phone')}>
+              <Input placeholder={t('invoice.phone_optional')} />
             </Form.Item>
 
-            <Form.Item name="bank" label="开户行">
-              <Input placeholder="请输入开户银行（选填）" />
+            <Form.Item name="bank" label={t('invoice.bank')}>
+              <Input placeholder={t('invoice.bank_optional')} />
             </Form.Item>
 
-            <Form.Item name="account" label="银行账号">
-              <Input placeholder="请输入银行账号（选填）" />
+            <Form.Item name="account" label={t('invoice.bank_account')}>
+              <Input placeholder={t('invoice.bank_account_optional')} />
             </Form.Item>
 
-            <Form.Item name="email" label="接收邮箱" rules={[{ type: 'email', message: '请输入有效的邮箱地址' }]}>
-              <Input placeholder="用于接收电子发票" />
+            <Form.Item name="email" label={t('invoice.receive_email')} rules={[{ type: 'email', message: t('common.valid_email_required') }]}>
+              <Input placeholder={t('invoice.email_placeholder')} />
             </Form.Item>
 
-            <Form.Item name="remark" label="备注">
-              <TextArea rows={3} placeholder="如有其他要求请在此说明" />
+            <Form.Item name="remark" label={t('common.remark')}>
+              <TextArea rows={3} placeholder={t('invoice.remark_placeholder')} />
             </Form.Item>
           </Card>
 
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={createLoading}>
-                提交申请
+                {t('invoice.submit_application')}
               </Button>
               <Button onClick={() => setModalVisible(false)}>
-                取消
+                {t('common.cancel')}
               </Button>
             </Space>
           </Form.Item>

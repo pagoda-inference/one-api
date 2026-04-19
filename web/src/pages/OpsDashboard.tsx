@@ -4,10 +4,12 @@ import { Row, Col, Card, Table, Statistic, Spin, Progress, Tag, Tabs, Button, Sp
 import { DollarOutlined, UserOutlined, ApiOutlined, RiseOutlined, SafetyCertificateOutlined, DashboardOutlined, LineChartOutlined, PlusOutlined, EditOutlined, SaveOutlined, SettingOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import { getOpsStats, getChannelHealth, getAlertConfig, updateAlertConfig, exportReport, getOpsUsers, updateUser, getChannels, createChannel, updateChannel, deleteChannel, getProviders, getOptions, updateOption, getChannel, OpsStats, ChannelHealth, AlertConfig, Channel, Provider } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { TabPane } = Tabs
 
 const OpsDashboard: React.FC = () => {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = searchParams.get('tab') || '1'
   const [loading, setLoading] = useState(true)
@@ -169,7 +171,7 @@ const OpsDashboard: React.FC = () => {
     // 获取完整渠道信息（包含真实 key）
     const res = await getChannel(record.id)
     if (!res.data.success) {
-      message.error('获取渠道信息失败')
+      message.error(t('ops.get_channel_failed'))
       return
     }
     const fullRecord = res.data.data
@@ -215,13 +217,13 @@ const OpsDashboard: React.FC = () => {
     try {
       const res = await deleteChannel(id)
       if (res.data.success) {
-        message.success('删除成功')
+        message.success(t('ops.delete_success'))
         loadChannels()
       } else {
-        message.error(res.data.message || '删除失败')
+        message.error(res.data.message || t('ops.delete_failed'))
       }
     } catch (error) {
-      message.error('删除失败')
+      message.error(t('ops.delete_failed'))
     }
   }
 
@@ -278,33 +280,33 @@ const OpsDashboard: React.FC = () => {
       if (editingChannel) {
         const res = await updateChannel(editingChannel.id, payload)
         if (res.data.success) {
-          message.success('更新成功')
+          message.success(t('ops.update_success'))
           setChannelModalVisible(false)
           loadChannels(channelsOffset, 10)
         } else {
-          message.error(res.data.message || '更新失败')
+          message.error(res.data.message || t('ops.update_failed'))
         }
       } else {
         const res = await createChannel(payload)
         if (res.data.success) {
-          message.success('创建成功')
+          message.success(t('ops.create_success'))
           setChannelModalVisible(false)
           loadChannels()
         } else {
-          message.error(res.data.message || '创建失败')
+          message.error(res.data.message || t('ops.create_failed'))
         }
       }
     } catch (error) {
-      message.error(editingChannel ? '更新失败' : '创建失败')
+      message.error(editingChannel ? t('ops.update_failed') : t('ops.create_failed'))
     }
   }
 
   const handleExport = async (type: string) => {
     try {
       const res = await exportReport({ type })
-      message.success(`报表已生成: ${res.data.data.report_url}`)
+      message.success(`${t('ops.report_generated')} ${res.data.data.report_url}`)
     } catch (error) {
-      message.error('导出失败')
+      message.error(t('ops.export_failed'))
     }
   }
 
@@ -395,11 +397,11 @@ const OpsDashboard: React.FC = () => {
         })
 
       await Promise.all(otherPromises)
-      message.success('设置保存成功')
+      message.success(t('ops.settings_saved_success'))
       loadSettings()
       loadData() // Refresh alert config display
     } catch (error: any) {
-      message.error(error.message || '保存失败')
+      message.error(error.message || t('ops.save_failed'))
       console.error('Save error:', error)
     } finally {
       setSettingSaving(false)
@@ -429,37 +431,37 @@ const OpsDashboard: React.FC = () => {
     const topups = days.map(d => stats.topup_by_day[d] || 0)
 
     return {
-      title: { text: '日营收趋势 (近7天)', left: 'center' },
+      title: { text: t('ops.daily_revenue_trend'), left: 'center' },
       tooltip: { trigger: 'axis' },
-      legend: { data: ['营收', '充值'], bottom: 0 },
+      legend: { data: [t('ops.revenue'), t('ops.topup_amount')], bottom: 0 },
       xAxis: { type: 'category', data: days },
-      yAxis: { type: 'value', name: '金额(元)' },
+      yAxis: { type: 'value', name: t('ops.amount_yuan') },
       series: [
-        { name: '营收', data: revenues, type: 'bar', itemStyle: { color: '#52c41a' } },
-        { name: '充值', data: topups, type: 'bar', itemStyle: { color: '#1890ff' } }
+        { name: t('ops.revenue'), data: revenues, type: 'bar', itemStyle: { color: '#52c41a' } },
+        { name: t('ops.topup_amount'), data: topups, type: 'bar', itemStyle: { color: '#1890ff' } }
       ]
     }
   }
 
   const channelColumns = [
-    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '类型', dataIndex: 'type_name', key: 'type_name' },
+    { title: t('ops.id'), dataIndex: 'id', key: 'id', width: 60 },
+    { title: t('ops.channel_name'), dataIndex: 'name', key: 'name' },
+    { title: t('ops.channel_type'), dataIndex: 'type_name', key: 'type_name' },
     { title: 'Provider', dataIndex: 'provider', key: 'provider', width: 100 },
     { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
     {
-      title: '成功率',
+      title: t('ops.success_rate'),
       dataIndex: 'success_rate',
       key: 'success_rate',
       render: (v: number) => <Progress percent={v} size="small" status={v < 80 ? 'exception' : undefined} />
     },
-    { title: '平均延迟', dataIndex: 'avg_latency', key: 'avg_latency', render: (v: number) => `${v}ms` },
-    { title: '优先级', dataIndex: 'priority', key: 'priority' },
+    { title: t('ops.avg_latency'), dataIndex: 'avg_latency', key: 'avg_latency', render: (v: number) => `${v}ms` },
+    { title: t('ops.priority'), dataIndex: 'priority', key: 'priority' },
     {
-      title: '状态',
+      title: t('ops.status'),
       dataIndex: 'is_enabled',
       key: 'is_enabled',
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '启用' : '禁用'}</Tag>
+      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? t('ops.enabled') : t('ops.disabled')}</Tag>
     }
   ]
 
@@ -473,18 +475,18 @@ const OpsDashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="今日营收"
+              title={t('ops.today_revenue')}
               value={stats?.today_revenue || 0}
               prefix={<DollarOutlined />}
               precision={2}
-              suffix="元"
+              suffix="¥"
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="今日用量"
+              title={t('ops.today_usage')}
               value={stats?.today_usage_tokens || 0}
               prefix={<ApiOutlined />}
               formatter={(v) => formatQuota(Number(v))}
@@ -494,7 +496,7 @@ const OpsDashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="活跃用户"
+              title={t('ops.active_users')}
               value={stats?.active_users || 0}
               prefix={<UserOutlined />}
             />
@@ -503,14 +505,14 @@ const OpsDashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="渠道健康率"
+              title={t('ops.channel_health_rate')}
               value={overallHealth}
               prefix={<SafetyCertificateOutlined />}
               suffix="%"
               precision={1}
             />
             <div style={{ marginTop: 8, color: '#666', fontSize: 12 }}>
-              {enabledCount}/{totalChannels} 渠道在线
+              {t('ops.channels_online', { count: enabledCount, total: totalChannels })}
             </div>
           </Card>
         </Col>
@@ -519,18 +521,18 @@ const OpsDashboard: React.FC = () => {
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="总用户数" value={stats?.total_users || 0} prefix={<UserOutlined />} />
+            <Statistic title={t('ops.total_users')} value={stats?.total_users || 0} prefix={<UserOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="总渠道数" value={stats?.total_channels || 0} prefix={<ApiOutlined />} />
+            <Statistic title={t('ops.total_channels')} value={stats?.total_channels || 0} prefix={<ApiOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="总消耗Token"
+              title={t('ops.total_tokens')}
               value={stats?.total_tokens || 0}
               formatter={(v) => formatQuota(Number(v))}
             />
@@ -539,7 +541,7 @@ const OpsDashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="总额度"
+              title={t('ops.total_quota')}
               value={stats?.total_quota || 0}
               formatter={(v) => formatQuota(Number(v))}
             />
@@ -548,24 +550,24 @@ const OpsDashboard: React.FC = () => {
       </Row>
 
       <Tabs activeKey={activeTab} onChange={handleTabChange} style={{ marginTop: 16 }}>
-        <TabPane tab={<span><LineChartOutlined /> 营收概览</span>} key="1">
+        <TabPane tab={<span><LineChartOutlined /> {t('ops.revenue_overview')}</span>} key="1">
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={16}>
-              <Card title="日营收趋势">
+              <Card title={t('ops.daily_revenue_trend')}>
                 <ReactECharts option={getRevenueChartOption()} style={{ height: 300 }} />
               </Card>
             </Col>
             <Col xs={24} lg={8}>
-              <Card title="快捷操作">
+              <Card title={t('ops.quick_actions')}>
                 <Space direction="vertical" style={{ width: '100%' }}>
                   <Button block icon={<DollarOutlined />} onClick={() => handleExport('daily')}>
-                    导出日报
+                    {t('ops.export_daily')}
                   </Button>
                   <Button block icon={<RiseOutlined />} onClick={() => handleExport('weekly')}>
-                    导出周报
+                    {t('ops.export_weekly')}
                   </Button>
                   <Button block icon={<DashboardOutlined />} onClick={() => handleExport('monthly')}>
-                    导出月报
+                    {t('ops.export_monthly')}
                   </Button>
                 </Space>
               </Card>
@@ -573,63 +575,63 @@ const OpsDashboard: React.FC = () => {
           </Row>
         </TabPane>
 
-        <TabPane tab={<span><UserOutlined /> 用户管理</span>} key="2">
-          <Card title="用户列表">
+        <TabPane tab={<span><UserOutlined /> {t('ops.user_management')}</span>} key="2">
+          <Card title={t('ops.user_list')}>
             <Table
               dataSource={users}
               columns={[
-                { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-                { title: '用户名', dataIndex: 'username', key: 'username', render: (v: string, r: any) => r.display_name || v },
-                { title: '邮箱', dataIndex: 'email', key: 'email' },
-                { title: 'Group', dataIndex: 'group', key: 'group', width: 100 },
-                { title: '角色', dataIndex: 'role', key: 'role', render: (v: number) => v === 100 ? '超级管理员' : v === 10 ? '管理员' : '普通用户' },
-                { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? '正常' : v === 2 ? '禁用' : '已删除' },
-                { title: '额度', dataIndex: 'quota', key: 'quota', render: (v: number) => v.toLocaleString() },
-                { title: '已用额度', dataIndex: 'used_quota', key: 'used_quota', render: (v: number) => v.toLocaleString() },
-                { title: '请求次数', dataIndex: 'request_count', key: 'request_count' },
+                { title: t('ops.id'), dataIndex: 'id', key: 'id', width: 60 },
+                { title: t('ops.username'), dataIndex: 'username', key: 'username', render: (v: string, r: any) => r.display_name || v },
+                { title: t('ops.email'), dataIndex: 'email', key: 'email' },
+                { title: t('ops.group'), dataIndex: 'group', key: 'group', width: 100 },
+                { title: t('ops.role'), dataIndex: 'role', key: 'role', render: (v: number) => v === 100 ? t('ops.super_admin') : v === 10 ? t('ops.admin') : t('ops.normal_user') },
+                { title: t('ops.status'), dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? t('ops.normal') : v === 2 ? t('ops.disabled') : t('ops.deleted') },
+                { title: t('ops.quota'), dataIndex: 'quota', key: 'quota', render: (v: number) => v.toLocaleString() },
+                { title: t('ops.used_quota'), dataIndex: 'used_quota', key: 'used_quota', render: (v: number) => v.toLocaleString() },
+                { title: t('ops.request_count'), dataIndex: 'request_count', key: 'request_count' },
                 {
-                  title: '操作',
+                  title: t('ops.action'),
                   key: 'action',
                   width: 100,
                   render: (_: any, record: any) => (
                     <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditUser(record)}>
-                      编辑
+                      {t('ops.edit')}
                     </Button>
                   )
                 },
               ]}
               rowKey="id"
               loading={usersLoading}
-              pagination={{ pageSize: 20, total: usersTotal, showTotal: (t) => `共 ${t} 条` }}
+              pagination={{ pageSize: 20, total: usersTotal, showTotal: (total) => t('ops.total_records', { count: total }) }}
               onChange={(pagination) => loadUsers(((pagination.current || 1) - 1) * 20, 20)}
             />
           </Card>
         </TabPane>
 
-        <TabPane tab={<span><ApiOutlined /> 渠道管理</span>} key="3">
+        <TabPane tab={<span><ApiOutlined /> {t('ops.channel_management')}</span>} key="3">
           <Card
-            title="渠道列表"
-            extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreateChannel}>添加渠道</Button>}
+            title={t('ops.channel_list')}
+            extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreateChannel}>{t('ops.add_channel')}</Button>}
           >
             <Table
               dataSource={channels}
               columns={[
-                { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-                { title: '名称', dataIndex: 'name', key: 'name' },
-                { title: '类型', dataIndex: 'type_name', key: 'type_name' },
+                { title: t('ops.id'), dataIndex: 'id', key: 'id', width: 60 },
+                { title: t('ops.channel_name'), dataIndex: 'name', key: 'name' },
+                { title: t('ops.channel_type'), dataIndex: 'type_name', key: 'type_name' },
                 { title: 'Provider', dataIndex: 'provider', key: 'provider', width: 100 },
                 { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
-                { title: '优先级', dataIndex: 'priority', key: 'priority', width: 80 },
-                { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? <Tag color="green">启用</Tag> : v === 2 ? <Tag color="red">禁用</Tag> : <Tag>未知</Tag> },
+                { title: t('ops.priority'), dataIndex: 'priority', key: 'priority', width: 80 },
+                { title: t('ops.status'), dataIndex: 'status', key: 'status', render: (v: number) => v === 1 ? <Tag color="green">{t('ops.enabled')}</Tag> : v === 2 ? <Tag color="red">{t('ops.disabled')}</Tag> : <Tag>{t('ops.unknown_status')}</Tag> },
                 {
-                  title: '操作',
+                  title: t('ops.action'),
                   key: 'action',
                   width: 150,
                   render: (_: any, record: Channel) => (
                     <Space>
-                      <Button type="link" size="small" onClick={() => handleEditChannel(record)}>编辑</Button>
-                      <Popconfirm title="确定删除？" onConfirm={() => handleDeleteChannel(record.id)}>
-                        <Button type="link" size="small" danger>删除</Button>
+                      <Button type="link" size="small" onClick={() => handleEditChannel(record)}>{t('ops.edit')}</Button>
+                      <Popconfirm title={t('ops.confirm_delete')} onConfirm={() => handleDeleteChannel(record.id)}>
+                        <Button type="link" size="small" danger>{t('ops.delete')}</Button>
                       </Popconfirm>
                     </Space>
                   )
@@ -637,67 +639,67 @@ const OpsDashboard: React.FC = () => {
               ]}
               rowKey="id"
               loading={channelsLoading}
-              pagination={{ pageSize: 10, total: channelsTotal, showTotal: (t) => `共 ${t} 条` }}
+              pagination={{ pageSize: 10, total: channelsTotal, showTotal: (total) => t('ops.total_records', { count: total }) }}
               onChange={(pagination) => loadChannels(((pagination.current || 1) - 1) * 10, 10)}
             />
           </Card>
         </TabPane>
 
-        <TabPane tab={<span><ApiOutlined /> 渠道健康</span>} key="4">
-          <Card title="渠道状态">
+        <TabPane tab={<span><ApiOutlined /> {t('ops.channel_health')}</span>} key="4">
+          <Card title={t('ops.channel_status')}>
             <Table
               dataSource={channelHealth}
               columns={channelColumns}
               rowKey="id"
               size="small"
-              pagination={{ pageSize: 10, total: channelHealth.length, showTotal: (t) => `共 ${t} 条` }}
+              pagination={{ pageSize: 10, total: channelHealth.length, showTotal: (total) => t('ops.total_records', { count: total }) }}
             />
           </Card>
         </TabPane>
 
-        <TabPane tab={<span><UserOutlined /> 配额设置</span>} key="6">
+        <TabPane tab={<span><UserOutlined /> {t('ops.quota_settings')}</span>} key="6">
           <Form form={settingForm} layout="vertical">
-            <Card title="配额配置" style={{ marginTop: 16 }}>
+            <Card title={t('ops.quota_config')} style={{ marginTop: 16 }}>
               <Row gutter={[16, 16]}>
                 <Col span={12}>
-                  <Form.Item label="新用户初始配额" name="QuotaForNewUser">
-                    <InputNumber style={{ width: '100%' }} placeholder="-1 表示无限额" />
+                  <Form.Item label={t('ops.new_user_initial_quota')} name="QuotaForNewUser">
+                    <InputNumber style={{ width: '100%' }} placeholder={t('ops.negative_unlimited')} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="预消耗配额" name="PreConsumedQuota">
-                    <InputNumber style={{ width: '100%' }} placeholder="请求前预扣除的配额" />
+                  <Form.Item label={t('ops.pre_consumed_quota')} name="PreConsumedQuota">
+                    <InputNumber style={{ width: '100%' }} placeholder={t('ops.pre_consumed_quota_placeholder')} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="邀请者奖励配额" name="QuotaForInviter">
-                    <InputNumber style={{ width: '100%' }} placeholder="邀请者获得的奖励" />
+                  <Form.Item label={t('ops.inviter_reward_quota')} name="QuotaForInviter">
+                    <InputNumber style={{ width: '100%' }} placeholder={t('ops.inviter_reward_placeholder')} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="被邀请者奖励配额" name="QuotaForInvitee">
-                    <InputNumber style={{ width: '100%' }} placeholder="被邀请者获得的奖励" />
+                  <Form.Item label={t('ops.invitee_reward_quota')} name="QuotaForInvitee">
+                    <InputNumber style={{ width: '100%' }} placeholder={t('ops.invitee_reward_placeholder')} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="配额提醒阈值" name="QuotaRemindThreshold">
-                    <InputNumber style={{ width: '100%' }} placeholder="配额低于此值时提醒" />
+                  <Form.Item label={t('ops.quota_remind_threshold')} name="QuotaRemindThreshold">
+                    <InputNumber style={{ width: '100%' }} placeholder={t('ops.quota_remind_placeholder')} />
                   </Form.Item>
                 </Col>
               </Row>
               <Button type="primary" icon={<SaveOutlined />} loading={settingSaving} onClick={handleSaveSettings} style={{ marginTop: 16 }}>
-                保存设置
+                {t('ops.save_settings')}
               </Button>
             </Card>
           </Form>
         </TabPane>
 
-        <TabPane tab={<span><SettingOutlined /> 系统设置</span>} key="7">
+        <TabPane tab={<span><SettingOutlined /> {t('ops.system_settings')}</span>} key="7">
           <Form form={settingForm} layout="vertical">
-            <Card title="分组倍率" style={{ marginTop: 16 }}>
+            <Card title={t('ops.group_multiplier')} style={{ marginTop: 16 }}>
               <Form.Item
                 name="GroupRatio"
-                rules={[{ validator: (_, value) => verifyJSON(value) ? Promise.resolve() : Promise.reject('不是合法的 JSON') }]}
+                rules={[{ validator: (_, value) => verifyJSON(value) ? Promise.resolve() : Promise.reject(t('ops.not_valid_json')) }]}
               >
                 <Input.TextArea
                   rows={6}
@@ -706,112 +708,111 @@ const OpsDashboard: React.FC = () => {
                 />
               </Form.Item>
               <div style={{ color: '#999', fontSize: 12 }}>
-                JSON 格式，键为分组名称，值为倍率。例如 {" "}
-                {'{"default": 1.0}'} 表示默认分组倍率为 1.0
+                {t('ops.json_format_example')}
               </div>
             </Card>
 
-            <Card title="渠道自动管理" style={{ marginTop: 16 }}>
+            <Card title={t('ops.channel_auto_management')} style={{ marginTop: 16 }}>
               <Row gutter={[16, 16]}>
                 <Col span={12}>
-                  <Form.Item label="自动禁用渠道" name="AutomaticDisableChannelEnabled" valuePropName="checked">
+                  <Form.Item label={t('ops.auto_disable_channel')} name="AutomaticDisableChannelEnabled" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="自动启用渠道" name="AutomaticEnableChannelEnabled" valuePropName="checked">
+                  <Form.Item label={t('ops.auto_enable_channel')} name="AutomaticEnableChannelEnabled" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="渠道禁用阈值(秒)" name="ChannelDisableThreshold">
-                    <InputNumber style={{ width: '100%' }} placeholder="响应时间超过此值自动禁用" />
+                  <Form.Item label={t('ops.channel_disable_threshold')} name="ChannelDisableThreshold">
+                    <InputNumber style={{ width: '100%' }} placeholder={t('ops.channel_disable_placeholder')} />
                   </Form.Item>
                 </Col>
               </Row>
             </Card>
 
-            <Card title="显示设置" style={{ marginTop: 16 }}>
+            <Card title={t('ops.display_settings')} style={{ marginTop: 16 }}>
               <Row gutter={[16, 16]}>
                 <Col span={12}>
-                  <Form.Item label="以货币形式显示" name="DisplayInCurrencyEnabled" valuePropName="checked">
+                  <Form.Item label={t('ops.display_in_currency')} name="DisplayInCurrencyEnabled" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="显示 Token 统计" name="DisplayTokenStatEnabled" valuePropName="checked">
+                  <Form.Item label={t('ops.display_token_stat')} name="DisplayTokenStatEnabled" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="消费日志" name="LogConsumeEnabled" valuePropName="checked">
+                  <Form.Item label={t('ops.consumption_log')} name="LogConsumeEnabled" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="重试次数" name="RetryTimes">
+                  <Form.Item label={t('ops.retry_times')} name="RetryTimes">
                     <InputNumber style={{ width: '100%' }} min={0} max={10} />
                   </Form.Item>
                 </Col>
               </Row>
             </Card>
 
-            <Card title="告警设置" style={{ marginTop: 16 }}>
+            <Card title={t('ops.alert_settings')} style={{ marginTop: 16 }}>
               <Row gutter={[16, 16]}>
                 <Col span={12}>
-                  <Form.Item label="告警开关" name="alert_enabled">
+                  <Form.Item label={t('ops.alert_switch')} name="alert_enabled">
                     <Switch checked={alertConfig?.enabled} onChange={(checked) => {
                       updateAlertConfig({ ...alertConfig, enabled: checked })
                     }} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="告警邮箱" name="alert_email">
-                    <Input placeholder="接收告警的邮箱地址" />
+                  <Form.Item label={t('ops.alert_email')} name="alert_email">
+                    <Input placeholder={t('ops.alert_email_placeholder')} />
                   </Form.Item>
                 </Col>
                 <Col span={24}>
-                  <Form.Item label="告警Webhook" name="alert_webhook">
-                    <Input placeholder="接收告警的 Webhook URL" />
+                  <Form.Item label={t('ops.alert_webhook')} name="alert_webhook">
+                    <Input placeholder={t('ops.alert_webhook_placeholder')} />
                   </Form.Item>
                 </Col>
               </Row>
             </Card>
 
-            <Card title="性能配置" style={{ marginTop: 16 }}>
+            <Card title={t('ops.performance_config')} style={{ marginTop: 16 }}>
               <Row gutter={[16, 16]}>
                 <Col span={12}>
-                  <Form.Item label="最大并发请求数" name="max_concurrent_requests">
+                  <Form.Item label={t('ops.max_concurrent_requests')} name="max_concurrent_requests">
                     <InputNumber style={{ width: '100%' }} min={1} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="请求队列超时(秒)" name="request_queue_timeout">
+                  <Form.Item label={t('ops.request_queue_timeout')} name="request_queue_timeout">
                     <InputNumber style={{ width: '100%' }} min={0} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="健康检查间隔(秒)" name="health_check_interval">
+                  <Form.Item label={t('ops.health_check_interval')} name="health_check_interval">
                     <InputNumber style={{ width: '100%' }} min={10} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="健康检查失败阈值" name="health_check_fail_threshold">
+                  <Form.Item label={t('ops.health_check_fail_threshold')} name="health_check_fail_threshold">
                     <InputNumber style={{ width: '100%' }} min={1} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="熔断失败阈值" name="circuit_breaker_threshold">
+                  <Form.Item label={t('ops.circuit_breaker_threshold')} name="circuit_breaker_threshold">
                     <InputNumber style={{ width: '100%' }} min={1} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="熔断超时(秒)" name="circuit_breaker_timeout">
+                  <Form.Item label={t('ops.circuit_breaker_timeout')} name="circuit_breaker_timeout">
                     <InputNumber style={{ width: '100%' }} min={1} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="请求超时(秒,0=无限)" name="relay_timeout">
+                  <Form.Item label={t('ops.request_timeout')} name="relay_timeout">
                     <InputNumber style={{ width: '100%' }} min={0} />
                   </Form.Item>
                 </Col>
@@ -819,55 +820,55 @@ const OpsDashboard: React.FC = () => {
             </Card>
 
             <Button type="primary" icon={<SaveOutlined />} loading={settingSaving} onClick={handleSaveSettings} style={{ marginTop: 16 }}>
-              保存设置
+              {t('ops.save_settings')}
             </Button>
           </Form>
         </TabPane>
       </Tabs>
 
       <Modal
-        title={editingChannel ? '编辑渠道' : '添加渠道'}
+        title={editingChannel ? t('ops.edit_channel') : t('ops.add_channel_title')}
         open={channelModalVisible}
         onCancel={() => setChannelModalVisible(false)}
         onOk={handleChannelSubmit}
-        okText="保存"
-        cancelText="取消"
+        okText={t('ops.save')}
+        cancelText={t('ops.cancel')}
         width={700}
       >
         <Form form={channelForm} layout="vertical">
-          <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: '请输入渠道名称' }]}>
+          <Form.Item name="name" label={t('ops.channel_name')} rules={[{ required: true, message: t('ops.enter_channel_name') }]}>
             <Input placeholder="如: BEDI-集群1" />
           </Form.Item>
-          <Form.Item name="type" label="渠道类型" rules={[{ required: true }]}>
+          <Form.Item name="type" label={t('ops.channel_type')} rules={[{ required: true }]}>
             <Select
               options={[
-                { value: 50, label: 'OpenAI兼容' },
-                { value: 14, label: 'Anthropic' },
-                { value: 8, label: '自定义' },
+                { value: 50, label: t('ops.openai_compatible') },
+                { value: 14, label: t('ops.anthropic') },
+                { value: 8, label: t('ops.custom') },
               ]}
-              placeholder="选择渠道类型"
+              placeholder={t('ops.select_channel_type')}
             />
           </Form.Item>
-          <Form.Item name="base_url" label="Base URL" rules={[{ required: true, message: '请输入Base URL' }]}>
+          <Form.Item name="base_url" label={t('ops.base_url')} rules={[{ required: true, message: t('ops.enter_base_url') }]}>
             <Input placeholder="如: https://api.bedicloud.net/v1" />
           </Form.Item>
-          <Form.Item name="provider" label="Provider" rules={[{ required: true, message: '请选择Provider' }]}>
+          <Form.Item name="provider" label="Provider" rules={[{ required: true, message: t('ops.select_provider') }]}>
             <Select
               showSearch
               allowClear
-              placeholder="选择 Provider"
+              placeholder={t('ops.select_provider')}
               options={providers.map(p => ({ value: p.code, label: p.name }))}
             />
           </Form.Item>
           <Form.Item
             name="key"
             label="API Key"
-            rules={editingChannel ? [] : [{ required: true, message: '请输入API Key' }]}
+            rules={editingChannel ? [] : [{ required: true, message: t('ops.enter_api_key') }]}
           >
-            <Input.Password placeholder="请输入API Key" />
+            <Input.Password placeholder={t('ops.enter_api_key')} />
           </Form.Item>
 
-          <Divider>支持的模型</Divider>
+          <Divider>{t('ops.supported_models')}</Divider>
 
           <Form.List name="modelMappings">
             {(fields, { add, remove }) => (
@@ -877,8 +878,8 @@ const OpsDashboard: React.FC = () => {
                     <Form.Item
                       {...restField}
                       name={[name, 'client']}
-                      label="客户端模型名"
-                      rules={[{ required: true, message: '请输入客户端模型名' }]}
+                      label={t('ops.client_model_name')}
+                      rules={[{ required: true, message: t('ops.enter_client_model_name') }]}
                     >
                       <Input placeholder="如: glm-4" style={{ width: 200 }} />
                     </Form.Item>
@@ -886,17 +887,17 @@ const OpsDashboard: React.FC = () => {
                     <Form.Item
                       {...restField}
                       name={[name, 'upstream']}
-                      label="上游实际名称"
-                      rules={[{ required: true, message: '请输入上游名称' }]}
+                      label={t('ops.upstream_actual_name')}
+                      rules={[{ required: true, message: t('ops.enter_upstream_name') }]}
                     >
                       <Input placeholder="如: ZhipuAI/GLM-4" style={{ width: 200 }} />
                     </Form.Item>
-                    <Button type="link" danger onClick={() => remove(name)}>删除</Button>
+                    <Button type="link" danger onClick={() => remove(name)}>{t('ops.delete')}</Button>
                   </Space>
                 ))}
                 <Form.Item>
                   <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                    添加模型映射
+                    {t('ops.add_model_mapping')}
                   </Button>
                 </Form.Item>
               </>
@@ -905,54 +906,54 @@ const OpsDashboard: React.FC = () => {
 
           <Divider />
 
-          <Form.Item name="priority" label="优先级">
-            <InputNumber style={{ width: '100%' }} placeholder="数值越大越优先" min={0} />
+          <Form.Item name="priority" label={t('ops.priority')}>
+            <InputNumber style={{ width: '100%' }} placeholder={t('ops.bigger_priority')} min={0} />
           </Form.Item>
-          <Form.Item name="status" label="状态">
+          <Form.Item name="status" label={t('ops.status')}>
             <Select
               options={[
-                { value: 1, label: '启用' },
-                { value: 2, label: '禁用' },
+                { value: 1, label: t('ops.enabled') },
+                { value: 2, label: t('ops.disabled') },
               ]}
-              placeholder="选择状态"
+              placeholder={t('ops.select_status')}
             />
           </Form.Item>
-          <Form.Item name="hide_upstream_model" label="隐藏上游模型" valuePropName="checked">
+          <Form.Item name="hide_upstream_model" label={t('ops.hide_upstream_model')} valuePropName="checked">
             <Switch onChange={(checked) => channelForm.setFieldValue('hide_upstream_model', checked)} />
-            <span style={{ marginLeft: 8, color: '#999' }}>开启后，API 返回的模型名将替换为客户端请求的模型名</span>
+            <span style={{ marginLeft: 8, color: '#999' }}>{t('ops.hide_upstream_model_tip')}</span>
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="编辑用户"
+        title={t('ops.edit_user')}
         open={editUserModalVisible}
         onCancel={() => setEditUserModalVisible(false)}
         onOk={handleUpdateUser}
-        okText="保存"
-        cancelText="取消"
+        okText={t('ops.save')}
+        cancelText={t('ops.cancel')}
       >
         <Form form={editUserForm} layout="vertical">
-          <Form.Item name="group" label="分组（Group）">
-            <Input placeholder="如: bedi, default" />
+          <Form.Item name="group" label={t('ops.group_group')}>
+            <Input placeholder={t('ops.group_placeholder')} />
           </Form.Item>
-          <Form.Item name="quota" label="额度">
-            <InputNumber style={{ width: '100%' }} placeholder="-1 = 无限制，0 = 无额度" min={-1} />
+          <Form.Item name="quota" label={t('ops.quota_amount')}>
+            <InputNumber style={{ width: '100%' }} placeholder={t('ops.quota_placeholder')} min={-1} />
           </Form.Item>
-          <Form.Item name="role" label="角色">
+          <Form.Item name="role" label={t('ops.role')}>
             <Select
               options={[
-                { value: 1, label: '普通用户' },
-                { value: 10, label: '管理员' },
-                { value: 100, label: '超级管理员' },
+                { value: 1, label: t('ops.normal_user') },
+                { value: 10, label: t('ops.admin') },
+                { value: 100, label: t('ops.super_admin') },
               ]}
             />
           </Form.Item>
-          <Form.Item name="status" label="状态">
+          <Form.Item name="status" label={t('ops.status')}>
             <Select
               options={[
-                { value: 1, label: '正常' },
-                { value: 2, label: '禁用' },
+                { value: 1, label: t('ops.normal') },
+                { value: 2, label: t('ops.disabled') },
               ]}
             />
           </Form.Item>

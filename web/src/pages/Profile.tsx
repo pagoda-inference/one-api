@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, Form, Input, Button, message, Spin, Divider } from 'antd'
 import { UserOutlined, MailOutlined, LockOutlined } from '@ant-design/icons'
 import { getUserInfo, updateUserInfo } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 interface UserInfo {
   display_name: string
@@ -11,6 +12,7 @@ interface UserInfo {
 }
 
 const Profile: React.FC = () => {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
@@ -34,7 +36,7 @@ const Profile: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load user info:', error)
-      message.error('加载用户信息失败')
+      message.error(t('profile.load_user_info_failed'))
     } finally {
       setLoading(false)
     }
@@ -45,14 +47,14 @@ const Profile: React.FC = () => {
       setSaving(true)
       const res = await updateUserInfo(values)
       if (res.data?.success) {
-        message.success('保存成功')
+        message.success(t('profile.save_success'))
         loadUserInfo()  // Refresh data
       } else {
-        message.error(res.data?.message || '保存失败')
+        message.error(res.data?.message || t('profile.save_failed'))
       }
     } catch (error) {
       console.error('Failed to update:', error)
-      message.error('保存失败')
+      message.error(t('profile.save_failed'))
     } finally {
       setSaving(false)
     }
@@ -71,7 +73,7 @@ const Profile: React.FC = () => {
       <Card
         title={
           <span>
-            <UserOutlined /> 个人中心
+            <UserOutlined /> {t('profile.personal_center')}
           </span>
         }
       >
@@ -80,47 +82,47 @@ const Profile: React.FC = () => {
           layout="vertical"
           onFinish={handleSubmit}
         >
-          <Divider>基本信息</Divider>
+          <Divider>{t('profile.basic_info')}</Divider>
 
           <Form.Item
-            label="显示名称"
+            label={t('profile.display_name')}
             name="display_name"
           >
-            <Input prefix={<UserOutlined />} placeholder="显示名称" />
+            <Input prefix={<UserOutlined />} placeholder={t('profile.display_name_placeholder')} />
           </Form.Item>
 
           <Form.Item
-            label="邮箱"
+            label={t('profile.email')}
             name="email"
             rules={[
-              { type: 'email', message: '请输入有效的邮箱地址' }
+              { type: 'email', message: t('profile.valid_email_required') }
             ]}
           >
-            <Input prefix={<MailOutlined />} placeholder="邮箱地址（用于接收告警通知）" />
+            <Input prefix={<MailOutlined />} placeholder={t('profile.email_placeholder')} />
           </Form.Item>
 
-          <Divider>修改密码</Divider>
+          <Divider>{t('profile.change_password')}</Divider>
 
           <Form.Item
-            label="新密码"
+            label={t('profile.new_password')}
             name="password"
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="留空则不修改密码" />
+            <Input.Password prefix={<LockOutlined />} placeholder={t('profile.leave_blank_no_change')} />
           </Form.Item>
 
           <Form.Item>
             <Button type="primary" htmlType="submit" loading={saving} block>
-              保存修改
+              {t('profile.save_changes')}
             </Button>
           </Form.Item>
         </Form>
 
         {userInfo && (
           <>
-            <Divider>账户信息</Divider>
+            <Divider>{t('profile.account_info')}</Divider>
             <div style={{ color: '#666', fontSize: 13 }}>
-              <p>角色: {userInfo.role === 100 ? '超级管理员' : userInfo.role === 10 ? '管理员' : '普通用户'}</p>
-              <p>状态: {userInfo.status === 1 ? '正常' : '已禁用'}</p>
+              <p>{t('profile.role')}: {userInfo.role === 100 ? t('profile.super_admin') : userInfo.role === 10 ? t('profile.admin') : t('profile.normal_user')}</p>
+              <p>{t('profile.status')}: {userInfo.status === 1 ? t('profile.normal') : t('profile.disabled')}</p>
             </div>
           </>
         )}

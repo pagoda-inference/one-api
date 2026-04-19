@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { Row, Col, Card, InputNumber, Select, Button, Table, Tag, Modal, message, Result, Empty } from 'antd'
 import { WechatOutlined, AlipayOutlined, CreditCardOutlined } from '@ant-design/icons'
 import { getTopupOrders, createTopupOrder, cancelTopupOrder, TopupOrder, User } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { Option } = Select
 
 const Topup: React.FC = () => {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [orders, setOrders] = useState<TopupOrder[]>([])
@@ -63,7 +65,7 @@ const Topup: React.FC = () => {
       setModalVisible(true)
       loadOrders()
     } catch (error) {
-      message.error('创建订单失败')
+      message.error(t('topup.create_order_failed'))
     } finally {
       setLoading(false)
     }
@@ -72,10 +74,10 @@ const Topup: React.FC = () => {
   const handleCancel = async (id: string) => {
     try {
       await cancelTopupOrder(id)
-      message.success('订单已取消')
+      message.success(t('topup.order_cancelled'))
       loadOrders()
     } catch (error) {
-      message.error('取消失败')
+      message.error(t('topup.cancel_order_failed'))
     }
   }
 
@@ -83,10 +85,10 @@ const Topup: React.FC = () => {
 
   const getStatusTag = (status: string) => {
     const map: Record<string, { color: string; text: string }> = {
-      pending: { color: 'orange', text: '待支付' },
-      paid: { color: 'green', text: '已支付' },
-      cancelled: { color: 'gray', text: '已取消' },
-      refunded: { color: 'red', text: '已退款' }
+      pending: { color: 'orange', text: t('topup.pending_payment') },
+      paid: { color: 'green', text: t('topup.paid') },
+      cancelled: { color: 'gray', text: t('topup.cancelled') },
+      refunded: { color: 'red', text: t('topup.refunded') }
     }
     const s = map[status] || { color: 'gray', text: status }
     return <Tag color={s.color}>{s.text}</Tag>
@@ -102,57 +104,57 @@ const Topup: React.FC = () => {
   }
 
   const columns = [
-    { title: '订单号', dataIndex: 'id', key: 'id', width: 200 },
+    { title: t('common.type'), dataIndex: 'id', key: 'id', width: 200 },
     {
-      title: '金额',
+      title: t('topup.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (v: number) => `¥${v.toFixed(2)}`
     },
     {
-      title: '获得额度',
+      title: t('topup.quota_obtained'),
       dataIndex: 'quota',
       key: 'quota',
       render: (v: number) => v?.toLocaleString() || '-'
     },
     {
-      title: '支付方式',
+      title: t('topup.payment_method'),
       dataIndex: 'pay_method',
       key: 'pay_method',
       render: (v: string) => (
         <span>
-          {getPayMethodIcon(v)} {v === 'alipay' ? '支付宝' : v === 'wechat' ? '微信支付' : '银行卡'}
+          {getPayMethodIcon(v)} {v === 'alipay' ? t('topup.alipay') : v === 'wechat' ? t('topup.wechat_pay') : t('topup.bank_card')}
         </span>
       )
     },
-    { title: '状态', dataIndex: 'status', key: 'status', render: getStatusTag },
+    { title: t('common.status'), dataIndex: 'status', key: 'status', render: getStatusTag },
     {
-      title: '创建时间',
+      title: t('token.created_time'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (v: number) => v ? new Date(v * 1000).toLocaleString() : '-'
     },
     ...(isAdmin ? [
       {
-        title: '操作',
+        title: t('common.action'),
         key: 'action',
         width: 100,
         render: (_: any, record: TopupOrder) => (
           record.status === 'pending' && (
             <Button size="small" danger onClick={() => handleCancel(record.id)}>
-              取消
+              {t('common.cancel')}
             </Button>
           )
         )
       }
     ] : [
       {
-        title: '操作',
+        title: t('common.action'),
         key: 'action',
         render: (_: any, record: TopupOrder) => (
           record.status === 'pending' && (
             <Button size="small" danger onClick={() => handleCancel(record.id)}>
-              取消
+              {t('common.cancel')}
             </Button>
           )
         )
@@ -164,7 +166,7 @@ const Topup: React.FC = () => {
   if (isAdmin) {
     return (
       <div>
-        <Card title="充值记录">
+        <Card title={t('topup.topup_record')}>
           {orders.length > 0 ? (
             <Table
               dataSource={orders}
@@ -174,7 +176,7 @@ const Topup: React.FC = () => {
               pagination={{ pageSize: 20 }}
             />
           ) : (
-            <Empty description="暂无充值记录" />
+            <Empty description={t('common.no_data')} />
           )}
         </Card>
       </div>
@@ -186,9 +188,9 @@ const Topup: React.FC = () => {
     <div>
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title="快速充值">
+          <Card title={t('topup.quick_topup')}>
             <div style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 8, color: '#666' }}>选择金额</div>
+              <div style={{ marginBottom: 8, color: '#666' }}>{t('topup.select_amount')}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {quickAmounts.map(v => (
                   <Button
@@ -203,7 +205,7 @@ const Topup: React.FC = () => {
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 8, color: '#666' }}>自定义金额</div>
+              <div style={{ marginBottom: 8, color: '#666' }}>{t('topup.custom_amount')}</div>
               <InputNumber
                 style={{ width: '100%' }}
                 min={1}
@@ -216,20 +218,20 @@ const Topup: React.FC = () => {
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 8, color: '#666' }}>支付方式</div>
+              <div style={{ marginBottom: 8, color: '#666' }}>{t('topup.payment_method')}</div>
               <Select
                 style={{ width: '100%' }}
                 value={payMethod}
                 onChange={setPayMethod}
               >
                 <Option value="alipay">
-                  <span><AlipayOutlined /> 支付宝</span>
+                  <span><AlipayOutlined /> {t('topup.alipay')}</span>
                 </Option>
                 <Option value="wechat">
-                  <span><WechatOutlined /> 微信支付</span>
+                  <span><WechatOutlined /> {t('topup.wechat_pay')}</span>
                 </Option>
                 <Option value="card">
-                  <span><CreditCardOutlined /> 银行卡</span>
+                  <span><CreditCardOutlined /> {t('topup.bank_card')}</span>
                 </Option>
               </Select>
             </div>
@@ -241,40 +243,37 @@ const Topup: React.FC = () => {
               loading={loading}
               onClick={handleTopup}
             >
-              立即充值 ¥{amount}
+              {t('topup.topup_now')} ¥{amount}
             </Button>
 
             <div style={{ marginTop: 16, color: '#999', fontSize: 12 }}>
-              <p>1元 = 7,200 quota (约等于1美元)</p>
-              <p>充值金额将直接到账，无手续费</p>
+              <p>{t('topup.1rmb_7200quota')}</p>
+              <p>{t('topup.no_handling_fee')}</p>
             </div>
           </Card>
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="充值说明">
+          <Card title={t('topup.topup_ratio')}>
             <div style={{ color: '#666' }}>
-              <h4>充值比例</h4>
-              <p>1元 = 7,200 quota</p>
-              <p>相当于 1美元 = 7.2元 的超低汇率</p>
+              <h4>{t('topup.topup_ratio')}</h4>
+              <p>{t('topup.1rmb_7200quota')}</p>
 
-              <h4 style={{ marginTop: 16 }}>到账时间</h4>
-              <p>支付宝/微信支付：即时到账</p>
-              <p>银行卡支付：1-3个工作日</p>
+              <h4 style={{ marginTop: 16 }}>{t('topup.arrival_time')}</h4>
+              <p>{t('topup.alipay_wechat_instant')}</p>
+              <p>{t('topup.bank_card_1_3_days')}</p>
 
-              <h4 style={{ marginTop: 16 }}>发票说明</h4>
-              <p>充值成功后，可在"发票管理"页面申请开具发票</p>
-              <p>发票内容为"技术服务费"</p>
+              <h4 style={{ marginTop: 16 }}>{t('menu.invoice_management')}</h4>
+              <p>{t('topup.invoice_note_1')}</p>
 
-              <h4 style={{ marginTop: 16 }}>退款政策</h4>
-              <p>如需退款，请联系客服</p>
-              <p>退款将在3-7个工作日内原路返回</p>
+              <h4 style={{ marginTop: 16 }}>{t('topup.refund_policy')}</h4>
+              <p>{t('topup.refund_note_1')}</p>
             </div>
           </Card>
         </Col>
       </Row>
 
-      <Card title="充值记录" style={{ marginTop: 16 }}>
+      <Card title={t('topup.topup_record')} style={{ marginTop: 16 }}>
         <Table
           dataSource={orders}
           columns={columns}
@@ -285,14 +284,14 @@ const Topup: React.FC = () => {
       </Card>
 
       <Modal
-        title="订单已创建"
+        title={t('topup.order_created')}
         open={modalVisible}
         footer={[
           <Button key="close" onClick={() => setModalVisible(false)}>
-            关闭
+            {t('common.close')}
           </Button>,
           <Button key="pay" type="primary" href={createdOrder?.payment_url} target="_blank">
-            前往支付
+            {t('topup.go_to_payment')}
           </Button>
         ]}
         onCancel={() => setModalVisible(false)}
@@ -300,12 +299,12 @@ const Topup: React.FC = () => {
         {createdOrder && (
           <Result
             status="success"
-            title="订单创建成功"
-            subTitle={`订单号: ${createdOrder.id}`}
+            title={t('topup.order_created_success')}
+            subTitle={`${t('common.type')}: ${createdOrder.id}`}
             extra={[
-              <p key="amount">充值金额: <strong>¥{createdOrder.amount}</strong></p>,
-              <p key="quota">获得额度: <strong>{createdOrder.quota?.toLocaleString()} quota</strong></p>,
-              <p key="expire">请在 {createdOrder.expired_at ? new Date(createdOrder.expired_at * 1000).toLocaleString() : '24小时内'} 前完成支付</p>
+              <p key="amount">{t('topup.amount')}: <strong>¥{createdOrder.amount}</strong></p>,
+              <p key="quota">{t('topup.quota_obtained')}: <strong>{createdOrder.quota?.toLocaleString()} quota</strong></p>,
+              <p key="expire">{t('topup.please_pay_within', { time: createdOrder.expired_at ? new Date(createdOrder.expired_at * 1000).toLocaleString() : t('topup.within_24_hours') })}</p>
             ]}
           />
         )}

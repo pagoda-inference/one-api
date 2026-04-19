@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Tag, Space } from 'antd'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import { getAllNotifications, createNotification, deleteNotification } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { TextArea } = Input
 
@@ -17,6 +18,7 @@ interface Notification {
 }
 
 const NotificationManage: React.FC = () => {
+  const { t } = useTranslation()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [modalVisible, setModalVisible] = useState(false)
@@ -36,7 +38,7 @@ const NotificationManage: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load notifications:', error)
-      message.error('加载通知失败')
+      message.error(t('notification.load_notification_failed'))
     } finally {
       setLoading(false)
     }
@@ -47,16 +49,16 @@ const NotificationManage: React.FC = () => {
     try {
       const res = await createNotification(values)
       if (res.data?.success) {
-        message.success('通知已创建')
+        message.success(t('notification.notification_created'))
         setModalVisible(false)
         form.resetFields()
         loadNotifications()
       } else {
-        message.error(res.data?.message || '创建失败')
+        message.error(res.data?.message || t('notification.create_failed'))
       }
     } catch (error) {
       console.error('Failed to create notification:', error)
-      message.error('创建失败')
+      message.error(t('notification.create_failed'))
     } finally {
       setSubmitting(false)
     }
@@ -66,14 +68,14 @@ const NotificationManage: React.FC = () => {
     try {
       const res = await deleteNotification(id)
       if (res.data?.success) {
-        message.success('删除成功')
+        message.success(t('notification.delete_success'))
         loadNotifications()
       } else {
-        message.error(res.data?.message || '删除失败')
+        message.error(res.data?.message || t('notification.delete_failed'))
       }
     } catch (error) {
       console.error('Failed to delete notification:', error)
-      message.error('删除失败')
+      message.error(t('notification.delete_failed'))
     }
   }
 
@@ -85,45 +87,45 @@ const NotificationManage: React.FC = () => {
       width: 60,
     },
     {
-      title: '标题',
+      title: t('notification.title'),
       dataIndex: 'title',
       key: 'title',
     },
     {
-      title: '内容',
+      title: t('notification.content'),
       dataIndex: 'content',
       key: 'content',
       ellipsis: true,
     },
     {
-      title: '类型',
+      title: t('notification.type'),
       dataIndex: 'type',
       key: 'type',
       width: 100,
       render: (type: string) => (
         <Tag color={type === 'alert' ? 'red' : 'blue'}>
-          {type === 'alert' ? '告警' : '系统'}
+          {type === 'alert' ? t('notification.alert') : t('notification.system')}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('notification.create_time'),
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (timestamp: number) => new Date(timestamp * 1000).toLocaleString('zh-CN'),
+      render: (timestamp: number) => new Date(timestamp * 1000).toLocaleString(),
     },
     {
-      title: '操作',
+      title: t('notification.action'),
       key: 'action',
       width: 100,
       render: (_: any, record: Notification) => (
         <Space>
           <Popconfirm
-            title="确认删除此通知？"
+            title={t('notification.confirm_delete_notification')}
             onConfirm={() => handleDelete(record.id)}
-            okText="确认"
-            cancelText="取消"
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button type="link" danger icon={<DeleteOutlined />} size="small" />
           </Popconfirm>
@@ -135,10 +137,10 @@ const NotificationManage: React.FC = () => {
   return (
     <div>
       <Card
-        title="系统通知管理"
+        title={t('notification.system_notification_management')}
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
-            发送通知
+            {t('notification.send_notification')}
           </Button>
         }
       >
@@ -152,7 +154,7 @@ const NotificationManage: React.FC = () => {
       </Card>
 
       <Modal
-        title="发送系统通知"
+        title={t('notification.send_notification')}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false)
@@ -163,28 +165,28 @@ const NotificationManage: React.FC = () => {
         <Form form={form} layout="vertical" onFinish={handleCreate}>
           <Form.Item
             name="title"
-            label="通知标题"
-            rules={[{ required: true, message: '请输入通知标题' }]}
+            label={t('notification.title')}
+            rules={[{ required: true, message: t('notification.notification_title_placeholder') }]}
           >
-            <Input placeholder="请输入通知标题" />
+            <Input placeholder={t('notification.notification_title_placeholder')} />
           </Form.Item>
           <Form.Item
             name="content"
-            label="通知内容"
-            rules={[{ required: true, message: '请输入通知内容' }]}
+            label={t('notification.content')}
+            rules={[{ required: true, message: t('notification.notification_content_placeholder') }]}
           >
-            <TextArea rows={4} placeholder="请输入通知内容" />
+            <TextArea rows={4} placeholder={t('notification.notification_content_placeholder')} />
           </Form.Item>
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit" loading={submitting}>
-                发送
+                {t('notification.send')}
               </Button>
               <Button onClick={() => {
                 setModalVisible(false)
                 form.resetFields()
               }}>
-                取消
+                {t('common.cancel')}
               </Button>
             </Space>
           </Form.Item>

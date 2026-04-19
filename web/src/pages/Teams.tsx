@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { Row, Col, Card, Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, message, Popconfirm, Tabs, Statistic } from 'antd'
 import { TeamOutlined, UserOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, AuditOutlined } from '@ant-design/icons'
 import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, getOpsUsers, Tenant, TenantUser, AuditLog, getAllCompanies, getDepartments, createCompany, createDepartment, deleteTenant, Company, Department } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { Option } = Select
 const { TabPane } = Tabs
 
 const Teams: React.FC = () => {
+  const { t } = useTranslation()
   const [, setLoading] = useState(false)
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null)
@@ -121,15 +123,15 @@ const Teams: React.FC = () => {
     try {
       const res = await createTenant(values)
       if (res.data.success) {
-        message.success('团队创建成功')
+        message.success(t('teams.team_created'))
         setCreateModalVisible(false)
         createForm.resetFields()
         loadTenants()
       } else {
-        message.error(res.data.message || '创建失败')
+        message.error(res.data.message || t('common.create_failed'))
       }
     } catch (error: any) {
-      message.error(error.response?.data?.message || '创建失败')
+      message.error(error.response?.data?.message || t('common.create_failed'))
     }
   }
 
@@ -137,14 +139,14 @@ const Teams: React.FC = () => {
     try {
       const res = await createCompany(values)
       if (res.data.success) {
-        message.success('公司创建成功')
+        message.success(t('teams.company_created'))
         setCreateCompanyModalVisible(false)
         loadCompanies()
       } else {
-        message.error(res.data.message || '创建失败')
+        message.error(res.data.message || t('common.create_failed'))
       }
     } catch (error: any) {
-      message.error(error.response?.data?.message || '创建失败')
+      message.error(error.response?.data?.message || t('common.create_failed'))
     }
   }
 
@@ -152,7 +154,7 @@ const Teams: React.FC = () => {
     try {
       const res = await deleteTenant(tenantId)
       if (res.data.success) {
-        message.success('团队删除成功')
+        message.success(t('teams.team_deleted'))
         loadTenants()
         if (currentTenant?.id === tenantId) {
           setCurrentTenant(null)
@@ -161,10 +163,10 @@ const Teams: React.FC = () => {
           loadDepartments(selectedCompanyId)
         }
       } else {
-        message.error(res.data.message || '删除失败')
+        message.error(res.data.message || t('common.delete_failed'))
       }
     } catch (error: any) {
-      message.error(error.response?.data?.message || '删除失败')
+      message.error(error.response?.data?.message || t('common.delete_failed'))
     }
   }
 
@@ -173,14 +175,14 @@ const Teams: React.FC = () => {
     try {
       const res = await createDepartment(selectedCompanyId, values)
       if (res.data.success) {
-        message.success('部门创建成功')
+        message.success(t('teams.department_created'))
         setCreateDeptModalVisible(false)
         loadDepartments(selectedCompanyId)
       } else {
-        message.error(res.data.message || '创建失败')
+        message.error(res.data.message || t('common.create_failed'))
       }
     } catch (error: any) {
-      message.error(error.response?.data?.message || '创建失败')
+      message.error(error.response?.data?.message || t('common.create_failed'))
     }
   }
 
@@ -203,15 +205,15 @@ const Teams: React.FC = () => {
     try {
       const res = await inviteUser(currentTenant.id, values)
       if (res.data.success) {
-        message.success('邀请成功')
+        message.success(t('teams.invite_success'))
         setInviteModalVisible(false)
         inviteForm.resetFields()
         loadTenantUsers(currentTenant.id)
       } else {
-        message.error(res.data.message || '邀请失败')
+        message.error(res.data.message || t('common.invite_failed'))
       }
     } catch (error: any) {
-      message.error(error.response?.data?.message || '邀请失败')
+      message.error(error.response?.data?.message || t('common.invite_failed'))
     }
   }
 
@@ -219,10 +221,10 @@ const Teams: React.FC = () => {
     if (!currentTenant) return
     try {
       await removeUser(currentTenant.id, userId)
-      message.success('已移除')
+      message.success(t('teams.member_removed'))
       loadTenantUsers(currentTenant.id)
     } catch (error) {
-      message.error('移除失败')
+      message.error(t('teams.remove_failed'))
     }
   }
 
@@ -230,10 +232,10 @@ const Teams: React.FC = () => {
     if (!currentTenant) return
     try {
       await updateUserRole(currentTenant.id, userId, { role })
-      message.success('角色已更新')
+      message.success(t('teams.role_updated'))
       loadTenantUsers(currentTenant.id)
     } catch (error) {
-      message.error('更新失败')
+      message.error(t('teams.update_failed'))
     }
   }
 
@@ -241,12 +243,12 @@ const Teams: React.FC = () => {
     if (!currentTenant) return
     try {
       await allocateQuota(currentTenant.id, values)
-      message.success('额度已分配')
+      message.success(t('teams.quota_allocated_success'))
       setQuotaModalVisible(false)
       quotaForm.resetFields()
       loadTenantUsers(currentTenant.id)
     } catch (error) {
-      message.error('分配失败')
+      message.error(t('teams.allocate_failed'))
     }
   }
 
@@ -254,22 +256,22 @@ const Teams: React.FC = () => {
     if (!currentTenant) return
     try {
       await leaveTenant(currentTenant.id)
-      message.success('已离开团队')
+      message.success(t('teams.left_team'))
       setCurrentTenant(null)
       loadTenants()
     } catch (error) {
-      message.error('离开失败')
+      message.error(t('teams.leave_failed'))
     }
   }
 
   const getRoleName = (role: number) => {
     const map: Record<number, { color: string; text: string }> = {
-      0: { color: 'red', text: '所有者' },
-      1: { color: 'blue', text: '管理员' },
-      2: { color: 'green', text: '成员' },
-      3: { color: 'gray', text: '观察者' }
+      0: { color: 'red', text: t('teams.owner') },
+      1: { color: 'blue', text: t('teams.admin') },
+      2: { color: 'green', text: t('teams.member') },
+      3: { color: 'gray', text: t('teams.observer') }
     }
-    return map[role] || { color: 'gray', text: '未知' }
+    return map[role] || { color: 'gray', text: t('teams.unknown') }
   }
 
   const formatQuota = (quota: number) => {
@@ -279,34 +281,34 @@ const Teams: React.FC = () => {
   }
 
   const userColumns = [
-    { title: '用户', dataIndex: 'username', key: 'username', render: (v: string, r: TenantUser) => (
+    { title: t('common.user'), dataIndex: 'username', key: 'username', render: (v: string, r: TenantUser) => (
       <Space>
         <UserOutlined />
         <span>{r.display_name || v}</span>
         <span style={{ color: '#999' }}>@{v}</span>
       </Space>
     )},
-    { title: '角色', dataIndex: 'role', key: 'role', render: (v: number) => {
+    { title: t('user.role'), dataIndex: 'role', key: 'role', render: (v: number) => {
       const role = getRoleName(v)
       return <Tag color={role.color}>{role.text}</Tag>
     }},
-    { title: '分配额度', dataIndex: 'quota_alloc', key: 'quota_alloc', render: (v: number) => formatQuota(v) },
-    { title: '已用额度', dataIndex: 'used_quota', key: 'used_quota', render: (v: number) => formatQuota(v) },
-    { title: '操作', key: 'action', render: (_: any, r: TenantUser) => (
+    { title: t('teams.alloc_quota'), dataIndex: 'quota_alloc', key: 'quota_alloc', render: (v: number) => formatQuota(v) },
+    { title: t('teams.quota_used'), dataIndex: 'used_quota', key: 'used_quota', render: (v: number) => formatQuota(v) },
+    { title: t('common.action'), key: 'action', render: (_: any, r: TenantUser) => (
       <Space>
         {(currentRole <= 1 || isRoot) && r.role > 0 && (
           <>
             <Button size="small" onClick={() => {
               quotaForm.setFieldsValue({ target_user_id: r.id })
               setQuotaModalVisible(true)
-            }}>分配额度</Button>
+            }}>{t('teams.alloc_quota')}</Button>
             <Select size="small" value={r.role} style={{ width: 80 }} onChange={(v) => handleUpdateRole(r.id, v)}>
-              <Option value={1}>管理员</Option>
-              <Option value={2}>成员</Option>
-              <Option value={3}>观察者</Option>
+              <Option value={1}>{t('teams.admin')}</Option>
+              <Option value={2}>{t('teams.member')}</Option>
+              <Option value={3}>{t('teams.observer')}</Option>
             </Select>
-            <Popconfirm title="确定要移除此用户吗？" onConfirm={() => handleRemoveUser(r.id)}>
-              <Button size="small" danger icon={<DeleteOutlined />}>移除</Button>
+            <Popconfirm title={t('teams.confirm_remove_user')} onConfirm={() => handleRemoveUser(r.id)}>
+              <Button size="small" danger icon={<DeleteOutlined />}>{t('teams.remove')}</Button>
             </Popconfirm>
           </>
         )}
@@ -315,17 +317,17 @@ const Teams: React.FC = () => {
   ]
 
   const auditColumns = [
-    { title: '时间', dataIndex: 'created_at', key: 'created_at', render: (v: number) => new Date(v * 1000).toLocaleString() },
-    { title: '操作', dataIndex: 'action', key: 'action', render: (v: string) => {
+    { title: t('teams.time'), dataIndex: 'created_at', key: 'created_at', render: (v: number) => new Date(v * 1000).toLocaleString() },
+    { title: t('common.action'), dataIndex: 'action', key: 'action', render: (v: string) => {
       const actionMap: Record<string, string> = {
-        create_user: '添加用户', delete_user: '删除用户', update_user: '更新用户',
-        allocate_quota: '分配额度', create_channel: '创建渠道', delete_channel: '删除渠道',
-        view_users: '查看用户', leave_tenant: '离开团队'
+        create_user: t('teams.action_create_user'), delete_user: t('teams.action_delete_user'), update_user: t('teams.action_update_user'),
+        allocate_quota: t('teams.action_allocate_quota'), create_channel: t('teams.action_create_channel'), delete_channel: t('teams.action_delete_channel'),
+        view_users: t('teams.action_view_users'), leave_tenant: t('teams.action_leave_tenant')
       }
       return actionMap[v] || v
     }},
-    { title: '目标', dataIndex: 'target', key: 'target' },
-    { title: '详情', dataIndex: 'details', key: 'details', ellipsis: true },
+    { title: t('teams.target'), dataIndex: 'target', key: 'target' },
+    { title: t('teams.detail'), dataIndex: 'details', key: 'details', ellipsis: true },
     { title: 'IP', dataIndex: 'ip', key: 'ip' }
   ]
 
@@ -333,22 +335,22 @@ const Teams: React.FC = () => {
     <div>
       <Row gutter={16}>
         <Col xs={24} lg={8}>
-          <Card title={isRoot ? "公司/团队" : "我的团队"} extra={
+          <Card title={isRoot ? t('teams.company_team') : t('teams.my_team')} extra={
             isRoot ? (
               <>
                 {companies.length === 0 ? (
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateCompanyModalVisible(true)}>
-                    创建公司
+                    {t('teams.create_company')}
                   </Button>
                 ) : (
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateDeptModalVisible(true)}>
-                    创建部门
+                    {t('teams.create_department')}
                   </Button>
                 )}
               </>
             ) : (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)}>
-                创建团队
+                {t('teams.create_team')}
               </Button>
             )
           }>
@@ -359,14 +361,14 @@ const Teams: React.FC = () => {
                     value={selectedCompanyId}
                     onChange={handleCompanyChange}
                     style={{ width: '100%' }}
-                    placeholder="选择公司"
+                    placeholder={t('teams.select_company')}
                     options={companies.map(c => ({ value: c.id, label: c.name }))}
                   />
                 </div>
                 {departments.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 20 }}>
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateDeptModalVisible(true)}>
-                      创建部门
+                      {t('teams.create_department')}
                     </Button>
                   </div>
                 ) : (
@@ -376,14 +378,14 @@ const Teams: React.FC = () => {
                         <span>{d.name}</span>
                         <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)} />
                       </div>
-                      {tenants.filter(t => t.department_id === d.id).map(t => (
-                        <Card key={t.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === t.id ? '#e6f7ff' : '#fafafa' }}
-                          onClick={() => selectTenant(t.id)}>
+                      {tenants.filter(tenant => tenant.department_id === d.id).map(tenant => (
+                        <Card key={tenant.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === tenant.id ? '#e6f7ff' : '#fafafa' }}
+                          onClick={() => selectTenant(tenant.id)}>
                           <Space>
                             <TeamOutlined />
-                            <span style={{ fontWeight: currentTenant?.id === t.id ? 'bold' : 'normal' }}>{t.name}</span>
-                            <Tag>{t.code}</Tag>
-                            <Popconfirm title="确定删除此团队？" onConfirm={(e) => { e?.stopPropagation(); handleDeleteTenant(t.id) }} onCancel={(e) => e?.stopPropagation()}>
+                            <span style={{ fontWeight: currentTenant?.id === tenant.id ? 'bold' : 'normal' }}>{tenant.name}</span>
+                            <Tag>{tenant.code}</Tag>
+                            <Popconfirm title={t('teams.confirm_delete_team')} onConfirm={(e) => { e?.stopPropagation(); handleDeleteTenant(tenant.id) }} onCancel={(e) => e?.stopPropagation()}>
                               <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
                             </Popconfirm>
                           </Space>
@@ -406,7 +408,7 @@ const Teams: React.FC = () => {
             ))}
             {!isRoot && tenants.length === 0 && (
               <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
-                暂未加入任何团队
+                {t('teams.not_joined_any_team')}
               </div>
             )}
           </Card>
@@ -415,78 +417,78 @@ const Teams: React.FC = () => {
         <Col xs={24} lg={16}>
           {currentTenant ? (
             <Tabs defaultActiveKey="1" onChange={(k) => k === '3' && loadAuditLogs(currentTenant.id)}>
-              <TabPane tab={<span><UserOutlined /> 成员管理</span>} key="1">
-                <Card title={`${currentTenant.name} - 成员管理`} extra={
+              <TabPane tab={<span><UserOutlined /> {t('teams.member_management')}</span>} key="1">
+                <Card title={`${currentTenant.name} - ${t('teams.member_management')}`} extra={
                   (currentRole <= 1 || isRoot) && (
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => setInviteModalVisible(true)}>
-                      邀请成员
+                      {t('teams.invite_member')}
                     </Button>
                   )
                 }>
                   <Row gutter={16} style={{ marginBottom: 16 }}>
                     <Col span={8}>
-                      <Statistic title="团队额度" value={currentTenant.quota_limit > 0 ? formatQuota(currentTenant.quota_limit) : '无限制'} />
+                      <Statistic title={t('teams.team_quota')} value={currentTenant.quota_limit > 0 ? formatQuota(currentTenant.quota_limit) : t('common.no_limit')} />
                     </Col>
                     <Col span={8}>
-                      <Statistic title="已用额度" value={formatQuota(currentTenant.quota_used)} />
+                      <Statistic title={t('teams.quota_used')} value={formatQuota(currentTenant.quota_used)} />
                     </Col>
                     <Col span={8}>
-                      <Statistic title="成员数" value={users.length} suffix={`/ ${currentTenant.max_users}`} />
+                      <Statistic title={t('teams.member_count')} value={users.length} suffix={`/ ${currentTenant.max_users}`} />
                     </Col>
                   </Row>
                   <Table dataSource={users} columns={userColumns} rowKey="id" size="small" pagination={{ pageSize: 10 }} />
                 </Card>
               </TabPane>
 
-              <TabPane tab={<span><SettingOutlined /> 团队设置</span>} key="2">
-                <Card title="团队设置">
+              <TabPane tab={<span><SettingOutlined /> {t('teams.team_settings')}</span>} key="2">
+                <Card title={t('teams.team_settings')}>
                   <Form layout="vertical" initialValues={currentTenant} onFinish={(values) => updateTenant(currentTenant!.id, values).then(() => {
-                    message.success('设置已更新')
+                    message.success(t('teams.settings_updated'))
                     selectTenant(currentTenant!.id)
                   })}>
-                    <Form.Item name="name" label="团队名称">
+                    <Form.Item name="name" label={t('teams.team_name')}>
                       <Input />
                     </Form.Item>
-                    <Form.Item name="max_users" label="最大成员数">
+                    <Form.Item name="max_users" label={t('teams.max_members')}>
                       <Input type="number" />
                     </Form.Item>
-                    <Form.Item name="max_channels" label="最大渠道数">
+                    <Form.Item name="max_channels" label={t('teams.max_channels')}>
                       <Input type="number" />
                     </Form.Item>
                     <Row gutter={16}>
                       <Col span={8}>
-                        <Form.Item name="rate_limit_rpm" label="RPM (请求/分钟)">
-                          <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+                        <Form.Item name="rate_limit_rpm" label={t('teams.rpm_limit')}>
+                          <InputNumber style={{ width: '100%' }} placeholder={t('common.no_limit')} min={0} />
                         </Form.Item>
                       </Col>
                       <Col span={8}>
-                        <Form.Item name="rate_limit_tpm" label="TPM (Token/分钟)">
-                          <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+                        <Form.Item name="rate_limit_tpm" label={t('teams.tpm_limit')}>
+                          <InputNumber style={{ width: '100%' }} placeholder={t('common.no_limit')} min={0} />
                         </Form.Item>
                       </Col>
                       <Col span={8}>
-                        <Form.Item name="rate_limit_concurrent" label="并发数">
-                          <InputNumber style={{ width: '100%' }} placeholder="0=无限制" min={0} />
+                        <Form.Item name="rate_limit_concurrent" label={t('teams.concurrent_limit')}>
+                          <InputNumber style={{ width: '100%' }} placeholder={t('common.no_limit')} min={0} />
                         </Form.Item>
                       </Col>
                     </Row>
                     <Form.Item>
-                      <Button type="primary" htmlType="submit">保存设置</Button>
+                      <Button type="primary" htmlType="submit">{t('common.save')}</Button>
                     </Form.Item>
                   </Form>
                   {currentRole === 0 && (
                     <div style={{ marginTop: 32, borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
-                      <h4 style={{ color: '#ff4d4f' }}>危险操作</h4>
-                      <Popconfirm title="确定要离开此团队吗？" onConfirm={handleLeave}>
-                        <Button danger>离开团队</Button>
+                      <h4 style={{ color: '#ff4d4f' }}>{t('teams.danger_zone')}</h4>
+                      <Popconfirm title={t('teams.confirm_leave_team')} onConfirm={handleLeave}>
+                        <Button danger>{t('teams.leave_team')}</Button>
                       </Popconfirm>
                     </div>
                   )}
                 </Card>
               </TabPane>
 
-              <TabPane tab={<span><AuditOutlined /> 审计日志</span>} key="3">
-                <Card title="审计日志">
+              <TabPane tab={<span><AuditOutlined /> {t('teams.audit_log')}</span>} key="3">
+                <Card title={t('teams.audit_log')}>
                   <Table dataSource={auditLogs} columns={auditColumns} rowKey="id" size="small" pagination={{ pageSize: 10 }} />
                 </Card>
               </TabPane>
@@ -495,81 +497,81 @@ const Teams: React.FC = () => {
             <Card>
               <div style={{ textAlign: 'center', color: '#999', padding: 40 }}>
                 <TeamOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-                <p>请选择一个团队或创建新团队</p>
+                <p>{t('teams.select_team_prompt')}</p>
               </div>
             </Card>
           )}
         </Col>
       </Row>
 
-      <Modal title="创建团队" open={createModalVisible} onCancel={() => setCreateModalVisible(false)} footer={null}>
+      <Modal title={t('teams.create_team')} open={createModalVisible} onCancel={() => setCreateModalVisible(false)} footer={null}>
         <Form form={createForm} onFinish={handleCreateTenant} layout="vertical">
           {isRoot && (
             <>
-              <Form.Item name="company_id" label="所属公司" rules={[{ required: true, message: '请选择公司' }]}>
-                <Select placeholder="选择公司" onChange={handleCompanyChange}>
+              <Form.Item name="company_id" label={t('teams.belong_company')} rules={[{ required: true, message: t('teams.select_company') }]}>
+                <Select placeholder={t('teams.select_company')} onChange={handleCompanyChange}>
                   {companies.map(c => <Option key={c.id} value={c.id}>{c.name}</Option>)}
                 </Select>
               </Form.Item>
-              <Form.Item name="department_id" label="所属部门" rules={[{ required: true, message: '请选择部门' }]}>
-                <Select placeholder="选择部门">
+              <Form.Item name="department_id" label={t('common.belong_department')} rules={[{ required: true, message: t('common.select_department') }]}>
+                <Select placeholder={t('common.select_department')}>
                   {departments.map(d => <Option key={d.id} value={d.id}>{d.name}</Option>)}
                 </Select>
               </Form.Item>
             </>
           )}
-          <Form.Item name="name" label="团队名称" rules={[{ required: true, message: '请输入团队名称' }]}>
-            <Input placeholder="如：产品研发部" />
+          <Form.Item name="name" label={t('teams.team_name')} rules={[{ required: true, message: t('teams.enter_team_name') }]}>
+            <Input placeholder={t('teams.team_name_placeholder')} />
           </Form.Item>
-          <Form.Item name="code" label="团队代码" rules={[{ required: true, message: '请输入团队代码' }]}>
-            <Input placeholder="唯一标识，如：product-dev" />
+          <Form.Item name="code" label={t('teams.team_code')} rules={[{ required: true, message: t('teams.enter_team_code') }]}>
+            <Input placeholder={t('teams.team_code_placeholder')} />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit">创建</Button>
+            <Button type="primary" htmlType="submit">{t('common.create')}</Button>
           </Form.Item>
         </Form>
       </Modal>
 
-      <Modal title="创建公司" open={createCompanyModalVisible} onCancel={() => setCreateCompanyModalVisible(false)} footer={null}>
+      <Modal title={t('teams.create_company')} open={createCompanyModalVisible} onCancel={() => setCreateCompanyModalVisible(false)} footer={null}>
         <Form form={createCompanyForm} onFinish={handleCreateCompany} layout="vertical">
-          <Form.Item name="name" label="公司名称" rules={[{ required: true, message: '请输入公司名称' }]}>
-            <Input placeholder="如：北电数智" />
+          <Form.Item name="name" label={t('teams.company_name')} rules={[{ required: true, message: t('teams.enter_company_name') }]}>
+            <Input placeholder={t('teams.company_name_placeholder')} />
           </Form.Item>
-          <Form.Item name="code" label="公司代码" rules={[{ required: true, message: '请输入公司代码' }]}>
-            <Input placeholder="唯一标识，如：bedi" />
+          <Form.Item name="code" label={t('teams.company_code')} rules={[{ required: true, message: t('teams.enter_company_code') }]}>
+            <Input placeholder={t('teams.company_code_placeholder')} />
           </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea placeholder="公司描述（可选）" />
+          <Form.Item name="description" label={t('common.description')}>
+            <Input.TextArea placeholder={t('teams.company_description_placeholder')} />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit">创建</Button>
+            <Button type="primary" htmlType="submit">{t('common.create')}</Button>
           </Form.Item>
         </Form>
       </Modal>
 
-      <Modal title="创建部门" open={createDeptModalVisible} onCancel={() => setCreateDeptModalVisible(false)} footer={null}>
+      <Modal title={t('teams.create_department')} open={createDeptModalVisible} onCancel={() => setCreateDeptModalVisible(false)} footer={null}>
         <Form form={createDeptForm} onFinish={handleCreateDepartment} layout="vertical">
-          <Form.Item name="name" label="部门名称" rules={[{ required: true, message: '请输入部门名称' }]}>
-            <Input placeholder="如：产研中心" />
+          <Form.Item name="name" label={t('teams.department_name')} rules={[{ required: true, message: t('teams.enter_department_name') }]}>
+            <Input placeholder={t('teams.department_name_placeholder')} />
           </Form.Item>
-          <Form.Item name="code" label="部门代码">
-            <Input placeholder="唯一标识（可选），如：rd" />
+          <Form.Item name="code" label={t('teams.department_code')}>
+            <Input placeholder={t('teams.department_code_placeholder')} />
           </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea placeholder="部门描述（可选）" />
+          <Form.Item name="description" label={t('common.description')}>
+            <Input.TextArea placeholder={t('teams.department_description_placeholder')} />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit">创建</Button>
+            <Button type="primary" htmlType="submit">{t('common.create')}</Button>
           </Form.Item>
         </Form>
       </Modal>
 
-      <Modal title="邀请成员" open={inviteModalVisible} onCancel={() => { setInviteModalVisible(false); setAllUsers([]) }} footer={null}>
+      <Modal title={t('teams.invite_member')} open={inviteModalVisible} onCancel={() => { setInviteModalVisible(false); setAllUsers([]) }} footer={null}>
         <Form form={inviteForm} onFinish={handleInviteUser} layout="vertical">
-          <Form.Item name="user_id" label="选择用户" rules={[{ required: true, message: '请选择用户' }]}>
+          <Form.Item name="user_id" label={t('teams.select_user')} rules={[{ required: true, message: t('teams.please_select_user') }]}>
             <Select
               showSearch
-              placeholder="搜索用户名、邮箱或昵称"
+              placeholder={t('teams.search_user_placeholder')}
               filterOption={false}
               onSearch={searchUsers}
               loading={userSearchLoading}
@@ -582,32 +584,32 @@ const Teams: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          <Form.Item name="role" label="角色" rules={[{ required: true, message: '请选择角色' }]}>
-            <Select placeholder="选择角色">
-              <Option value={1}>管理员</Option>
-              <Option value={2}>成员</Option>
-              <Option value={3}>观察者</Option>
+          <Form.Item name="role" label={t('common.role')} rules={[{ required: true, message: t('teams.please_select_role') }]}>
+            <Select placeholder={t('teams.select_role')}>
+              <Option value={1}>{t('teams.admin')}</Option>
+              <Option value={2}>{t('teams.member')}</Option>
+              <Option value={3}>{t('teams.observer')}</Option>
             </Select>
           </Form.Item>
-          <Form.Item name="quota" label="分配额度">
-            <Input type="number" placeholder="输入分配额度" />
+          <Form.Item name="quota" label={t('teams.alloc_quota')}>
+            <Input type="number" placeholder={t('teams.input_quota_placeholder')} />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit">邀请</Button>
+            <Button type="primary" htmlType="submit">{t('teams.invite')}</Button>
           </Form.Item>
         </Form>
       </Modal>
 
-      <Modal title="分配额度" open={quotaModalVisible} onCancel={() => setQuotaModalVisible(false)} footer={null}>
+      <Modal title={t('teams.allocate_quota')} open={quotaModalVisible} onCancel={() => setQuotaModalVisible(false)} footer={null}>
         <Form form={quotaForm} onFinish={handleAllocateQuota} layout="vertical">
-          <Form.Item name="target_user_id" label="用户ID" rules={[{ required: true }]}>
+          <Form.Item name="target_user_id" label={t('common.user_id')} rules={[{ required: true }]}>
             <Input disabled />
           </Form.Item>
-          <Form.Item name="quota" label="分配额度" rules={[{ required: true, message: '请输入额度' }]}>
-            <Input type="number" placeholder="输入分配额度" />
+          <Form.Item name="quota" label={t('teams.alloc_quota')} rules={[{ required: true, message: t('teams.enter_quota') }]}>
+            <Input type="number" placeholder={t('teams.input_quota_placeholder')} />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit">分配</Button>
+            <Button type="primary" htmlType="submit">{t('teams.allocate')}</Button>
           </Form.Item>
         </Form>
       </Modal>

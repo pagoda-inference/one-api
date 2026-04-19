@@ -162,11 +162,11 @@ const ModelMarket: React.FC = () => {
     setTrialLoading(true)
     try {
       await startModelTrial(selectedModel.id)
-      message.success('试用已开启')
+      message.success(t('modelMarket.trial_enabled'))
       const res = await getModelTrial(selectedModel.id)
       setTrialInfo(res.data.data)
     } catch (error) {
-      message.error('开启试用失败')
+      message.error(t('modelMarket.trial_failed'))
     } finally {
       setTrialLoading(false)
     }
@@ -246,7 +246,7 @@ const ModelMarket: React.FC = () => {
   }
 
   const formatPrice = (price: number) => {
-    if (price === 0) return '免费'
+    if (price === 0) return t('modelMarket.free')
     return `¥${price.toFixed(4)}/1K`
   }
 
@@ -266,14 +266,14 @@ const ModelMarket: React.FC = () => {
 
   // Model type options with icons (ordered by category)
   const typeOptions = [
-    { value: '', label: '全部类型' },
-    { value: 'chat', label: '对话', icon: <RobotOutlined /> },
-    { value: 'vlm', label: '多模态', icon: <ExperimentOutlined /> },
-    { value: 'reranker', label: '重排序', icon: <SyncOutlined /> },
-    { value: 'embedding', label: '嵌入', icon: <FileTextOutlined /> },
+    { value: '', label: t('modelMarket.all_types') },
+    { value: 'chat', label: t('modelMarket.chat'), icon: <RobotOutlined /> },
+    { value: 'vlm', label: t('modelMarket.vlm'), icon: <ExperimentOutlined /> },
+    { value: 'reranker', label: t('modelMarket.reranker'), icon: <SyncOutlined /> },
+    { value: 'embedding', label: t('modelMarket.embedding'), icon: <FileTextOutlined /> },
     { value: 'ocr', label: 'OCR', icon: <FileTextOutlined /> },
-    { value: 'image', label: '图像', icon: <PictureOutlined /> },
-    { value: 'audio', label: '音频', icon: <AudioOutlined /> }
+    { value: 'image', label: t('modelMarket.image'), icon: <PictureOutlined /> },
+    { value: 'audio', label: t('modelMarket.audio'), icon: <AudioOutlined /> }
   ]
 
   // Stat card helper
@@ -393,7 +393,7 @@ const ModelMarket: React.FC = () => {
                   padding: '0 4px'
                 }}
               >
-                {t ? t('model.trial') : '试用'}
+                {t('modelMarket.trial')}
               </Tag>
             )}
             {model.sla === 'enterprise' && (
@@ -407,7 +407,7 @@ const ModelMarket: React.FC = () => {
                   padding: '0 4px'
                 }}
               >
-                企业专属
+                {t('modelMarket.enterprise_exclusive')}
               </Tag>
             )}
             {model.visible_to_teams && model.visible_to_teams !== '' && (
@@ -422,7 +422,7 @@ const ModelMarket: React.FC = () => {
                 }}
                 icon={<LockOutlined />}
               >
-                团队私有
+                {t('modelMarket.team_private')}
               </Tag>
             )}
             {isMaintenance && (
@@ -436,7 +436,7 @@ const ModelMarket: React.FC = () => {
                   padding: '0 4px'
                 }}
               >
-                维护中
+                {t('modelMarket.maintenance')}
               </Tag>
             )}
           </div>
@@ -446,7 +446,7 @@ const ModelMarket: React.FC = () => {
           </div>
 
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {model.description || '暂无描述'}
+            {model.description || t('modelMarket.no_description')}
           </div>
 
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -461,13 +461,13 @@ const ModelMarket: React.FC = () => {
             borderTop: '1px solid var(--border-color)'
           }}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>输入</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t('modelMarket.input')}</span>
               <span style={{ fontSize: 12, fontWeight: 500, color: '#667eea' }}>
                 {formatPrice(model.input_price)}
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>输出</span>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t('modelMarket.output')}</span>
               <span style={{ fontSize: 12, fontWeight: 500, color: '#764ba2' }}>
                 {formatPrice(model.output_price)}
               </span>
@@ -535,11 +535,11 @@ const ModelMarket: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>{model.name}</span>
             {model.is_trial && (
-              <Tag style={{ background: '#f6ffed', color: '#52c41a', border: 'none', borderRadius: 4, fontSize: 10 }}>试用</Tag>
+              <Tag style={{ background: '#f6ffed', color: '#52c41a', border: 'none', borderRadius: 4, fontSize: 10 }}>{t('modelMarket.trial')}</Tag>
             )}
             {isMaintenance && (
               <Tag style={{ background: '#faad1405', color: '#faad14', border: '1px solid #faad14', borderRadius: 4, fontSize: 10 }}>
-                维护中
+                {t('modelMarket.maintenance')}
               </Tag>
             )}
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{model.provider}</span>
@@ -548,11 +548,11 @@ const ModelMarket: React.FC = () => {
 
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>输入</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t('modelMarket.input')}</div>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#667eea' }}>{formatPrice(model.input_price)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>输出</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t('modelMarket.output')}</div>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#764ba2' }}>{formatPrice(model.output_price)}</div>
           </div>
         </div>
@@ -567,27 +567,27 @@ const ModelMarket: React.FC = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <StatCard
-            title="可用模型"
+            title={t('modelMarket.available_models')}
             value={stats?.total_models || 0}
-            suffix="个"
+            suffix=""
             icon={<RobotOutlined />}
             color="#667eea"
           />
         </Col>
         <Col xs={24} sm={8}>
           <StatCard
-            title="供应商数量"
+            title={t('modelMarket.provider_count')}
             value={stats?.total_groups || 0}
-            suffix="个"
+            suffix=""
             icon={<BarsOutlined />}
             color="#52c41a"
           />
         </Col>
         <Col xs={24} sm={8}>
           <StatCard
-            title="支持试用"
+            title={t('modelMarket.support_trial')}
             value={stats?.trial_models || 0}
-            suffix="个"
+            suffix=""
             icon={<ThunderboltOutlined />}
             color="#faad14"
           />
@@ -602,7 +602,7 @@ const ModelMarket: React.FC = () => {
         <Row gutter={[16, 16]} align="middle">
           <Col xs={24} sm={12} md={8}>
             <Search
-              placeholder="搜索模型名称、ID或提供商"
+              placeholder={t('modelMarket.search_placeholder')}
               allowClear
               onSearch={handleSearch}
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
@@ -619,7 +619,7 @@ const ModelMarket: React.FC = () => {
           </Col>
           <Col xs={12} sm={6} md={4}>
             <Select
-              placeholder="选择分组"
+              placeholder={t('modelMarket.select_group')}
               allowClear
               style={{ width: '100%', borderRadius: 8 }}
               value={groupFilter || undefined}
@@ -636,7 +636,7 @@ const ModelMarket: React.FC = () => {
                 { value: 'list', icon: <BarsOutlined /> }
               ]}
             />
-            <Button icon={<SyncOutlined />} onClick={loadData}>刷新</Button>
+            <Button icon={<SyncOutlined />} onClick={loadData}>{t('common.refresh')}</Button>
           </Col>
         </Row>
       </Card>
@@ -653,7 +653,7 @@ const ModelMarket: React.FC = () => {
         items={[
           {
             key: 'all',
-            label: `全部模型 (${models.length})`,
+            label: `${t('modelMarket.all_models')} (${models.length})`,
             children: viewMode === 'grid' ? (
               <Row gutter={[16, 16]}>
                 {models.map(model => (
@@ -672,7 +672,7 @@ const ModelMarket: React.FC = () => {
           },
           {
             key: 'groups',
-            label: '分组浏览',
+            label: t('modelMarket.browse_by_group'),
             children: (
               <Row gutter={[16, 16]}>
                 {groups.map(group => (
@@ -741,7 +741,7 @@ const ModelMarket: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontWeight: 600 }}>{selectedModel?.name}</span>
             {selectedModel?.is_trial && (
-              <Tag style={{ background: '#f6ffed', color: '#52c41a', border: 'none', borderRadius: 4 }}>支持试用</Tag>
+              <Tag style={{ background: '#f6ffed', color: '#52c41a', border: 'none', borderRadius: 4 }}>{t('modelMarket.support_trial')}</Tag>
             )}
             {selectedModel?.sla && (
               <Tag
@@ -765,30 +765,30 @@ const ModelMarket: React.FC = () => {
         {selectedModel && (
           <div>
             <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="模型ID">
+              <Descriptions.Item label={t('modelMarket.model_id')}>
                 <code style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>{selectedModel.id}</code>
               </Descriptions.Item>
-              <Descriptions.Item label="提供商">{selectedModel.provider}</Descriptions.Item>
-              <Descriptions.Item label="类型">
+              <Descriptions.Item label={t('modelMarket.provider')}>{selectedModel.provider}</Descriptions.Item>
+              <Descriptions.Item label={t('modelMarket.type')}>
                 <Tag style={{ borderRadius: 4 }}>{selectedModel.model_type}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label={selectedModel.model_type === 'embedding' ? '维度' : '上下文长度'}>
+              <Descriptions.Item label={selectedModel.model_type === 'embedding' ? t('modelMarket.dimensions') : t('modelMarket.context_length')}>
                 {selectedModel.context_len.toLocaleString()}{selectedModel.model_type === 'embedding' ? '' : ' tokens'}
               </Descriptions.Item>
-              <Descriptions.Item label="输入价格">
+              <Descriptions.Item label={t('modelMarket.input_price')}>
                 <span style={{ color: '#667eea', fontWeight: 500 }}>{formatPrice(selectedModel.input_price)}</span>
               </Descriptions.Item>
-              <Descriptions.Item label="输出价格">
+              <Descriptions.Item label={t('modelMarket.output_price')}>
                 <span style={{ color: '#764ba2', fontWeight: 500 }}>{formatPrice(selectedModel.output_price)}</span>
               </Descriptions.Item>
               {selectedModel.description && (
-                <Descriptions.Item label="描述">
+                <Descriptions.Item label={t('common.description')}>
                   <span style={{ color: '#595959' }}>{selectedModel.description}</span>
                 </Descriptions.Item>
               )}
             </Descriptions>
 
-            <Card title="能力" style={{ marginBottom: 16, borderRadius: 12 }} styles={{ body: { padding: 12 } }}>
+            <Card title={t('modelMarket.trial_function')} style={{ marginBottom: 16, borderRadius: 12 }} styles={{ body: { padding: 12 } }}>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {getCapabilityTags(selectedModel.capabilities)}
               </div>
@@ -796,7 +796,7 @@ const ModelMarket: React.FC = () => {
 
             {selectedModel.is_trial && (
               <Card
-                title="试用功能"
+                title={t('modelMarket.trial_function')}
                 style={{ marginBottom: 16, borderRadius: 12 }}
                 styles={{ header: { borderRadius: '12px 12px 0 0' } }}
               >
@@ -804,13 +804,13 @@ const ModelMarket: React.FC = () => {
                   trialInfo.available ? (
                     <div>
                       <Statistic
-                        title="剩余试用额度"
+                        title={t('modelMarket.remaining_trial_quota')}
                         value={formatQuota(trialInfo.quota_limit - trialInfo.quota_used)}
                         suffix="tokens"
                         valueStyle={{ color: '#52c41a' }}
                       />
                       <Button type="primary" disabled style={{ marginTop: 16, borderRadius: 8 }}>
-                        已开启试用
+                        {t('modelMarket.trial_enabled')}
                       </Button>
                     </div>
                   ) : (
@@ -818,7 +818,7 @@ const ModelMarket: React.FC = () => {
                       <p style={{ color: '#8c8c8c', marginBottom: 12 }}>试用状态: {trialInfo.reason}</p>
                       {trialInfo.quota_used > 0 && (
                         <Statistic
-                          title="已使用"
+                          title={t('token.used_quota')}
                           value={formatQuota(trialInfo.quota_used)}
                           suffix={`/ ${formatQuota(trialInfo.quota_limit || 0)}`}
                         />
@@ -828,7 +828,7 @@ const ModelMarket: React.FC = () => {
                 ) : (
                   <div>
                     <p style={{ color: '#595959', marginBottom: 16 }}>
-                      该模型支持试用，您将获得 <strong>{formatQuota(selectedModel.trial_quota || 0)} tokens</strong> 的免费试用额度。
+                      {t('modelMarket.trial_quota_tokens', { quota: formatQuota(selectedModel.trial_quota || 0) })}
                     </p>
                     <Button
                       type="primary"
@@ -836,7 +836,7 @@ const ModelMarket: React.FC = () => {
                       onClick={handleStartTrial}
                       style={{ borderRadius: 8, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}
                     >
-                      开启试用
+                      {t('modelMarket.start_trial')}
                     </Button>
                   </div>
                 )}
@@ -844,13 +844,13 @@ const ModelMarket: React.FC = () => {
             )}
 
             <Card
-              title="价格计算器"
+              title={t('modelMarket.price_calculator')}
               style={{ marginBottom: 16, borderRadius: 12 }}
               styles={{ header: { borderRadius: '12px 12px 0 0' } }}
             >
               <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: 6, color: '#8c8c8c', fontSize: 12 }}>输入Token数</div>
+                  <div style={{ marginBottom: 6, color: '#8c8c8c', fontSize: 12 }}>{t('modelMarket.input_token_count')}</div>
                   <Input
                     type="number"
                     placeholder="如: 1000"
@@ -859,7 +859,7 @@ const ModelMarket: React.FC = () => {
                   />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: 6, color: '#8c8c8c', fontSize: 12 }}>输出Token数</div>
+                  <div style={{ marginBottom: 6, color: '#8c8c8c', fontSize: 12 }}>{t('modelMarket.output_token_count')}</div>
                   <Input
                     type="number"
                     placeholder="如: 500"
@@ -870,7 +870,7 @@ const ModelMarket: React.FC = () => {
               </div>
               {priceCalc && (
                 <div style={{ textAlign: 'center', padding: '16px 0', background: '#f9f0ff', borderRadius: 8 }}>
-                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>预计消耗额度</div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{t('modelMarket.estimated_quota_consumption')}</div>
                   <div style={{ fontSize: 28, fontWeight: 700, color: '#722ed1' }}>
                     {priceCalc.quota_cost.toLocaleString()}
                   </div>
@@ -879,17 +879,17 @@ const ModelMarket: React.FC = () => {
             </Card>
 
             <Card
-              title="使用示例"
+              title={t('modelMarket.usage_example')}
               extra={
                 <Button
                   size="small"
                   icon={<CopyOutlined />}
                   onClick={() => {
                     navigator.clipboard.writeText(getModelExample(selectedModel.id, selectedModel.model_type))
-                    message.success('已复制')
+                    message.success(t('common.copied_to_clipboard'))
                   }}
                 >
-                  复制
+                  {t('common.copy')}
                 </Button>
               }
               style={{ borderRadius: 12 }}

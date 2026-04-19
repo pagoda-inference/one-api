@@ -3,10 +3,12 @@ import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, mes
 import { PlusOutlined, EditOutlined, DeleteOutlined, CloudServerOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { getProviders, createProvider, updateProvider, deleteProvider, getProviderStatuses, uploadProviderLogo, Provider } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { TextArea } = Input
 
 const ProviderManagement: React.FC = () => {
+  const { t } = useTranslation()
   const [providers, setProviders] = useState<Provider[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -29,7 +31,7 @@ const ProviderManagement: React.FC = () => {
         setProviders(res.data.data)
       }
     } catch (error) {
-      message.error('加载供应商列表失败')
+      message.error(t('provider.load_provider_list_failed'))
     } finally {
       setLoading(false)
     }
@@ -53,10 +55,10 @@ const ProviderManagement: React.FC = () => {
       if (res.data.success) {
         form.setFieldsValue({ logo_url: res.data.data.url })
         setLogoPreview(res.data.data.url)
-        message.success('Logo上传成功')
+        message.success(t('provider.logo_upload_success'))
       }
     } catch (error) {
-      message.error('Logo上传失败')
+      message.error(t('provider.logo_upload_failed'))
     } finally {
       setUploadingLogo(false)
     }
@@ -81,13 +83,13 @@ const ProviderManagement: React.FC = () => {
     try {
       const res = await deleteProvider(id)
       if (res.data.success) {
-        message.success('删除成功')
+        message.success(t('provider.delete_success'))
         loadProviders()
       } else {
-        message.error(res.data.message || '删除失败')
+        message.error(res.data.message || t('provider.delete_failed'))
       }
     } catch (error) {
-      message.error('删除失败')
+      message.error(t('provider.delete_failed'))
     }
   }
 
@@ -97,24 +99,24 @@ const ProviderManagement: React.FC = () => {
       if (editingProvider) {
         const res = await updateProvider(editingProvider.id, values)
         if (res.data.success) {
-          message.success('更新成功')
+          message.success(t('provider.update_success'))
           setModalVisible(false)
           loadProviders()
         } else {
-          message.error(res.data.message || '更新失败')
+          message.error(res.data.message || t('provider.update_failed'))
         }
       } else {
         const res = await createProvider(values)
         if (res.data.success) {
-          message.success('创建成功')
+          message.success(t('provider.create_success'))
           setModalVisible(false)
           loadProviders()
         } else {
-          message.error(res.data.message || '创建失败')
+          message.error(res.data.message || t('provider.create_failed'))
         }
       }
     } catch (error: any) {
-      message.error(editingProvider ? '更新失败' : '创建失败')
+      message.error(editingProvider ? t('provider.update_failed') : t('provider.create_failed'))
     }
   }
 
@@ -129,9 +131,9 @@ const ProviderManagement: React.FC = () => {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'active': return '正常'
-      case 'maintenance': return '维护中'
-      case 'disabled': return '禁用'
+      case 'active': return t('provider.status_active')
+      case 'maintenance': return t('provider.status_maintenance')
+      case 'disabled': return t('provider.status_disabled')
       default: return status
     }
   }
@@ -154,27 +156,27 @@ const ProviderManagement: React.FC = () => {
       ) : <div style={{ width: 40, height: 40, background: '#f5f5f5', borderRadius: 4 }} />
     },
     {
-      title: 'Code',
+      title: t('provider.code'),
       dataIndex: 'code',
       key: 'code',
       width: 120,
       render: (v: string) => <Tag>{v}</Tag>
     },
     {
-      title: '名称',
+      title: t('provider.name'),
       dataIndex: 'name',
       key: 'name',
       width: 150,
     },
     {
-      title: '描述',
+      title: t('provider.description'),
       dataIndex: 'description',
       key: 'description',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '官网',
+      title: t('provider.website'),
       dataIndex: 'website',
       key: 'website',
       width: 180,
@@ -184,30 +186,30 @@ const ProviderManagement: React.FC = () => {
       ) : '-'
     },
     {
-      title: '状态',
+      title: t('provider.status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
       render: (v: string) => <Tag color={getStatusColor(v)}>{getStatusLabel(v)}</Tag>
     },
     {
-      title: '排序',
+      title: t('provider.sort_order'),
       dataIndex: 'sort_order',
       key: 'sort_order',
       width: 80,
     },
     {
-      title: '操作',
+      title: t('provider.action'),
       key: 'action',
       width: 130,
       render: (_, record) => (
         <Space size="small">
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('provider.edit')}
           </Button>
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record.id)}>
+          <Popconfirm title={t('provider.confirm_delete')} onConfirm={() => handleDelete(record.id)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
+              {t('provider.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -218,9 +220,9 @@ const ProviderManagement: React.FC = () => {
   return (
     <div style={{ padding: 24 }}>
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}><CloudServerOutlined /> Provider 管理</h2>
+        <h2 style={{ margin: 0 }}><CloudServerOutlined /> {t('provider.provider_management')}</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-          添加 Provider
+          {t('provider.add_provider')}
         </Button>
       </div>
 
@@ -229,32 +231,32 @@ const ProviderManagement: React.FC = () => {
         dataSource={providers}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+        pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => t('provider.total_records', { total }) }}
       />
 
       <Modal
-        title={editingProvider ? '编辑 Provider' : '添加 Provider'}
+        title={editingProvider ? t('provider.edit_provider') : t('provider.add_provider_title')}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         width={600}
-        okText="保存"
-        cancelText="取消"
+        okText={t('provider.save')}
+        cancelText={t('provider.cancel')}
       >
         <Form form={form} layout="vertical" initialValues={{ status: 'active', sort_order: 0 }}>
           <Row gutter={16}>
-            <Form.Item name="code" label="Code" rules={[{ required: true, message: '请输入 Code' }]} style={{ flex: 1 }}>
-              <Input placeholder="如: bedi, openai" disabled={!!editingProvider} />
+            <Form.Item name="code" label={t('provider.code')} rules={[{ required: true, message: t('provider.enter_code') }]} style={{ flex: 1 }}>
+              <Input placeholder={t('provider.like_bedi')} disabled={!!editingProvider} />
             </Form.Item>
-            <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]} style={{ flex: 1 }}>
-              <Input placeholder="如: BEDI" />
+            <Form.Item name="name" label={t('provider.name')} rules={[{ required: true, message: t('provider.enter_name') }]} style={{ flex: 1 }}>
+              <Input placeholder={t('provider.like_bedi')} />
             </Form.Item>
           </Row>
 
-          <Form.Item name="logo_url" label="Logo URL">
+          <Form.Item name="logo_url" label={t('provider.logo_url')}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <Input
-                placeholder="如: /logos/bedi.png 或 https://..."
+                placeholder={t('provider.like_https_bedicloud')}
                 value={form.getFieldValue('logo_url')}
                 onChange={(e) => {
                   form.setFieldsValue({ logo_url: e.target.value })
@@ -263,7 +265,7 @@ const ProviderManagement: React.FC = () => {
               />
               <Upload beforeUpload={handleLogoUpload} showUploadList={false} accept="image/*">
                 <Button icon={<UploadOutlined />} loading={uploadingLogo}>
-                  上传Logo
+                  {t('provider.upload_logo')}
                 </Button>
               </Upload>
               {logoPreview && (
@@ -279,19 +281,19 @@ const ProviderManagement: React.FC = () => {
             </Space>
           </Form.Item>
 
-          <Form.Item name="description" label="描述">
-            <TextArea rows={2} placeholder="供应商描述信息" />
+          <Form.Item name="description" label={t('provider.description')}>
+            <TextArea rows={2} placeholder={t('provider.provider_description_placeholder')} />
           </Form.Item>
 
-          <Form.Item name="website" label="官网">
-            <Input placeholder="如: https://bedicloud.net" />
+          <Form.Item name="website" label={t('provider.website')}>
+            <Input placeholder={t('provider.like_https_bedicloud')} />
           </Form.Item>
 
           <Row gutter={16}>
-            <Form.Item name="status" label="状态" style={{ flex: 1 }}>
-              <Select options={statuses} placeholder="选择状态" />
+            <Form.Item name="status" label={t('provider.status')} style={{ flex: 1 }}>
+              <Select options={statuses} placeholder={t('provider.select_status')} />
             </Form.Item>
-            <Form.Item name="sort_order" label="排序" style={{ flex: 1 }}>
+            <Form.Item name="sort_order" label={t('provider.sort_order')} style={{ flex: 1 }}>
               <InputNumber style={{ width: '100%' }} placeholder="0" min={0} />
             </Form.Item>
           </Row>

@@ -8,6 +8,7 @@ import {
   getAdminUsageSummary, getAdminUsageByUsers, getAdminUsageByModels,
   ModelUsage, Model, UsageSummary, User
 } from '../services/api'
+import { useTranslation } from 'react-i18next'
 
 const { RangePicker } = DatePicker
 const { Option } = Select
@@ -23,6 +24,7 @@ interface UserUsageItem {
 }
 
 const Usage: React.FC = () => {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<UsageSummary | null>(null)
   const [modelUsage, setModelUsage] = useState<ModelUsage[]>([])
@@ -156,14 +158,14 @@ const Usage: React.FC = () => {
       const completionTokens = safeDailyUsage.map((d: any) => d.completion_tokens || 0)
 
       return {
-        title: { text: '每日用量趋势', left: 'center' },
+        title: { text: t('usage.daily_usage_trend'), left: 'center' },
         tooltip: { trigger: 'axis' },
-        legend: { data: ['输入Token', '输出Token'], bottom: 0 },
+        legend: { data: [t('usage.input_token'), t('usage.output_token')], bottom: 0 },
         grid: { left: 100, right: 20, top: 40, bottom: 40 },
         xAxis: { type: 'category', data: dates },
         yAxis: {
           type: 'value',
-          name: 'Token数',
+          name: t('usage.token_count'),
           nameLocation: 'middle',
           nameGap: 70,
           nameTextStyle: { color: '#8c8c8c', fontSize: 11 },
@@ -171,14 +173,14 @@ const Usage: React.FC = () => {
         },
         series: [
           {
-            name: '输入Token',
+            name: t('usage.input_token'),
             data: promptTokens,
             type: 'bar',
             stack: 'total',
             itemStyle: { color: '#1890ff' }
           },
           {
-            name: '输出Token',
+            name: t('usage.output_token'),
             data: completionTokens,
             type: 'bar',
             stack: 'total',
@@ -206,28 +208,28 @@ const Usage: React.FC = () => {
   }
 
   const modelColumns = [
-    { title: '模型', dataIndex: 'model_name', key: 'model_name' },
+    { title: t('dashboard.model'), dataIndex: 'model_name', key: 'model_name' },
     {
-      title: '请求数',
+      title: t('usage.request_count'),
       dataIndex: 'request_count',
       key: 'request_count',
       sorter: (a: ModelUsage, b: ModelUsage) => a.request_count - b.request_count
     },
     {
-      title: '消耗额度',
+      title: t('usage.consumed_quota'),
       dataIndex: 'quota',
       key: 'quota',
       render: (v: number) => formatQuota(v),
       sorter: (a: ModelUsage, b: ModelUsage) => a.quota - b.quota
     },
     {
-      title: '输入Token',
+      title: t('usage.input_token'),
       dataIndex: 'prompt_tokens',
       key: 'prompt_tokens',
       render: (v: number) => formatQuota(v)
     },
     {
-      title: '输出Token',
+      title: t('usage.output_token'),
       dataIndex: 'completion_tokens',
       key: 'completion_tokens',
       render: (v: number) => formatQuota(v)
@@ -236,32 +238,32 @@ const Usage: React.FC = () => {
 
   const userColumns = [
     {
-      title: '用户',
+      title: t('usage.user'),
       dataIndex: 'display_name',
       key: 'display_name',
       render: (v: string, record: UserUsageItem) => v || record.username || `User ${record.user_id}`
     },
     {
-      title: '请求数',
+      title: t('usage.request_count'),
       dataIndex: 'request_count',
       key: 'request_count',
       sorter: (a: UserUsageItem, b: UserUsageItem) => a.request_count - b.request_count
     },
     {
-      title: '消耗额度',
+      title: t('usage.consumed_quota'),
       dataIndex: 'quota',
       key: 'quota',
       render: (v: number) => formatQuota(v),
       sorter: (a: UserUsageItem, b: UserUsageItem) => a.quota - b.quota
     },
     {
-      title: '输入Token',
+      title: t('usage.input_token'),
       dataIndex: 'prompt_tokens',
       key: 'prompt_tokens',
       render: (v: number) => formatQuota(v)
     },
     {
-      title: '输出Token',
+      title: t('usage.output_token'),
       dataIndex: 'completion_tokens',
       key: 'completion_tokens',
       render: (v: number) => formatQuota(v)
@@ -269,31 +271,31 @@ const Usage: React.FC = () => {
   ]
 
   const dailyColumns = [
-    { title: '日期', dataIndex: 'day', key: 'day' },
+    { title: t('usage.date'), dataIndex: 'day', key: 'day' },
     {
-      title: '模型',
+      title: t('dashboard.model'),
       dataIndex: 'model_name',
       key: 'model_name'
     },
     {
-      title: '请求数',
+      title: t('usage.request_count'),
       dataIndex: 'request_count',
       key: 'request_count'
     },
     {
-      title: '消耗额度',
+      title: t('usage.consumed_quota'),
       dataIndex: 'quota',
       key: 'quota',
       render: (v: number) => formatQuota(v)
     },
     {
-      title: '输入Token',
+      title: t('usage.input_token'),
       dataIndex: 'prompt_tokens',
       key: 'prompt_tokens',
       render: (v: number) => formatQuota(v)
     },
     {
-      title: '输出Token',
+      title: t('usage.output_token'),
       dataIndex: 'completion_tokens',
       key: 'completion_tokens',
       render: (v: number) => formatQuota(v)
@@ -310,7 +312,7 @@ const Usage: React.FC = () => {
         <Col xs={24} sm={12} lg={isAdmin ? 6 : 6}>
           <Card>
             <Statistic
-              title={isAdmin ? "总消耗额度" : "总请求数"}
+              title={isAdmin ? t('usage.total_consumed_quota') : t('usage.total_requests')}
               value={isAdmin ? (summary as any)?.total_quota ?? 0 : summary?.total_requests ?? 0}
               prefix={<ApiOutlined />}
               formatter={(v) => formatQuota(Number(v) || 0)}
@@ -322,7 +324,7 @@ const Usage: React.FC = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="总Token数"
+                  title={t('usage.total_token')}
                   value={(summary as any)?.total_tokens ?? 0}
                   formatter={(v) => formatQuota(Number(v) || 0)}
                 />
@@ -331,7 +333,7 @@ const Usage: React.FC = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="总输入Token"
+                  title={t('usage.total_input_token')}
                   value={(summary as any)?.total_prompt_tokens ?? 0}
                   formatter={(v) => formatQuota(Number(v) || 0)}
                 />
@@ -340,7 +342,7 @@ const Usage: React.FC = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="总输出Token"
+                  title={t('usage.total_output_token')}
                   value={(summary as any)?.total_completion_tokens ?? 0}
                   formatter={(v) => formatQuota(Number(v) || 0)}
                 />
@@ -352,7 +354,7 @@ const Usage: React.FC = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="总消耗额度"
+                  title={t('usage.consumed_quota')}
                   value={summary?.total_quota ?? 0}
                   formatter={(v) => formatQuota(Number(v) || 0)}
                 />
@@ -361,7 +363,7 @@ const Usage: React.FC = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="总输入Token"
+                  title={t('usage.total_input_token')}
                   value={summary?.total_prompt_tokens ?? 0}
                   formatter={(v) => formatQuota(Number(v) || 0)}
                 />
@@ -370,7 +372,7 @@ const Usage: React.FC = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="总输出Token"
+                  title={t('usage.total_output_token')}
                   value={summary?.total_completion_tokens ?? 0}
                   formatter={(v) => formatQuota(Number(v) || 0)}
                 />
@@ -390,7 +392,7 @@ const Usage: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} md={6}>
             <Select
-              placeholder="选择模型"
+              placeholder={t('usage.select_model')}
               allowClear
               style={{ width: '100%' }}
               value={selectedModel || undefined}
@@ -403,7 +405,7 @@ const Usage: React.FC = () => {
           </Col>
           <Col xs={24} md={4}>
             <button className="ant-btn ant-btn-primary" onClick={handleSearch}>
-              查询
+              {t('common.query')}
             </button>
           </Col>
         </Row>
@@ -413,7 +415,7 @@ const Usage: React.FC = () => {
         // Admin view: show user and model tables
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={12}>
-            <Card title="按用户统计">
+            <Card title={t('usage.usage_by_user')}>
               <Table
                 dataSource={userUsage}
                 columns={userColumns}
@@ -424,7 +426,7 @@ const Usage: React.FC = () => {
             </Card>
           </Col>
           <Col xs={24} lg={12}>
-            <Card title="按模型统计">
+            <Card title={t('usage.usage_by_model')}>
               <Table
                 dataSource={modelUsage}
                 columns={modelColumns}
@@ -439,7 +441,7 @@ const Usage: React.FC = () => {
         // User view: show model and daily tables
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={12}>
-            <Card title="按模型统计">
+            <Card title={t('usage.usage_by_model')}>
               <Table
                 dataSource={modelUsage}
                 columns={modelColumns}
@@ -450,7 +452,7 @@ const Usage: React.FC = () => {
             </Card>
           </Col>
           <Col xs={24} lg={12}>
-            <Card title="每日明细">
+            <Card title={t('usage.daily_detail')}>
               <Table
                 dataSource={dailyUsage}
                 columns={dailyColumns}
@@ -464,7 +466,7 @@ const Usage: React.FC = () => {
       )}
 
       {!isAdmin && Array.isArray(dailyUsage) && dailyUsage.length > 0 ? (
-        <Card title="用量趋势图" style={{ marginTop: 16 }}>
+        <Card title={t('usage.usage_trend_chart')} style={{ marginTop: 16 }}>
           <ReactECharts option={getUsageChartOption()} style={{ height: 300 }} />
         </Card>
       ) : null}
