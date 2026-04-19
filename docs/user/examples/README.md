@@ -8,6 +8,6 @@
 
 | 示例 | 说明 |
 |------|------|
-| [RAG 检索系统](rag) | 构建知识库检索系统 |
-| [Claude Code 接入](claude-code) | 在编码工具中使用 API |
-| [多模型对比](multi-model) | 对比不同模型效果 |
+| [RAG 检索系统](/examples/rag) | 构建知识库检索系统 |
+| [Claude Code 接入](/examples/claude-code) | 在编码工具中使用 API |
+| [多模型对比](/examples/multi-model) | 对比不同模型效果 |

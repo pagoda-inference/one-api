@@ -1,7 +1,7 @@
 * 运维手册
 
-  * [首页](/guide/)  
   * [AI Agent 运营](/guide/SKILL)
+  * [首页](/guide/)
 
   * 运营管理
     * [营收概览](/guide/operator#营收概览)

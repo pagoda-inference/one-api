@@ -6,14 +6,14 @@
 
 | 章节 | 说明 |
 |------|------|
-| [AI Agent 运营](/ops/SKILL) | 运维 AI Agent 指南 |
-| [运营管理](/ops/operator) | 营收概览、用户管理、渠道管理、配额设置、系统设置 |
-| [模型管理](/ops/models) | 模型列表和价格配置 |
-| [Provider 管理](/ops/providers) | Provider 实体管理 |
-| [系统通知](/ops/notification) | 发送系统通知 |
-| [团队管理](/ops/teams) | 团队协作管理 |
-| [运维 API](/ops/admin-api) | 管理员 API 接口文档 |
-| [API 文档](api) | API 接口文档 |
+| [AI Agent 运营](/guide/SKILL) | 运维 AI Agent 指南 |
+| [运营管理](/guide/operator) | 营收概览、用户管理、渠道管理、配额设置、系统设置 |
+| [模型管理](/guide/models) | 模型列表和价格配置 |
+| [Provider 管理](/guide/providers) | Provider 实体管理 |
+| [系统通知](/guide/notification) | 发送系统通知 |
+| [团队管理](/guide/teams) | 团队协作管理 |
+| [运维 API](/guide/admin-api) | 管理员 API 接口文档 |
+| [API 文档](/guide/api) | API 接口文档 |
 
 ## 运营管理
 
@@ -21,20 +21,20 @@
 
 | 子章节 | 说明 |
 |--------|------|
-| [营收概览](/ops/operator#营收概览) | 数据看板、营收趋势、快捷操作 |
-| [用户管理](/ops/operator#用户管理) | 用户列表、角色权限、批量操作 |
-| [渠道管理](/ops/operator#渠道管理) | 渠道列表、模型映射、渠道健康 |
-| [配额设置](/ops/operator#配额设置) | 新用户配额、邀请奖励、预消耗 |
-| [系统设置](/ops/operator#系统设置) | 分组倍率、渠道自动管理、显示设置、告警设置、性能配置 |
+| [营收概览](/guide/operator#营收概览) | 数据看板、营收趋势、快捷操作 |
+| [用户管理](/guide/operator#用户管理) | 用户列表、角色权限、批量操作 |
+| [渠道管理](/guide/operator#渠道管理) | 渠道列表、模型映射、渠道健康 |
+| [配额设置](/guide/operator#配额设置) | 新用户初始配额、邀请奖励、预消耗 |
+| [系统设置](/guide/operator#系统设置) | 分组倍率、渠道自动管理、显示设置、告警设置、性能配置 |
 
 系统设置包含以下子项：
 
 | 子章节 | 说明 |
 |--------|------|
-| [基础配置](/ops/operator#基础配置) | 系统名称、Logo、页脚 |
-| [认证配置](/ops/operator#认证配置) | 密码登录、OAuth 配置 |
-| [支付配置](/ops/operator#支付配置) | 支付宝、微信支付 |
-| [SMTP 配置](/ops/operator#smtp-配置) | 邮件服务配置 |
+| [基础配置](/guide/operator#基础配置) | 系统名称、Logo、页脚 |
+| [认证配置](/guide/operator#认证配置) | 密码登录、OAuth 配置 |
+| [支付配置](/guide/operator#支付配置) | 支付宝、微信支付 |
+| [SMTP 配置](/guide/operator#smtp-配置) | 邮件服务配置 |
 
 ## 快速配置
 

@@ -1,0 +1,40 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docs-site-ops
+  namespace: baota
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docs-site-ops
+  template:
+    metadata:
+      labels:
+        app: docs-site-ops
+    spec:
+      containers:
+        - name: docs
+          image: 10.1.112.238:8443/baota/one-api-docs-ops:latest
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docs-site-ops
+  namespace: baota
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: docs-site-ops

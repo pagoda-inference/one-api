@@ -676,3 +676,237 @@ func main() {
 
 > [!NOTE]
 > 具体限流值取决于您的 API Key 权限设置，可在 API Keys 管理页面查看和修改。
+
+---
+
+## 平台操作 API
+
+以下 API 供用户操作自己的账户、额度、订单等资源。
+
+### 认证
+
+| 接口 | 方法 | 说明 |
+|:-----|:-----|:-----|
+| `/api/user/login` | POST | 用户登录 |
+| `/api/user/register` | POST | 用户注册 |
+| `/api/user/logout` | GET | 退出登录 |
+| `/api/user/self` | GET | 获取当前用户信息 |
+| `/api/user/self` | PUT | 更新用户信息 |
+| `/api/user/token` | GET | 生成访问令牌 |
+
+#### 登录
+
+```bash
+curl -X POST "https://baotaai.bedicloud.net/api/user/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"xxxxxx"}'
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": 1,
+      "username": "user@example.com",
+      "email": "user@example.com",
+      "quota": 100000,
+      "role": 1
+    }
+  }
+}
+```
+
+#### 注册
+
+```bash
+curl -X POST "https://baotaai.bedicloud.net/api/user/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"xxxxxx","username":"用户名"}'
+```
+
+### 额度管理
+
+| 接口 | 方法 | 说明 |
+|:-----|:-----|:-----|
+| `/api/user/topup` | GET | 获取充值记录列表 |
+| `/api/user/topup/create` | POST | 创建充值订单 |
+| `/api/user/topup/:id` | GET | 获取充值订单详情 |
+| `/api/user/topup/:id/cancel` | POST | 取消充值订单 |
+| `/api/user/self` | GET | 获取账户余额 |
+
+#### 创建充值订单
+
+```bash
+curl -X POST "https://baotaai.bedicloud.net/api/user/topup/create" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 100}'
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "order_id": "TP20260419001",
+    "amount": 100,
+    "status": "pending",
+    "pay_url": "https://pay.example.com/..."
+  }
+}
+```
+
+### 用量查询
+
+| 接口 | 方法 | 说明 |
+|:-----|:-----|:-----|
+| `/api/usage/summary` | GET | 用量汇总 |
+| `/api/usage/by-token` | GET | 按 Token 统计 |
+| `/api/usage/by-model` | GET | 按模型统计 |
+| `/api/usage/by-channel` | GET | 按渠道统计 |
+| `/api/usage/by-hour` | GET | 按小时统计 |
+| `/api/usage/daily` | GET | 按天统计 |
+
+#### 查询参数
+
+| 参数 | 类型 | 说明 |
+|:-----|:-----|:-----|
+| start | string | 开始时间 (YYYY-MM-DD) |
+| end | string | 结束时间 (YYYY-MM-DD) |
+| model | string | 按模型筛选 |
+| channel | int | 按渠道筛选 |
+
+#### 用量汇总
+
+```bash
+curl -X GET "https://baotaai.bedicloud.net/api/usage/summary" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "total_tokens": 987654,
+    "total_quota": 1234567,
+    "period": {
+      "start": "2026-04-01",
+      "end": "2026-04-19"
+    }
+  }
+}
+```
+
+### 发票管理
+
+| 接口 | 方法 | 说明 |
+|:-----|:-----|:-----|
+| `/api/user/invoice` | GET | 获取发票列表 |
+| `/api/user/invoice` | POST | 申请发票 |
+| `/api/user/invoice/:id` | GET | 获取发票详情 |
+
+#### 申请发票
+
+```bash
+curl -X POST "https://baotaai.bedicloud.net/api/user/invoice" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 100,"title":"公司名称","tax_id":"911101xx"}'
+```
+
+### 签到
+
+| 接口 | 方法 | 说明 |
+|:-----|:-----|:-----|
+| `/api/user/signin` | POST | 每日签到 |
+| `/api/user/signin/records` | GET | 签到记录 |
+
+#### 签到
+
+```bash
+curl -X POST "https://baotaai.bedicloud.net/api/user/signin" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "quota": 100,
+    "total_days": 7
+  }
+}
+```
+
+### 通知
+
+| 接口 | 方法 | 说明 |
+|:-----|:-----|:-----|
+| `/api/user/notifications` | GET | 获取通知列表 |
+| `/api/user/notifications/unread-count` | GET | 未读数量 |
+| `/api/user/notifications/:id/read` | PUT | 标记已读 |
+| `/api/user/notifications/read-all` | PUT | 全部已读 |
+
+### 模型市场
+
+| 接口 | 方法 | 说明 |
+|:-----|:-----|:-----|
+| `/api/user/market/models` | GET | 获取模型列表 |
+| `/api/user/market/models/:id` | GET | 获取模型详情 |
+| `/api/user/market/models/:id/pricing` | GET | 获取模型定价 |
+| `/api/user/market/models/:id/trial` | GET/POST | 模型试用 |
+| `/api/user/market/providers` | GET | 获取 Provider 列表 |
+| `/api/user/market/groups/:id/models` | GET | 获取分组下模型 |
+| `/api/user/market/stats` | GET | 获取市场统计 |
+| `/api/user/market/calculate` | GET | 计算价格 |
+
+#### 模型试用
+
+```bash
+curl -X POST "https://baotaai.bedicloud.net/api/user/market/models/glm-4/trial" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "trial_quota": 10000,
+    "expires_at": "2026-04-20T00:00:00Z"
+  }
+}
+```
+
+---
+
+## 响应格式
+
+所有 API 响应遵循统一格式：
+
+```json
+{
+  "success": true,
+  "message": "操作成功",
+  "data": {}
+}
+```
+
+错误响应：
+
+```json
+{
+  "success": false,
+  "message": "错误描述",
+  "code": 10000
+}
+```
+
+### 常见错误码
+
+| code | 说明 |
+|:----:|:-----|
+| 10000 | 额度不足 |
+| 10001 | Key 被禁用 |
+| 10002 | Key 未启用 |
+| 10003 | 模型已下架 |

@@ -24,7 +24,14 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: docs-site
+                name: docs-site-user
+                port:
+                  number: 80
+          - path: /ops-guide
+            pathType: Prefix
+            backend:
+              service:
+                name: docs-site-ops
                 port:
                   number: 80
           - backend:
