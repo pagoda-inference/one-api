@@ -30,6 +30,7 @@ type ModelRequest struct {
 	RateLimitRPM  int     `json:"rate_limit_rpm"`
 	RateLimitTPM  int     `json:"rate_limit_tpm"`
 	VisibleToTeams string  `json:"visible_to_teams"`
+	IsTrial        bool    `json:"is_trial"`
 }
 
 type UploadLogoResponse struct {
@@ -203,6 +204,7 @@ func UpdateModel(c *gin.Context) {
 	if req.VisibleToTeams != "" {
 		m.VisibleToTeams = req.VisibleToTeams
 	}
+	m.IsTrial = req.IsTrial
 	m.UpdatedAt = time.Now().Unix()
 
 	// 如果 sort_order 发生了变化，需要重排其他模型
