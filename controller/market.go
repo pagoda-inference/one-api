@@ -114,40 +114,68 @@ func GetMarketProviders(c *gin.Context) {
 
 // GetMarketStats handles GET /api/market/stats
 func GetMarketStats(c *gin.Context) {
-	stats, err := model.GetModelMarketStats()
+	userId := c.GetInt(ctxkey.Id)
+	tenantIds, _ := model.GetUserTenantIds(userId)
+
+	// Get all active models
+	var allModels []*model.ModelInfo
+	var err error
+	allModels, err = model.GetActiveModels("", 0, 0)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "Failed to get stats: " + err.Error(),
+			"message": "Failed to get models: " + err.Error(),
 		})
 		return
 	}
 
-	// Get active provider count (distinct channels.group)
-	// Note: "group" is a reserved keyword in PostgreSQL, must use quoted identifier
-	groupCol := "\"group\""
-	var totalGroups int64
-	model.DB.Model(&model.Channel{}).
-		Where("status = ? AND "+groupCol+" != ''", 1).
-		Distinct(groupCol).
-		Count(&totalGroups)
+	// Filter by visibility
+	var visibleModels []*model.ModelInfo
+	for _, m := range allModels {
+		if isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+			visibleModels = append(visibleModels, m)
+		}
+	}
 
-	// Get trial models count
-	var trialModels int64
-	model.DB.Model(&model.ModelInfo{}).Where("status = ? AND is_trial = ?", model.ModelStatusActive, true).Count(&trialModels)
+	// Count by type from visible models
+	chatModels := 0
+	embeddingModels := 0
+	imageModels := 0
+	trialModels := 0
+	for _, m := range visibleModels {
+		switch m.ModelType {
+		case model.ModelTypeChat:
+			chatModels++
+		case model.ModelTypeEmbedding:
+			embeddingModels++
+		case model.ModelTypeImage:
+			imageModels++
+		}
+		if m.IsTrial {
+			trialModels++
+		}
+	}
+
+	// Get provider count (distinct providers from visible models)
+	providerSet := make(map[string]bool)
+	for _, m := range visibleModels {
+		if m.Provider != "" {
+			providerSet[m.Provider] = true
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"total_models":     stats.TotalModels,
-			"total_providers":  stats.TotalProviders,
-			"total_groups":     stats.TotalGroups,
-			"chat_models":      stats.ChatModels,
-			"embedding_models": stats.EmbeddingModels,
-			"image_models":     stats.ImageModels,
-			"trial_models":     trialModels,
-			"avg_input_price":  stats.AvgInputPrice,
-			"avg_output_price": stats.AvgOutputPrice,
+			"total_models":      len(visibleModels),
+			"total_providers":   len(providerSet),
+			"total_groups":      len(providerSet),
+			"chat_models":       chatModels,
+			"embedding_models":   embeddingModels,
+			"image_models":      imageModels,
+			"trial_models":      trialModels,
+			"avg_input_price":   0,
+			"avg_output_price":  0,
 		},
 	})
 }
