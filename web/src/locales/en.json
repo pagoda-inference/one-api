@@ -77,6 +77,7 @@
   },
   "menu": {
     "experience_center": "Experience Center",
+    "text_chat": "Text Chat",
     "model": "Model",
     "console": "Console",
     "personal_center": "Personal Center",
@@ -687,7 +688,8 @@
     "delete_success": "Delete success",
     "delete_failed": "Delete failed",
     "notification_title_placeholder": "Please enter notification title",
-    "notification_content_placeholder": "Please enter notification content"
+    "notification_content_placeholder": "Please enter notification content",
+    "action": "Action"
   },
   "batch": {
     "batch_inference": "Batch Inference",
@@ -737,6 +739,32 @@
     "model_placeholder": "Please select a model",
     "api_key": "API Key",
     "api_key_placeholder": "Please enter your API Key"
+  },
+  "chat": {
+    "experience_center": "Experience Center",
+    "text_chat": "Text Chat",
+    "model_config": "Model Config",
+    "trial": "Trial",
+    "trial_models_note": "Available trial models:",
+    "trial_models_tip": "All models are free to trial",
+    "start_conversation": "Start a conversation",
+    "clear": "Clear",
+    "send": "Send",
+    "stop": "Stop",
+    "input_placeholder": "Enter to send, Shift+Enter for new line",
+    "disclaimer": "AI may generate inaccurate information, please use with caution",
+    "send_failed": "Failed to send",
+    "model": "Model",
+    "system_prompt": "System Prompt",
+    "system_prompt_placeholder": "Optional system prompt",
+    "max_tokens": "Max Tokens",
+    "temperature": "Temperature",
+    "top_p": "Top-P",
+    "top_k": "Top-K",
+    "frequency_penalty": "Frequency Penalty",
+    "presence_penalty": "Presence Penalty",
+    "enable_thinking": "Enable Thinking",
+    "thinking_budget": "Thinking Budget"
   },
   "provider": {
     "provider_management": "Provider Management",

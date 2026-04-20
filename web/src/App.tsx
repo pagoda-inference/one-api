@@ -30,6 +30,7 @@ import ApiDocs from './pages/ApiDocs'
 import Profile from './pages/Profile'
 import NotificationManage from './pages/NotificationManage'
 import BatchInference from './pages/BatchInference'
+import ChatPlayground from './pages/ChatPlayground'
 import { logout, User, getUnreadNotificationCount, getNotifications, markNotificationAsRead } from './services/api'
 
 const { Content } = Layout
@@ -171,13 +172,13 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   const isAdmin = (user.role ?? 0) >= 10
 
-  // Experience Center - placeholder (disabled)
+  // Experience Center
   const experienceCenterGroup = {
     type: 'group' as const,
     label: t('menu.experience_center'),
     key: 'experience',
     children: [
-      { key: '/experience', icon: <ExperimentOutlined />, label: t('menu.experience_center'), disabled: true }
+      { key: '/experience', icon: <ExperimentOutlined />, label: t('menu.text_chat') }
     ]
   }
 
@@ -438,6 +439,7 @@ const App: React.FC = () => {
         <Route path="/profile" element={<ProtectedPage><Profile /></ProtectedPage>} />
         <Route path="/ops/notifications" element={<ProtectedPage><NotificationManage /></ProtectedPage>} />
         <Route path="/batch" element={<ProtectedPage><BatchInference /></ProtectedPage>} />
+        <Route path="/experience" element={<ProtectedPage><ChatPlayground /></ProtectedPage>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

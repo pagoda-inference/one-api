@@ -88,6 +88,23 @@ func RootAuth() func(c *gin.Context) {
 	}
 }
 
+// trialModelPrefixes is a whitelist of trial/free models that bypass token.Models restriction
+// These models can be used by any authenticated user regardless of their token's model permissions
+var trialModelPrefixes = []string{
+	"bedi/qwen3-14b",
+	"bedi/qwen3-32b",
+	"bedi/qwen3-vl-8b",
+}
+
+func isTrialModel(modelName string) bool {
+	for _, prefix := range trialModelPrefixes {
+		if strings.HasPrefix(modelName, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func TokenAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -152,8 +169,11 @@ func TokenAuth() func(c *gin.Context) {
 		if token.Models != nil && *token.Models != "" {
 			c.Set(ctxkey.AvailableModels, *token.Models)
 			if requestModel != "" && !isModelInList(requestModel, *token.Models) {
-				abortWithMessage(c, http.StatusForbidden, fmt.Sprintf("该令牌无权使用模型：%s", requestModel))
-				return
+				// Trial models bypass token.Models restriction
+				if !isTrialModel(requestModel) {
+					abortWithMessage(c, http.StatusForbidden, fmt.Sprintf("该令牌无权使用模型：%s", requestModel))
+					return
+				}
 			}
 		}
 		c.Set(ctxkey.Id, token.UserId)

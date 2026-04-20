@@ -77,6 +77,7 @@
   },
   "menu": {
     "experience_center": "体验中心",
+    "text_chat": "文本对话",
     "model": "模型",
     "console": "控制台",
     "personal_center": "个人中心",
@@ -688,7 +689,8 @@
     "delete_success": "删除成功",
     "delete_failed": "删除失败",
     "notification_title_placeholder": "请输入通知标题",
-    "notification_content_placeholder": "请输入通知内容"
+    "notification_content_placeholder": "请输入通知内容",
+    "action": "操作"
   },
   "batch": {
     "batch_inference": "批量推理",
@@ -738,6 +740,32 @@
     "model_placeholder": "请选择模型",
     "api_key": "API Key",
     "api_key_placeholder": "请输入您的 API Key"
+  },
+  "chat": {
+    "experience_center": "体验中心",
+    "text_chat": "文本对话",
+    "model_config": "模型配置",
+    "trial": "试用",
+    "trial_models_note": "可用试用模型：",
+    "trial_models_tip": "所有模型均为免费试用",
+    "start_conversation": "开始对话吧",
+    "clear": "清空",
+    "send": "发送",
+    "stop": "停止",
+    "input_placeholder": "输入消息，Enter 发送，Shift+Enter 换行",
+    "disclaimer": "AI 助手可能会产生不准确的信息，请谨慎参考",
+    "send_failed": "发送失败",
+    "model": "模型",
+    "system_prompt": "系统提示词",
+    "system_prompt_placeholder": "可选的系统提示词",
+    "max_tokens": "最大输出",
+    "temperature": "温度",
+    "top_p": "Top-P",
+    "top_k": "Top-K",
+    "frequency_penalty": "频率惩罚",
+    "presence_penalty": "存在惩罚",
+    "enable_thinking": "开启思考",
+    "thinking_budget": "思考预算"
   },
   "provider": {
     "provider_management": "Provider 管理",

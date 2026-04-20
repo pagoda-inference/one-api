@@ -7,6 +7,7 @@ import {
   CopyOutlined, UserOutlined, TeamOutlined
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
+import dayjs from 'dayjs'
 import {
   getDashboard, getUsageByDay, getUsageByModel, getTokens, getMarketStats,
   getSignInRecords, signIn, SignInRecord,
@@ -246,7 +247,7 @@ const Dashboard: React.FC = () => {
   ]
 
   // Check if today is signed in
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = dayjs().format('YYYY-MM-DD')
   const isTodaySignedIn = signInRecords.some(r => r.date === todayStr)
 
   const renderTabContent = () => {
@@ -288,8 +289,7 @@ const Dashboard: React.FC = () => {
                   cells.push(<div key={`empty-${i}`} style={{ aspectRatio: '1' }} />)
                 }
                 for (let day = 1; day <= daysInMonth; day++) {
-                  const date = new Date(year, month, day)
-                  const dateStr = date.toISOString().split('T')[0]
+                  const dateStr = dayjs().year(year).month(month).date(day).format('YYYY-MM-DD')
                   const isToday = day === today
                   const signData = signInRecords.find((r: SignInRecord) => r.date === dateStr)
                   const isSigned = signData?.status === 'completed'

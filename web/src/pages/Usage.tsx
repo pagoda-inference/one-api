@@ -271,7 +271,11 @@ const Usage: React.FC = () => {
   ]
 
   const dailyColumns = [
-    { title: t('usage.date'), dataIndex: 'day', key: 'day' },
+    { title: t('usage.date'), dataIndex: 'day', key: 'day', defaultSortOrder: 'descend' as const, sorter: (a: any, b: any) => {
+      if (!a.day) return 1
+      if (!b.day) return -1
+      return a.day.localeCompare(b.day)
+    }},
     {
       title: t('dashboard.model'),
       dataIndex: 'model_name',
