@@ -84,7 +84,7 @@ print(response['choices'][0]['message']['content'])`
 
 const ModelMarket: React.FC = () => {
   const { t } = useTranslation()
-  const { themeMode } = useTheme()
+  const { appTheme } = useTheme()
   const [models, setModels] = useState<Model[]>([])
   const [groups, setGroups] = useState<ModelGroup[]>([])
   const [stats, setStats] = useState<MarketStats | null>(null)
@@ -380,7 +380,7 @@ const ModelMarket: React.FC = () => {
               borderRadius: 10,
               objectFit: 'contain',
               flexShrink: 0,
-              background: themeMode === 'dark' ? 'var(--bg-secondary)' : '#f5f5f5'
+              background: appTheme.bgElevated
             }}
             onError={(e) => {
               // 如果图片加载失败，显示图标
@@ -534,7 +534,7 @@ const ModelMarket: React.FC = () => {
               height: 36,
               borderRadius: 8,
               objectFit: 'contain',
-              background: themeMode === 'dark' ? 'var(--bg-secondary)' : '#f5f5f5'
+              background: appTheme.bgElevated
             }}
             onError={(e) => {
               const target = e.target as HTMLImageElement
@@ -929,7 +929,7 @@ const ModelMarket: React.FC = () => {
           <div>
             <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
               <Descriptions.Item label={t('modelMarket.model_id')}>
-                <code style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>{selectedModel.id}</code>
+                <code style={{ background: appTheme.bgElevated, padding: '2px 6px', borderRadius: 4, fontSize: 12, color: appTheme.textPrimary }}>{selectedModel.id}</code>
               </Descriptions.Item>
               <Descriptions.Item label={t('modelMarket.provider')}>{selectedModel.provider}</Descriptions.Item>
               <Descriptions.Item label={t('modelMarket.type')}>
@@ -1059,8 +1059,8 @@ const ModelMarket: React.FC = () => {
               styles={{ header: { borderRadius: '12px 12px 0 0' } }}
             >
               <pre style={{
-                background: '#1a1a2e',
-                color: '#e0e0e0',
+                background: appTheme.bgElevated,
+                color: appTheme.textPrimary,
                 padding: 16,
                 borderRadius: 8,
                 fontSize: 12,

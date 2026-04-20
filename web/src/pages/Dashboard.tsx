@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTheme } from '../contexts/ThemeContext'
 import { Row, Col, Card, Table, Tabs, Badge, Button, Spin, Empty } from 'antd'
 import {
   DollarOutlined, ApiOutlined, RiseOutlined, TrophyOutlined,
@@ -19,6 +20,7 @@ import { useTranslation } from 'react-i18next'
 const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [dashboardData, setDashboardData] = useState<any>(null)
@@ -131,16 +133,16 @@ const Dashboard: React.FC = () => {
       style={{
         borderRadius: 12,
         border: 'none',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+        boxShadow: appTheme.shadow
       }}
       styles={{ body: { padding: '20px 24px' } }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ color: '#8c8c8c', fontSize: 14, marginBottom: 8 }}>{title}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#262626' }}>
+          <div style={{ color: appTheme.textSecondary, fontSize: 14, marginBottom: 8 }}>{title}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: appTheme.textPrimary }}>
             {value}
-            <span style={{ fontSize: 14, color: '#8c8c8c', marginLeft: 4 }}>{suffix}</span>
+            <span style={{ fontSize: 14, color: appTheme.textSecondary, marginLeft: 4 }}>{suffix}</span>
           </div>
         </div>
         <div style={{
@@ -175,28 +177,28 @@ const Dashboard: React.FC = () => {
     xAxis: {
       type: 'category',
       data: usageData.map(d => d.day?.slice(5) || ''),
-      axisLine: { lineStyle: { color: '#e8e8e8' } },
-      axisLabel: { color: '#8c8c8c' }
+      axisLine: { lineStyle: { color: appTheme.border } },
+      axisLabel: { color: appTheme.textSecondary }
     },
     yAxis: {
       type: 'value',
       name: t('dashboard.token_count'),
       nameLocation: 'middle',
       nameGap: 70,
-      nameTextStyle: { color: '#8c8c8c', fontSize: 12 },
+      nameTextStyle: { color: appTheme.textSecondary, fontSize: 12 },
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: '#f5f5f5' } },
-      axisLabel: { color: '#8c8c8c' }
+      splitLine: { lineStyle: { color: appTheme.borderLight } },
+      axisLabel: { color: appTheme.textSecondary }
     },
     series: [{
       data: usageData.map(d => ({
         value: (d.prompt_tokens || 0) + (d.completion_tokens || 0),
-        itemStyle: { color: '#667eea' }
+        itemStyle: { color: appTheme.primary }
       })),
       type: 'bar',
       barWidth: '60%',
       itemStyle: { borderRadius: [4, 4, 0, 0] },
-      areaStyle: { color: 'rgba(102,126,234,0.1)' }
+      areaStyle: { color: `${appTheme.primary}1a` }
     }]
   })
 
@@ -207,23 +209,23 @@ const Dashboard: React.FC = () => {
     xAxis: {
       type: 'category',
       data: modelUsage.map(d => d.model_name?.slice(0, 12) || d.model_id?.slice(0, 12) || ''),
-      axisLine: { lineStyle: { color: '#e8e8e8' } },
-      axisLabel: { color: '#8c8c8c', rotate: 45, fontSize: 10 },
+      axisLine: { lineStyle: { color: appTheme.border } },
+      axisLabel: { color: appTheme.textSecondary, rotate: 45, fontSize: 10 },
     },
     yAxis: {
       type: 'value',
       name: t('dashboard.token_count'),
       nameLocation: 'middle',
       nameGap: 70,
-      nameTextStyle: { color: '#8c8c8c', fontSize: 12 },
+      nameTextStyle: { color: appTheme.textSecondary, fontSize: 12 },
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: '#f5f5f5' } },
-      axisLabel: { color: '#8c8c8c' }
+      splitLine: { lineStyle: { color: appTheme.borderLight } },
+      axisLabel: { color: appTheme.textSecondary }
     },
     series: [{
       data: modelUsage.map(d => ({
         value: (d.prompt_tokens || 0) + (d.completion_tokens || 0),
-        itemStyle: { color: '#764ba2' }
+        itemStyle: { color: appTheme.primary }
       })),
       type: 'bar',
       barWidth: '60%',
@@ -257,12 +259,12 @@ const Dashboard: React.FC = () => {
           <Card style={{ borderRadius: 12, border: 'none' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <span style={{ fontWeight: 600, fontSize: 16 }}>{t('dashboard.sign_in_calendar')}</span>
+                <span style={{ fontWeight: 600, fontSize: 16, color: appTheme.textPrimary }}>{t('dashboard.sign_in_calendar')}</span>
                 <span style={{ marginLeft: 12, color: '#52c41a', fontSize: 14 }}>{t('dashboard.total_quota')}: ¥{formatMoney(dashboardData?.user?.quota || 0)}</span>
               </div>
               <Button
                 type="primary"
-                style={{ borderRadius: 8, background: isTodaySignedIn ? '#d9d9d9' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}
+                style={{ borderRadius: 8, background: isTodaySignedIn ? appTheme.borderLight : `linear-gradient(135deg, ${appTheme.primary} 0%, ${appTheme.primaryHover} 100%)`, border: 'none' }}
                 onClick={handleSignIn}
                 disabled={isTodaySignedIn || signingIn}
                 loading={signingIn}
@@ -272,7 +274,7 @@ const Dashboard: React.FC = () => {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
               {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
-                <div key={i} style={{ textAlign: 'center', color: '#8c8c8c', fontSize: 12, padding: 8 }}>{d}</div>
+                <div key={i} style={{ textAlign: 'center', color: appTheme.textSecondary, fontSize: 12, padding: 8 }}>{d}</div>
               ))}
               {(() => {
                 const now = new Date()
@@ -302,10 +304,10 @@ const Dashboard: React.FC = () => {
                         alignItems: 'center',
                         justifyContent: 'center',
                         borderRadius: 8,
-                        background: isToday ? '#667eea15' : isSigned ? '#52c41a15' : '#f5f5f5',
-                        border: isToday ? '2px solid #667eea' : 'none',
+                        background: isToday ? `${appTheme.primary}25` : isSigned ? '#52c41a15' : appTheme.bgElevated,
+                        border: isToday ? `2px solid ${appTheme.primary}` : 'none',
                         fontSize: 12,
-                        color: isSigned ? '#52c41a' : '#8c8c8c',
+                        color: isSigned ? '#52c41a' : appTheme.textSecondary,
                         fontWeight: isSigned ? 600 : 400
                       }}
                     >
