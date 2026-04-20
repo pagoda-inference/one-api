@@ -94,7 +94,8 @@ func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIR
 		preConsumedQuota = 0
 		logger.Info(ctx, fmt.Sprintf("user %d has enough quota %d, trusted and no need to pre-consume", meta.UserId, userQuota))
 	}
-	if preConsumedQuota > 0 {
+	// Lark OAuth users have TokenId=0, skip token quota pre-consume
+	if meta.TokenId != 0 && preConsumedQuota > 0 {
 		err := model.PreConsumeTokenQuota(meta.TokenId, preConsumedQuota)
 		if err != nil {
 			return preConsumedQuota, openai.ErrorWrapper(err, "pre_consume_token_quota_failed", http.StatusForbidden)
