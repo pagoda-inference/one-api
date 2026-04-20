@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Popconfirm, Row, Col, Switch, Select } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Popconfirm, Row, Col, Switch, Select, Tooltip } from 'antd'
 import { PlusOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, EyeInvisibleOutlined, EditOutlined } from '@ant-design/icons'
 import { getTokens, createToken, deleteToken, updateToken, getMarketModels } from '../services/api'
 import { useTranslation } from 'react-i18next'
@@ -238,18 +238,38 @@ const ApiKeys: React.FC = () => {
     {
       title: t('token.allowed_models'),
       key: 'models',
+      width: 260,
       render: (_: any, record: Token) => {
-        if (!record.models) {
+        if (!record.models || record.modelNames.length === 0) {
           return <Tag color="blue">{t('token.all_models')}</Tag>
         }
         const modelList = record.modelNames
-        if (modelList.length === 0) {
-          return <Tag color="blue">{t('token.all_models')}</Tag>
-        }
-        if (modelList.length > 3) {
-          return <Tag>{modelList.slice(0, 3).join(', ')}...</Tag>
-        }
-        return <Tag>{modelList.join(', ')}</Tag>
+        const maxVisible = 2
+        const visibleModels = modelList.slice(0, maxVisible)
+        const hiddenCount = modelList.length - maxVisible
+        const fullText = modelList.join(', ')
+
+        return (
+          <Tooltip title={fullText}>
+            <Space size={[4, 4]} wrap>
+              {visibleModels.map((model) => (
+                <Tag
+                  key={model}
+                  style={{
+                    maxWidth: 110,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    marginInlineEnd: 0,
+                  }}
+                >
+                  {model}
+                </Tag>
+              ))}
+              {hiddenCount > 0 && <Tag>+{hiddenCount}</Tag>}
+            </Space>
+          </Tooltip>
+        )
       }
     },
     {
@@ -291,6 +311,7 @@ const ApiKeys: React.FC = () => {
           rowKey="id"
           loading={loading}
           pagination={{ pageSize: 10 }}
+          scroll={{ x: 1400 }}
         />
       </Card>
 

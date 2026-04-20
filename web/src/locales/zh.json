@@ -765,7 +765,9 @@
     "frequency_penalty": "频率惩罚",
     "presence_penalty": "存在惩罚",
     "enable_thinking": "开启思考",
-    "thinking_budget": "思考预算"
+    "thinking_budget": "思考预算",
+    "add_comparison": "添加对比模型",
+    "remove_comparison": "取消对比"
   },
   "provider": {
     "provider_management": "Provider 管理",
@@ -937,6 +939,7 @@
     "param_error": "参数错误，正在跳转...",
     "login_success": "登录成功，正在跳转...",
     "login_failed": "登录失败，正在跳转...",
-    "login_failed_redirect": "登录失败，正在跳转..."
+    "login_failed_redirect": "登录失败，正在跳转...",
+    "login_retry": "登录失败，请重试"
   }
 }

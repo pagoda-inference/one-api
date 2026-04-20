@@ -764,7 +764,9 @@
     "frequency_penalty": "Frequency Penalty",
     "presence_penalty": "Presence Penalty",
     "enable_thinking": "Enable Thinking",
-    "thinking_budget": "Thinking Budget"
+    "thinking_budget": "Thinking Budget",
+    "add_comparison": "Add Comparison",
+    "remove_comparison": "Remove Comparison"
   },
   "provider": {
     "provider_management": "Provider Management",
@@ -936,6 +938,7 @@
     "param_error": "Parameter error, redirecting...",
     "login_success": "Login successful, redirecting...",
     "login_failed": "Login failed, redirecting...",
-    "login_failed_redirect": "Login failed, redirecting..."
+    "login_failed_redirect": "Login failed, redirecting...",
+    "login_retry": "Login failed, please retry"
   }
 }
