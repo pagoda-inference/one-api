@@ -43,6 +43,11 @@ func Distribute() func(c *gin.Context) {
 			}
 		} else {
 			requestModel = c.GetString(ctxkey.RequestModel)
+			// Batch/files listing requests have no model, skip channel selection
+			if requestModel == "" {
+				c.Next()
+				return
+			}
 			var err error
 			channel, err = model.CacheGetRandomSatisfiedChannelByModel(requestModel, false)
 			if err != nil {

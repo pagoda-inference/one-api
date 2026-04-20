@@ -417,9 +417,9 @@ func DeleteFile(c *gin.Context) {
 // CreateBatchRequest represents the request body for creating a batch
 type CreateBatchRequest struct {
 	InputFileId       string `json:"input_file_id"`
-	Endpoint          string `json:"endpoint"`
-	CompletionWindow string `json:"completion_window"`
+	CompletionWindow  string `json:"completion_window"`
 	Metadata          string `json:"metadata"`
+	APIKey           string `json:"api_key" binding:"required"`
 }
 
 // CreateBatch handles POST /v1/batches
@@ -488,23 +488,6 @@ func CreateBatch(c *gin.Context) {
 		return
 	}
 
-	// Validate endpoint
-	validEndpoints := map[string]bool{
-		"/v1/chat/completions": true,
-		"/v1/completions":      true,
-		"/v1/embeddings":       true,
-	}
-	if !validEndpoints[req.Endpoint] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": gin.H{
-				"message": "Invalid endpoint. Must be /v1/chat/completions, /v1/completions, or /v1/embeddings",
-				"type":    "invalid_request_error",
-				"code":    "invalid_endpoint",
-			},
-		})
-		return
-	}
-
 	// Validate completion window
 	if req.CompletionWindow != "24h" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -536,7 +519,7 @@ func CreateBatch(c *gin.Context) {
 		TokenId:           tokenId,
 		Status:            model.BatchStatusValidating,
 		InputFileId:       fileId,
-		Endpoint:          req.Endpoint,
+		APIKey:            req.APIKey,
 		CompletionWindow:  req.CompletionWindow,
 		CreatedAt:         helper.GetTimestamp(),
 		ExpiresAt:         helper.GetTimestamp() + int64(DefaultBatchExpiry.Seconds()),
@@ -697,7 +680,6 @@ func formatBatchResponse(b *model.Batch) gin.H {
 	response := gin.H{
 		"id":                b.Id,
 		"object":            "batch",
-		"endpoint":          b.Endpoint,
 		"errors":            nil,
 		"input_file_id":     fmt.Sprintf("file-%d", b.InputFileId),
 		"completion_window": b.CompletionWindow,
@@ -867,7 +849,7 @@ func processBatch(batchId string) {
 
 // processBatchLine processes a single line from the batch input file
 func processBatchLine(ctx context.Context, line string, lineNum int, batch *model.Batch) (string, error) {
-	// Parse the batch request
+	// Parse the batch request from JSONL line
 	var batchReq struct {
 		CustomId string          `json:"custom_id"`
 		Method   string          `json:"method"`
@@ -879,40 +861,55 @@ func processBatchLine(ctx context.Context, line string, lineNum int, batch *mode
 		return "", fmt.Errorf("invalid JSON at line %d: %v", lineNum, err)
 	}
 
-	// Get token for authentication
-	_, err := model.GetTokenById(batch.TokenId)
-	if err != nil {
-		return "", fmt.Errorf("token not found: %v", err)
+	customId := batchReq.CustomId
+	if customId == "" {
+		customId = fmt.Sprintf("request-%d", lineNum)
 	}
 
-	// Make the actual API call
-	// This would typically call through the relay controller
-	// For now, we'll return a placeholder response
+	// Construct full URL
+	fullUrl := "https://baotaai.bedicloud.net" + batchReq.Url
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", fullUrl, strings.NewReader(string(batchReq.Body)))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+batch.APIKey)
+
+	// Execute request
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %v", err)
+	}
+
+	// Format response in batch API format
 	result := gin.H{
-		"id":          fmt.Sprintf("batch_req_%d", lineNum),
-		"custom_id":   batchReq.CustomId,
+		"id":         fmt.Sprintf("batch_req_%d", lineNum),
+		"custom_id":  customId,
 		"response": gin.H{
-			"status_code": 200,
-			"body": gin.H{
-				"object": "chat.completion",
-				"model":  "placeholder",
-				"choices": []gin.H{
-					{
-						"index": 0,
-						"message": gin.H{
-							"role":    "assistant",
-							"content": "Batch processing placeholder - integrate with relay controller",
-						},
-						"finish_reason": "stop",
-					},
-				},
-			},
+			"status_code": resp.StatusCode,
+			"body":         json.RawMessage(respBody),
 		},
+	}
+
+	if resp.StatusCode >= 400 {
+		result["error"] = gin.H{
+			"message": fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(respBody)),
+		}
 	}
 
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal result: %v", err)
 	}
 
 	return string(resultBytes), nil

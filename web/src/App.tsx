@@ -5,7 +5,8 @@ import {
   HistoryOutlined, FileTextOutlined, SettingOutlined, TeamOutlined,
   BellOutlined, LogoutOutlined, UserOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined, DatabaseOutlined,
-  CloudServerOutlined, MoonOutlined, SunOutlined
+  CloudServerOutlined, MoonOutlined, SunOutlined, ExperimentOutlined,
+  ThunderboltOutlined
 } from '@ant-design/icons'
 import React, { useState, useEffect } from 'react'
 import Logo from './components/Logo'
@@ -28,6 +29,7 @@ import LarkOAuth from './pages/LarkOAuth'
 import ApiDocs from './pages/ApiDocs'
 import Profile from './pages/Profile'
 import NotificationManage from './pages/NotificationManage'
+import BatchInference from './pages/BatchInference'
 import { logout, User, getUnreadNotificationCount, getNotifications, markNotificationAsRead } from './services/api'
 
 const { Content } = Layout
@@ -139,7 +141,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   const userMenuItems = [
-    { key: 'profile', icon: <UserOutlined />, label: t('common.personal_center') },
+    { key: 'profile', icon: <UserOutlined />, label: t('menu.personal_settings') },
     { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: t('common.logout'), danger: true }
   ]
@@ -156,26 +158,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }
 
-  // Common menu items for all users
-  const commonMenuItems = [
-    { key: '/dashboard', icon: <DashboardOutlined />, label: t('menu.dashboard') },
-    { key: '/market', icon: <ShopOutlined />, label: t('menu.model_market') },
-    { key: '/keys', icon: <KeyOutlined />, label: t('menu.tokens') },
-    { key: '/docs', icon: <ApiOutlined />, label: t('menu.api_docs') },
-    { key: '/usage', icon: <HistoryOutlined />, label: t('menu.usage_detail') },
-    { key: '/topup', icon: <PlusSquareOutlined />, label: t('menu.topup') },
-    { key: '/invoices', icon: <FileTextOutlined />, label: t('menu.invoice_management') },
-  ]
-
-  // Admin menu items
-  const adminMenuItems = [
-    { key: '/ops', icon: <SettingOutlined />, label: t('menu.ops_dashboard') },
-    { key: '/ops/models', icon: <DatabaseOutlined />, label: t('menu.model_management_admin') },
-    { key: '/ops/providers', icon: <CloudServerOutlined />, label: t('menu.provider_management') },
-    { key: '/ops/notifications', icon: <BellOutlined />, label: t('menu.system_notifications') },
-    { key: '/teams', icon: <TeamOutlined />, label: t('menu.teams') },
-  ]
-
+  // User null check must come first
   if (!user) {
     return (
       <Layout style={{ minHeight: '100vh', background: 'var(--bg-secondary)' }}>
@@ -186,9 +169,72 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     )
   }
 
-  const menuItems = (user.role ?? 0) >= 10
-    ? [...commonMenuItems, ...adminMenuItems]
-    : commonMenuItems
+  const isAdmin = (user.role ?? 0) >= 10
+
+  // Experience Center - placeholder (disabled)
+  const experienceCenterGroup = {
+    type: 'group' as const,
+    label: t('menu.experience_center'),
+    key: 'experience',
+    children: [
+      { key: '/experience', icon: <ExperimentOutlined />, label: t('menu.experience_center'), disabled: true }
+    ]
+  }
+
+  // Model group - batch only for non-admin users
+  const modelGroupChildren = [
+    { key: '/market', icon: <ShopOutlined />, label: t('menu.model_market') },
+    ...(isAdmin ? [] : [{ key: '/batch', icon: <ThunderboltOutlined />, label: t('menu.batch_inference') }])
+  ]
+  const modelGroup = {
+    type: 'group' as const,
+    label: t('menu.model'),
+    key: 'model',
+    children: modelGroupChildren
+  }
+
+  // Console group
+  const consoleGroup = {
+    type: 'group' as const,
+    label: t('menu.console'),
+    key: 'console',
+    children: [
+      { key: '/dashboard', icon: <DashboardOutlined />, label: t('menu.dashboard') },
+      { key: '/keys', icon: <KeyOutlined />, label: t('menu.tokens') },
+      { key: '/docs', icon: <ApiOutlined />, label: t('menu.quick_start') },
+      { key: '/usage', icon: <HistoryOutlined />, label: t('menu.usage_detail') },
+    ]
+  }
+
+  // Personal Center group
+  const personalCenterGroup = {
+    type: 'group' as const,
+    label: t('menu.personal_center'),
+    key: 'personal',
+    children: [
+      { key: '/profile', icon: <UserOutlined />, label: t('menu.personal_settings') },
+      { key: '/topup', icon: <PlusSquareOutlined />, label: t('menu.topup') },
+      { key: '/invoices', icon: <FileTextOutlined />, label: t('menu.invoice_management') },
+    ]
+  }
+
+  // Admin group
+  const adminGroup = {
+    type: 'group' as const,
+    label: t('menu.ops_dashboard'),
+    key: 'admin',
+    children: [
+      { key: '/ops', icon: <SettingOutlined />, label: t('menu.ops_dashboard') },
+      { key: '/ops/models', icon: <DatabaseOutlined />, label: t('menu.model_management_admin') },
+      { key: '/ops/providers', icon: <CloudServerOutlined />, label: t('menu.provider_management') },
+      { key: '/ops/notifications', icon: <BellOutlined />, label: t('menu.system_notifications') },
+      { key: '/teams', icon: <TeamOutlined />, label: t('menu.teams') },
+    ]
+  }
+
+  const menuItems = isAdmin
+    ? [experienceCenterGroup, modelGroup, consoleGroup, personalCenterGroup, adminGroup]
+    : [experienceCenterGroup, modelGroup, consoleGroup, personalCenterGroup]
 
   // Get greeting based on time
   const getGreeting = () => {
@@ -260,6 +306,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
         <Menu
           mode="inline"
+          inlineCollapsed={collapsed}
           selectedKeys={[location.pathname]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
@@ -390,6 +437,7 @@ const App: React.FC = () => {
         <Route path="/docs" element={<ProtectedPage><ApiDocs /></ProtectedPage>} />
         <Route path="/profile" element={<ProtectedPage><Profile /></ProtectedPage>} />
         <Route path="/ops/notifications" element={<ProtectedPage><NotificationManage /></ProtectedPage>} />
+        <Route path="/batch" element={<ProtectedPage><BatchInference /></ProtectedPage>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

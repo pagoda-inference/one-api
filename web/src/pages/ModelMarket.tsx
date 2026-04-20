@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Input, Select, Tag, Button, Drawer, Descriptions, Statistic, message, Tabs, Badge, Segmented } from 'antd'
+import { Row, Col, Card, Input, Tag, Button, Drawer, Descriptions, Statistic, message, Tabs, Badge, Segmented } from 'antd'
 import {
   SearchOutlined, RobotOutlined, SyncOutlined,
   ExperimentOutlined, AppstoreOutlined, BarsOutlined,
@@ -91,6 +91,10 @@ const ModelMarket: React.FC = () => {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
+  const [capabilityFilter, setCapabilityFilter] = useState<string[]>([])
+  const [contextFilter, setContextFilter] = useState<string>('')
+  const [trialOnly, setTrialOnly] = useState(false)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [selectedModel, setSelectedModel] = useState<Model | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [priceCalc, setPriceCalc] = useState<{ prompt_tokens: number; completion_tokens: number; quota_cost: number } | null>(null)
@@ -100,7 +104,7 @@ const ModelMarket: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('all')
   useEffect(() => {
     loadData()
-  }, [typeFilter, groupFilter])
+  }, [typeFilter, groupFilter, capabilityFilter, contextFilter, trialOnly])
 
   const loadData = async () => {
     try {
@@ -115,6 +119,29 @@ const ModelMarket: React.FC = () => {
       // Apply group filter (filter by provider code, case-insensitive)
       if (groupFilter) {
         allModels = allModels.filter((m: Model) => m.provider.toLowerCase() === groupFilter.toLowerCase())
+      }
+
+      // Apply capability filter (AND logic - must have all selected capabilities)
+      if (capabilityFilter.length > 0) {
+        allModels = allModels.filter((m: Model) => {
+          try {
+            const caps = JSON.parse(m.capabilities || '[]') as string[]
+            return capabilityFilter.every(cap => caps.includes(cap))
+          } catch {
+            return false
+          }
+        })
+      }
+
+      // Apply context length filter
+      if (contextFilter) {
+        const minContext = parseInt(contextFilter) * 1024
+        allModels = allModels.filter((m: Model) => m.context_len >= minContext)
+      }
+
+      // Apply trial only filter
+      if (trialOnly) {
+        allModels = allModels.filter((m: Model) => m.is_trial)
       }
 
       // Apply search filter
@@ -597,9 +624,10 @@ const ModelMarket: React.FC = () => {
       {/* Filters */}
       <Card
         style={{ marginBottom: 16, borderRadius: 12, border: 'none', background: 'var(--bg-card)' }}
-        styles={{ body: { padding: '16px 20px', background: 'var(--bg-card)' } }}
+        styles={{ body: { padding: '12px 20px', background: 'var(--bg-card)' } }}
       >
-        <Row gutter={[16, 16]} align="middle">
+        {/* Search Row */}
+        <Row gutter={[16, 12]} align="middle" style={{ marginBottom: filtersCollapsed ? 0 : 12 }}>
           <Col xs={24} sm={12} md={8}>
             <Search
               placeholder={t('modelMarket.search_placeholder')}
@@ -609,25 +637,7 @@ const ModelMarket: React.FC = () => {
               style={{ width: '100%' }}
             />
           </Col>
-          <Col xs={12} sm={6} md={4}>
-            <Select
-              style={{ width: '100%', borderRadius: 8 }}
-              value={typeFilter || undefined}
-              onChange={setTypeFilter}
-              options={typeOptions}
-            />
-          </Col>
-          <Col xs={12} sm={6} md={4}>
-            <Select
-              placeholder={t('modelMarket.select_group')}
-              allowClear
-              style={{ width: '100%', borderRadius: 8 }}
-              value={groupFilter || undefined}
-              onChange={(v) => setGroupFilter(v || null)}
-              options={groups.map(g => ({ value: g.code, label: g.name }))}
-            />
-          </Col>
-          <Col xs={24} md={8} style={{ textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          <Col xs={24} md={16} style={{ textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
             <Segmented
               value={viewMode}
               onChange={(v) => setViewMode(v as 'grid' | 'list')}
@@ -637,8 +647,161 @@ const ModelMarket: React.FC = () => {
               ]}
             />
             <Button icon={<SyncOutlined />} onClick={loadData}>{t('common.refresh')}</Button>
+            <Button
+              icon={filtersCollapsed ? <ThunderboltOutlined /> : <BarsOutlined />}
+              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+              title={filtersCollapsed ? t('modelMarket.expand_filters') : t('modelMarket.collapse_filters')}
+            />
           </Col>
         </Row>
+
+        {!filtersCollapsed && (
+          <>
+            {/* Type Filter Tags */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginRight: 8 }}>{t('modelMarket.filter_by_type')}:</span>
+          {typeOptions.map(opt => (
+            <Tag
+              key={opt.value}
+              className="filter-tag"
+              style={{
+                cursor: 'pointer',
+                borderRadius: 16,
+                padding: '2px 12px',
+                border: typeFilter === opt.value ? '1px solid #667eea' : '1px solid var(--border-color)',
+                background: typeFilter === opt.value ? '#667eea15' : 'transparent',
+                color: typeFilter === opt.value ? '#667eea' : 'var(--text-secondary)',
+                fontSize: 12
+              }}
+              onClick={() => setTypeFilter(opt.value)}
+            >
+              {opt.label}
+            </Tag>
+          ))}
+        </div>
+
+        {/* Provider Filter Tags */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginRight: 8 }}>{t('modelMarket.filter_by_provider')}:</span>
+          <Tag
+            className="filter-tag"
+            style={{
+              cursor: 'pointer',
+              borderRadius: 16,
+              padding: '2px 12px',
+              border: !groupFilter ? '1px solid #52c41a' : '1px solid var(--border-color)',
+              background: !groupFilter ? '#52c41a15' : 'transparent',
+              color: !groupFilter ? '#52c41a' : 'var(--text-secondary)',
+              fontSize: 12
+            }}
+            onClick={() => setGroupFilter(null)}
+          >
+            {t('modelMarket.all_types')}
+          </Tag>
+          {groups.map(g => (
+            <Tag
+              key={g.code}
+              className="filter-tag"
+              style={{
+                cursor: 'pointer',
+                borderRadius: 16,
+                padding: '2px 12px',
+                border: groupFilter === g.code ? '1px solid #52c41a' : '1px solid var(--border-color)',
+                background: groupFilter === g.code ? '#52c41a15' : 'transparent',
+                color: groupFilter === g.code ? '#52c41a' : 'var(--text-secondary)',
+                fontSize: 12
+              }}
+              onClick={() => setGroupFilter(g.code)}
+            >
+              {g.name}
+            </Tag>
+          ))}
+        </div>
+
+        {/* Capability Filter Tags */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginRight: 8 }}>{t('modelMarket.filter_by_capability')}:</span>
+          {[
+            { value: 'vision', label: t('modelMarket.cap_vision') },
+            { value: 'moe', label: t('modelMarket.cap_moe') },
+            { value: 'reasoning', label: t('modelMarket.cap_reasoning') },
+            { value: 'function_call', label: t('modelMarket.cap_tools') },
+            { value: 'embedding', label: t('modelMarket.embedding') },
+            { value: 'reranker', label: t('modelMarket.reranker') },
+          ].map(opt => (
+            <Tag
+              key={opt.value}
+              className="filter-tag"
+              style={{
+                cursor: 'pointer',
+                borderRadius: 16,
+                padding: '2px 12px',
+                border: capabilityFilter.includes(opt.value) ? '1px solid #722ed1' : '1px solid var(--border-color)',
+                background: capabilityFilter.includes(opt.value) ? '#722ed115' : 'transparent',
+                color: capabilityFilter.includes(opt.value) ? '#722ed1' : 'var(--text-secondary)',
+                fontSize: 12
+              }}
+              onClick={() => {
+                if (capabilityFilter.includes(opt.value)) {
+                  setCapabilityFilter(capabilityFilter.filter(c => c !== opt.value))
+                } else {
+                  setCapabilityFilter([...capabilityFilter, opt.value])
+                }
+              }}
+            >
+              {opt.label}
+            </Tag>
+          ))}
+        </div>
+
+        {/* Context Length Filter Tags */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginRight: 8 }}>{t('modelMarket.filter_by_context')}:</span>
+          {[
+            { value: '8', label: t('modelMarket.context_8k') },
+            { value: '16', label: t('modelMarket.context_16k') },
+            { value: '32', label: t('modelMarket.context_32k') },
+            { value: '128', label: t('modelMarket.context_128k') },
+          ].map(opt => (
+            <Tag
+              key={opt.value}
+              className="filter-tag"
+              style={{
+                cursor: 'pointer',
+                borderRadius: 16,
+                padding: '2px 12px',
+                border: contextFilter === opt.value ? '1px solid #fa8c16' : '1px solid var(--border-color)',
+                background: contextFilter === opt.value ? '#fa8c1615' : 'transparent',
+                color: contextFilter === opt.value ? '#fa8c16' : 'var(--text-secondary)',
+                fontSize: 12
+              }}
+              onClick={() => setContextFilter(contextFilter === opt.value ? '' : opt.value)}
+            >
+              {opt.label}
+            </Tag>
+          ))}
+        </div>
+
+        {/* Trial Only Filter */}
+        <div>
+          <Tag
+            className="filter-tag"
+            style={{
+              cursor: 'pointer',
+              borderRadius: 16,
+              padding: '2px 12px',
+              border: trialOnly ? '1px solid #eb2f96' : '1px solid var(--border-color)',
+              background: trialOnly ? '#eb2f9615' : 'transparent',
+              color: trialOnly ? '#eb2f96' : 'var(--text-secondary)',
+              fontSize: 12
+            }}
+            onClick={() => setTrialOnly(!trialOnly)}
+          >
+            🔥 {t('modelMarket.trial_only')}
+          </Tag>
+        </div>
+          </>
+        )}
       </Card>
 
       {/* Model List */}

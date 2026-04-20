@@ -231,6 +231,7 @@ func formatModelInfo(m *model.ModelInfo) gin.H {
 		"input_price":  m.InputPrice,
 		"output_price": m.OutputPrice,
 		"capabilities": m.Capabilities,
+		"tags":         m.Tags,
 		"status":       m.Status,
 		"icon_url":     m.IconUrl,
 		"group_id":     m.GroupId,

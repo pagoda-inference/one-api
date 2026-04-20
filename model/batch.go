@@ -32,7 +32,7 @@ type Batch struct {
 	InputFileId        int    `json:"input_file_id"`
 	OutputFileId       *int   `json:"output_file_id"`
 	ErrorFileId        *int   `json:"error_file_id"`
-	Endpoint           string `json:"endpoint" gorm:"size:128"`     // "/v1/chat/completions"
+	APIKey            string `json:"api_key" gorm:"size:64"`      // user's API key for this batch
 	CompletionWindow  string `json:"completion_window" gorm:"size:32"` // "24h"
 	CreatedAt          int64  `json:"created_at" gorm:"bigint"`
 	InProgressAt       *int64 `json:"in_progress_at" gorm:"bigint"`

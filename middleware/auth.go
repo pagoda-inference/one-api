@@ -91,9 +91,36 @@ func RootAuth() func(c *gin.Context) {
 func TokenAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
-		key := c.Request.Header.Get("Authorization")
-		key = strings.TrimPrefix(key, "Bearer ")
-		key = strings.TrimPrefix(key, "sk-")
+		rawKey := c.Request.Header.Get("Authorization")
+		rawKey = strings.TrimPrefix(rawKey, "Bearer ")
+
+		// Lark OAuth user: token is "lark-session-{id}", use session auth
+		if strings.HasPrefix(rawKey, "lark-session-") {
+			idStr := strings.TrimPrefix(rawKey, "lark-session-")
+			session := sessions.Default(c)
+			sessionId := session.Get("id")
+			if sessionId != nil && fmt.Sprintf("%v", sessionId) == idStr {
+				userId := sessionId.(int)
+				userEnabled, err := model.CacheIsUserEnabled(userId)
+				if err != nil {
+					abortWithMessage(c, http.StatusInternalServerError, err.Error())
+					return
+				}
+				if !userEnabled || blacklist.IsUserBanned(userId) {
+					abortWithMessage(c, http.StatusForbidden, "用户已被封禁")
+					return
+				}
+				c.Set(ctxkey.Id, userId)
+				c.Set(ctxkey.TokenId, 0)
+				c.Set(ctxkey.TokenName, "lark-oauth")
+				c.Next()
+				return
+			}
+			abortWithMessage(c, http.StatusUnauthorized, "无效的令牌")
+			return
+		}
+
+		key := strings.TrimPrefix(rawKey, "sk-")
 		parts := strings.Split(key, "-")
 		key = parts[0]
 		token, err := model.ValidateUserToken(key)
