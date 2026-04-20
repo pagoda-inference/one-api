@@ -3,6 +3,8 @@
   * [AI Agent 开发](/guide/SKILL)
   * [账户管理](/guide/account)
   * [模型广场](/guide/models)
+  * [体验中心](/guide/chatplayground)
+  * [批量推理](/guide/batch-inference)
   * [API Keys](/guide/api-keys)
   * [API 文档](/guide/api)
   * [用量明细](/guide/usage)

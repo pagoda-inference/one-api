@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Input, Button, Select, Switch, Slider, Space, Tag, message, InputNumber } from 'antd'
 import { SendOutlined, ClearOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -40,36 +41,39 @@ interface ParamControlProps {
 
 const ParamControl: React.FC<ParamControlProps> = ({
   label, value, min, max, step = 1, precision, onChange, suffix
-}) => (
-  <div style={{ marginBottom: 18 }}>
-    <div style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-    }}>
-      <span style={{ fontSize: 14, fontWeight: 500 }}>{label}</span>
-      <InputNumber
+}) => {
+  const { appTheme } = useTheme()
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+      }}>
+        <span style={{ fontSize: 14, fontWeight: 500, color: appTheme.textPrimary }}>{label}</span>
+        <InputNumber
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          precision={precision}
+          onChange={(v) => onChange(v ?? value)}
+          style={{ width: 100 }}
+          size="small"
+        />
+      </div>
+      <Slider
         value={value}
         min={min}
         max={max}
         step={step}
-        precision={precision}
-        onChange={(v) => onChange(v ?? value)}
-        style={{ width: 100 }}
-        size="small"
+        onChange={(v) => onChange(v as number)}
       />
+      {suffix && <div style={{ fontSize: 11, color: appTheme.textTertiary, marginTop: 2 }}>{suffix}</div>}
     </div>
-    <Slider
-      value={value}
-      min={min}
-      max={max}
-      step={step}
-      onChange={(v) => onChange(v as number)}
-    />
-    {suffix && <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>{suffix}</div>}
-  </div>
-)
+  )
+}
 
 // Trial models available for experience center
 const trialModels = [
@@ -111,6 +115,7 @@ const modelCapabilities: Record<string, {
 
 const ChatPlayground: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [messages, setMessages] = useState<Message[]>([])
   const [messages2, setMessages2] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
@@ -377,9 +382,9 @@ const ChatPlayground: React.FC = () => {
       <div style={{
         width: 340,
         minWidth: 320,
-        borderRight: '1px solid #f0f0f0',
+        borderRight: appTheme.borderLight,
         padding: 24,
-        background: '#fcfcfd',
+        background: appTheme.bgElevated,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -501,8 +506,8 @@ const ChatPlayground: React.FC = () => {
 
         {/* Second model config panel (comparison mode) */}
         {comparisonMode && (
-          <div style={{ marginTop: 16, borderTop: '1px solid #e8e8e8', paddingTop: 16 }}>
-            <div style={{ fontSize: 13, color: '#8c8c8c', marginBottom: 12 }}>{t('chat.model_config')} 2</div>
+          <div style={{ marginTop: 16, borderTop: appTheme.border, paddingTop: 16 }}>
+            <div style={{ fontSize: 13, color: appTheme.textSecondary, marginBottom: 12 }}>{t('chat.model_config')} 2</div>
             <Select
               value={params2.model}
               onChange={(value) => setParams2(p => ({ ...p, model: value }))}
@@ -549,7 +554,7 @@ const ChatPlayground: React.FC = () => {
         {/* Chat header */}
         <div style={{
           padding: '16px 24px',
-          borderBottom: '1px solid #f0f0f0',
+          borderBottom: appTheme.borderLight,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -567,7 +572,7 @@ const ChatPlayground: React.FC = () => {
         </div>
 
         {/* Messages area - split view for comparison */}
-        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0 }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0, background: appTheme.bgPage }}>
           {/* Left model chat */}
           <div style={{
             flex: 1,
@@ -576,9 +581,9 @@ const ChatPlayground: React.FC = () => {
             padding: '24px 32px',
             display: 'flex',
             flexDirection: 'column',
-            borderRight: comparisonMode ? '1px solid #f0f0f0' : 'none',
+            borderRight: comparisonMode ? appTheme.borderLight : 'none',
           }}>
-            <div style={{ fontSize: 14, color: '#8c8c8c', marginBottom: 16, fontWeight: 500 }}>
+            <div style={{ fontSize: 14, color: appTheme.textSecondary, marginBottom: 16, fontWeight: 500 }}>
               {trialModels.find(m => m.value === params.model)?.label || params.model}
             </div>
             {!chatStarted ? (
@@ -588,7 +593,7 @@ const ChatPlayground: React.FC = () => {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#8c8c8c',
+                color: appTheme.textSecondary,
               }}>
                 <p style={{ fontSize: 16 }}>{t('chat.start_conversation')}</p>
                 <p style={{ fontSize: 12, marginTop: 8 }}>{t('chat.trial_models_tip')}</p>
@@ -609,8 +614,8 @@ const ChatPlayground: React.FC = () => {
                       maxWidth: '85%',
                       padding: '12px 16px',
                       borderRadius: 16,
-                      background: msg.role === 'user' ? '#1890ff' : '#f5f5f5',
-                      color: msg.role === 'user' ? '#fff' : '#333',
+                      background: msg.role === 'user' ? appTheme.bgBubbleUser : appTheme.bgBubbleAssistant,
+                      color: msg.role === 'user' ? appTheme.textOnPrimary : appTheme.textPrimary,
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                       fontSize: 14,
@@ -626,8 +631,8 @@ const ChatPlayground: React.FC = () => {
                       maxWidth: '85%',
                       padding: '12px 16px',
                       borderRadius: 16,
-                      background: '#f5f5f5',
-                      color: '#333',
+                      background: appTheme.bgBubbleAssistant,
+                      color: appTheme.textPrimary,
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                       fontSize: 14,
@@ -652,7 +657,7 @@ const ChatPlayground: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
             }}>
-              <div style={{ fontSize: 14, color: '#8c8c8c', marginBottom: 16, fontWeight: 500 }}>
+              <div style={{ fontSize: 14, color: appTheme.textSecondary, marginBottom: 16, fontWeight: 500 }}>
                 {trialModels.find(m => m.value === params2.model)?.label || params2.model}
               </div>
               {!chatStarted ? (
@@ -662,7 +667,7 @@ const ChatPlayground: React.FC = () => {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: '#8c8c8c',
+                  color: appTheme.textSecondary,
                 }}>
                   <p style={{ fontSize: 16 }}>{t('chat.start_conversation')}</p>
                 </div>
@@ -682,8 +687,8 @@ const ChatPlayground: React.FC = () => {
                         maxWidth: '85%',
                         padding: '12px 16px',
                         borderRadius: 16,
-                        background: msg.role === 'user' ? '#722ed1' : '#f5f5f5',
-                        color: msg.role === 'user' ? '#fff' : '#333',
+                        background: msg.role === 'user' ? appTheme.bgBubbleUser : appTheme.bgBubbleAssistant,
+                        color: msg.role === 'user' ? appTheme.textOnPrimary : appTheme.textPrimary,
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
                         fontSize: 14,
@@ -699,8 +704,8 @@ const ChatPlayground: React.FC = () => {
                         maxWidth: '85%',
                         padding: '12px 16px',
                         borderRadius: 16,
-                        background: '#f5f5f5',
-                        color: '#333',
+                        background: appTheme.bgBubbleAssistant,
+                        color: appTheme.textPrimary,
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
                         fontSize: 14,
@@ -718,13 +723,13 @@ const ChatPlayground: React.FC = () => {
         </div>
 
         {/* Input area - compact card style */}
-        <div style={{ padding: '8px 24px 12px', background: '#f8fafc' }}>
+        <div style={{ padding: '8px 24px 12px', background: appTheme.bgElevated }}>
           <div style={{
-            border: '1px solid #e5e7eb',
+            border: `1px solid ${appTheme.border}`,
             borderRadius: 16,
             padding: '10px 12px',
-            background: '#fff',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+            background: appTheme.bgInput,
+            boxShadow: appTheme.shadow,
           }}>
             <TextArea
               value={inputValue}
@@ -736,7 +741,7 @@ const ChatPlayground: React.FC = () => {
               disabled={loading || loading2}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-              <div style={{ fontSize: 11, color: '#8c8c8c' }}>
+              <div style={{ fontSize: 11, color: appTheme.textTertiary }}>
                 {t('chat.disclaimer')}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
