@@ -420,4 +420,3 @@ async function withRetry(fn, maxRetries = 3) {
 
 - [One-API GitHub](https://github.com/pagoda-inference/one-api)
 - [API Documentation](./api.md)
-- [Admin API](../ops/admin-api.md)
