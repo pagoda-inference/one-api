@@ -17,6 +17,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/status", controller.GetStatus)
 		apiRouter.GET("/models", middleware.UserAuth(), controller.DashboardListModels)
 		apiRouter.GET("/notice", controller.GetNotice)
+		apiRouter.GET("/images/:key", controller.GetMediaFile)
 		apiRouter.GET("/about", controller.GetAbout)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/api-docs", controller.GetApiDocs)
@@ -66,6 +67,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/notifications/unread-count", controller.GetUnreadNotificationCount)
 				selfRoute.PUT("/notifications/:id/read", controller.MarkNotificationAsRead)
 				selfRoute.PUT("/notifications/read-all", controller.MarkAllNotificationsAsRead)
+				selfRoute.POST("/upload", controller.UploadMediaFile)
 			}
 
 			// Payment routes

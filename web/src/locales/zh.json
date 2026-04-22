@@ -739,7 +739,11 @@
     "model": "模型",
     "model_placeholder": "请选择模型",
     "api_key": "API Key",
-    "api_key_placeholder": "请输入您的 API Key"
+    "api_key_placeholder": "请输入您的 API Key",
+    "model_price": "模型价格",
+    "input_price": "输入",
+    "output_price": "输出",
+    "price_per_1k": "元/千token"
   },
   "chat": {
     "experience_center": "体验中心",
@@ -753,6 +757,7 @@
     "send": "发送",
     "stop": "停止",
     "input_placeholder": "输入消息，Enter 发送，Shift+Enter 换行",
+    "input_placeholder_compare": "输入消息，Enter 发送，Shift+Enter 换行（对比模式）",
     "disclaimer": "AI 助手可能会产生不准确的信息，请谨慎参考",
     "send_failed": "发送失败",
     "model": "模型",
@@ -767,7 +772,15 @@
     "enable_thinking": "开启思考",
     "thinking_budget": "思考预算",
     "add_comparison": "添加对比模型",
-    "remove_comparison": "取消对比"
+    "remove_comparison": "取消对比",
+    "vl_input_placeholder": "输入提示词...（粘贴可上传部分图片，删除可清除图片）",
+    "select_image_file": "请选择图片文件",
+    "image_size_limit": "图片大小不能超过 10MB",
+    "invalid_image_url": "请输入有效的图片 URL",
+    "upload_image_file": "上传图片文件",
+    "upload_image_button": "上传图片（大小不超过10MB）",
+    "input_image_url": "输入图片的 URL",
+    "upload_failed": "文件上传失败"
   },
   "provider": {
     "provider_management": "Provider 管理",

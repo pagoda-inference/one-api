@@ -1,5 +1,9 @@
 {
   "invalid_input": "Invalid input, please check your input",
   "send_email_failed": "failed to send email: ",
-  "invalid_parameter": "invalid parameter"
+  "invalid_parameter": "invalid parameter",
+  "upload_not_enabled": "file upload is not enabled",
+  "file_too_large": "file size exceeds 10MB limit",
+  "file_type_not_allowed": "file type not allowed",
+  "upload_failed": "file upload failed"
 }

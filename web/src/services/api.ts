@@ -722,3 +722,8 @@ export const getOptions = () =>
 
 export const updateOption = (key: string, value: string) =>
   api.put<{ success: boolean; message?: string }>('/option/', { key, value })
+
+export const uploadFile = (formData: FormData) =>
+  api.post<{ success: boolean; data: { url: string; key: string; filename: string; size: number }; message?: string }>('/user/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })

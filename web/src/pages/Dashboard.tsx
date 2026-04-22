@@ -132,7 +132,7 @@ const Dashboard: React.FC = () => {
     <Card
       style={{
         borderRadius: 12,
-        border: 'none',
+        border: appTheme.border,
         boxShadow: appTheme.shadow
       }}
       styles={{ body: { padding: '20px 24px' } }}
@@ -171,36 +171,43 @@ const Dashboard: React.FC = () => {
   )
 
   // Usage chart
-  const getUsageChartOption = () => ({
-    tooltip: { trigger: 'axis' },
-    grid: { left: 100, right: 30, top: 30, bottom: 40 },
-    xAxis: {
-      type: 'category',
-      data: usageData.map(d => d.day?.slice(5) || ''),
-      axisLine: { lineStyle: { color: appTheme.border } },
-      axisLabel: { color: appTheme.textSecondary }
-    },
-    yAxis: {
-      type: 'value',
-      name: t('dashboard.token_count'),
-      nameLocation: 'middle',
-      nameGap: 70,
-      nameTextStyle: { color: appTheme.textSecondary, fontSize: 12 },
-      axisLine: { show: false },
-      splitLine: { lineStyle: { color: appTheme.borderLight } },
-      axisLabel: { color: appTheme.textSecondary }
-    },
-    series: [{
-      data: usageData.map(d => ({
-        value: (d.prompt_tokens || 0) + (d.completion_tokens || 0),
-        itemStyle: { color: appTheme.primary }
-      })),
-      type: 'bar',
-      barWidth: '60%',
-      itemStyle: { borderRadius: [4, 4, 0, 0] },
-      areaStyle: { color: `${appTheme.primary}1a` }
-    }]
-  })
+  const getUsageChartOption = () => {
+    // Aggregate by day (query returns rows grouped by day+model_name, need to merge same-day entries)
+    const byDay: Record<string, number> = {}
+    usageData.forEach(d => {
+      const day = d.day?.slice(5) || ''
+      byDay[day] = (byDay[day] || 0) + (d.prompt_tokens || 0) + (d.completion_tokens || 0)
+    })
+    const days = Object.keys(byDay).sort()
+    const values = days.map(d => byDay[d])
+    return {
+      tooltip: { trigger: 'axis' },
+      grid: { left: 100, right: 30, top: 30, bottom: 40 },
+      xAxis: {
+        type: 'category',
+        data: days,
+        axisLine: { lineStyle: { color: appTheme.border } },
+        axisLabel: { color: appTheme.textSecondary }
+      },
+      yAxis: {
+        type: 'value',
+        name: t('dashboard.token_count'),
+        nameLocation: 'middle',
+        nameGap: 70,
+        nameTextStyle: { color: appTheme.textSecondary, fontSize: 12 },
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: appTheme.borderLight } },
+        axisLabel: { color: appTheme.textSecondary }
+      },
+      series: [{
+        data: values.map(v => ({ value: v, itemStyle: { color: appTheme.primary } })),
+        type: 'bar',
+        barWidth: '60%',
+        itemStyle: { borderRadius: [4, 4, 0, 0] },
+        areaStyle: { color: `${appTheme.primary}1a` }
+      }]
+    }
+  }
 
   // Model usage chart
   const getModelChartOption = () => ({
@@ -256,7 +263,7 @@ const Dashboard: React.FC = () => {
     switch (activeTab) {
       case 'calendar':
         return (
-          <Card style={{ borderRadius: 12, border: 'none' }}>
+          <Card style={{ borderRadius: 12, border: appTheme.border }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
                 <span style={{ fontWeight: 600, fontSize: 16, color: appTheme.textPrimary }}>{t('dashboard.sign_in_calendar')}</span>
@@ -322,7 +329,7 @@ const Dashboard: React.FC = () => {
         )
       case 'trend':
         return (
-          <Card style={{ borderRadius: 12, border: 'none' }}>
+          <Card style={{ borderRadius: 12, border: appTheme.border }}>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{t('dashboard.recent_7day_usage_trend')}</div>
             {usageData.length > 0 ? (
               <ReactECharts option={getUsageChartOption()} style={{ height: 300 }} />
@@ -333,7 +340,7 @@ const Dashboard: React.FC = () => {
         )
       case 'model':
         return (
-          <Card style={{ borderRadius: 12, border: 'none' }}>
+          <Card style={{ borderRadius: 12, border: appTheme.border }}>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{t('dashboard.model_usage_ranking')}</div>
             {modelUsage.length > 0 ? (
               <ReactECharts option={getModelChartOption()} style={{ height: 300 }} />
@@ -344,7 +351,7 @@ const Dashboard: React.FC = () => {
         )
       case 'ranking':
         return (
-          <Card style={{ borderRadius: 12, border: 'none' }}>
+          <Card style={{ borderRadius: 12, border: appTheme.border }}>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{t('dashboard.token_consumption_ranking')}</div>
             <Table
               dataSource={modelUsage}
@@ -394,7 +401,7 @@ const Dashboard: React.FC = () => {
               title={t('dashboard.today_revenue')}
               value={`¥${formatMoney(opsStats?.today_revenue || 0)}`}
               suffix=""
-              icon={<DollarOutlined style={{ color: '#fff', fontSize: 16 }} />}
+              icon={<DollarOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
               color="#667eea"
             />
           </Col>
@@ -403,7 +410,7 @@ const Dashboard: React.FC = () => {
               title={t('dashboard.today_usage_token')}
               value={formatQuota(opsStats?.today_usage_tokens || 0)}
               suffix=""
-              icon={<ApiOutlined style={{ color: '#fff', fontSize: 16 }} />}
+              icon={<ApiOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
               color="#52c41a"
             />
           </Col>
@@ -412,7 +419,7 @@ const Dashboard: React.FC = () => {
               title={t('dashboard.active_users')}
               value={opsStats?.active_users || 0}
               suffix=""
-              icon={<UserOutlined style={{ color: '#fff', fontSize: 16 }} />}
+              icon={<UserOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
               color="#ff4d4f"
             />
           </Col>
@@ -421,7 +428,7 @@ const Dashboard: React.FC = () => {
               title={t('dashboard.channel_health_rate')}
               value={`${(opsStats?.channel_health_rate || 0).toFixed(1)}`}
               suffix="%"
-              icon={<TrophyOutlined style={{ color: '#fff', fontSize: 16 }} />}
+              icon={<TrophyOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
               color="#faad14"
             />
           </Col>
@@ -434,7 +441,7 @@ const Dashboard: React.FC = () => {
               title={t('dashboard.total_users')}
               value={opsStats?.total_users || 0}
               suffix=""
-              icon={<TeamOutlined style={{ color: '#fff', fontSize: 16 }} />}
+              icon={<TeamOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
               color="#13c2c2"
             />
           </Col>
@@ -443,7 +450,7 @@ const Dashboard: React.FC = () => {
               title={t('dashboard.total_channels')}
               value={opsStats?.total_channels || 0}
               suffix=""
-              icon={<ApiOutlined style={{ color: '#fff', fontSize: 16 }} />}
+              icon={<ApiOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
               color="#722ed1"
             />
           </Col>
@@ -452,7 +459,7 @@ const Dashboard: React.FC = () => {
               title={t('dashboard.total_token_consumption')}
               value={formatQuota(opsStats?.total_tokens || 0)}
               suffix=""
-              icon={<RiseOutlined style={{ color: '#fff', fontSize: 16 }} />}
+              icon={<RiseOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
               color="#eb2f96"
             />
           </Col>
@@ -461,7 +468,7 @@ const Dashboard: React.FC = () => {
               title={t('dashboard.total_quota_all')}
               value={formatQuota(opsStats?.total_quota || 0)}
               suffix=""
-              icon={<WalletOutlined style={{ color: '#fff', fontSize: 16 }} />}
+              icon={<WalletOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
               color="#fa8c16"
             />
           </Col>
@@ -471,7 +478,7 @@ const Dashboard: React.FC = () => {
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={16}>
             <Card
-              style={{ borderRadius: 12, border: 'none' }}
+              style={{ borderRadius: 12, border: appTheme.border }}
               styles={{ body: { padding: '16px 20px' } }}
             >
               <Tabs
@@ -488,7 +495,7 @@ const Dashboard: React.FC = () => {
           <Col xs={24} lg={8}>
             <Card
               title={t('dashboard.quick_actions')}
-              style={{ borderRadius: 12, border: 'none' }}
+              style={{ borderRadius: 12, border: appTheme.border }}
               styles={{ body: { padding: 16 } }}
             >
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
@@ -510,13 +517,13 @@ const Dashboard: React.FC = () => {
             {/* Top Models Card */}
             <Card
               title={t('dashboard.top_models_by_usage')}
-              style={{ borderRadius: 12, border: 'none', marginTop: 16 }}
+              style={{ borderRadius: 12, border: appTheme.border, marginTop: 16 }}
               styles={{ body: { padding: 16 } }}
             >
               {modelUsage.slice(0, 5).map((m: any, i: number) => (
-                <div key={m.model_name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < 4 ? '1px solid #f5f5f5' : 'none' }}>
+                <div key={m.model_name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < 4 ? `1px solid ${appTheme.borderLight}` : 'none' }}>
                   <span style={{ fontWeight: 500 }}>{m.model_name}</span>
-                  <span style={{ color: '#8c8c8c' }}>{formatQuota((m.prompt_tokens || 0) + (m.completion_tokens || 0))}</span>
+                  <span style={{ color: appTheme.textSecondary }}>{formatQuota((m.prompt_tokens || 0) + (m.completion_tokens || 0))}</span>
                 </div>
               ))}
               {modelUsage.length === 0 && <Empty description={t('common.no_data')} image={Empty.PRESENTED_IMAGE_SIMPLE} />}
@@ -537,7 +544,7 @@ const Dashboard: React.FC = () => {
             title={t('common.account_balance')}
             value={`¥${formatMoney(user.quota || 0)}`}
             suffix=""
-            icon={<DollarOutlined style={{ color: '#fff', fontSize: 16 }} />}
+            icon={<DollarOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
             color="#667eea"
           />
         </Col>
@@ -546,7 +553,7 @@ const Dashboard: React.FC = () => {
             title={t('dashboard.monthly_requests')}
             value={dashboardData?.usage?.total_requests?.toLocaleString() || '0'}
             suffix=""
-            icon={<ApiOutlined style={{ color: '#fff', fontSize: 16 }} />}
+            icon={<ApiOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
             color="#52c41a"
           />
         </Col>
@@ -555,7 +562,7 @@ const Dashboard: React.FC = () => {
             title={t('dashboard.monthly_token_consumption')}
             value={formatQuota(dashboardData?.usage?.total_tokens || 0)}
             suffix=""
-            icon={<RiseOutlined style={{ color: '#fff', fontSize: 16 }} />}
+            icon={<RiseOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
             color="#ff4d4f"
           />
         </Col>
@@ -564,7 +571,7 @@ const Dashboard: React.FC = () => {
             title={t('dashboard.available_models')}
             value={marketStats?.total_models || 0}
             suffix=""
-            icon={<TrophyOutlined style={{ color: '#fff', fontSize: 16 }} />}
+            icon={<TrophyOutlined style={{ color: appTheme.textOnPrimary, fontSize: 16 }} />}
             color="#faad14"
           />
         </Col>
@@ -574,7 +581,7 @@ const Dashboard: React.FC = () => {
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={16}>
           <Card
-            style={{ borderRadius: 12, border: 'none' }}
+            style={{ borderRadius: 12, border: appTheme.border }}
             styles={{ body: { padding: '16px 20px' } }}
           >
             <Tabs
@@ -591,7 +598,7 @@ const Dashboard: React.FC = () => {
         <Col xs={24} lg={8}>
           <Card
             title={t('dashboard.api_quick_access')}
-            style={{ borderRadius: 12, border: 'none' }}
+            style={{ borderRadius: 12, border: appTheme.border }}
             styles={{ body: { padding: 16 } }}
             extra={<Button size="small" type="link" onClick={() => navigate('/keys')}>{t('dashboard.view_all')}</Button>}
           >
@@ -600,18 +607,20 @@ const Dashboard: React.FC = () => {
                 key={token.id}
                 style={{
                   padding: '12px',
-                  background: '#f5f7fa',
+                  background: appTheme.bgElevated,
+                  border: `1px solid ${appTheme.border}`,
                   borderRadius: 8,
-                  marginBottom: 8
+                  marginBottom: 8,
+                  boxShadow: appTheme.shadow,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontWeight: 500, fontSize: 14 }}>{token.name}</span>
+                  <span style={{ fontWeight: 500, fontSize: 14, color: appTheme.textPrimary }}>{token.name}</span>
                   <Button
                     type="text"
                     size="small"
                     icon={<CopyOutlined />}
-                    style={{ color: '#667eea' }}
+                    style={{ color: appTheme.primary }}
                     onClick={() => {
                       navigator.clipboard.writeText(`sk-${token.key}`)
                     }}
@@ -619,7 +628,7 @@ const Dashboard: React.FC = () => {
                     {t('common.copy')}
                   </Button>
                 </div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', fontFamily: 'monospace' }}>
+                <div style={{ fontSize: 12, color: appTheme.textPrimary, opacity: 0.85, fontFamily: 'monospace' }}>
                   sk-{token.key?.slice(0, 20)}...
                 </div>
               </div>
@@ -633,7 +642,7 @@ const Dashboard: React.FC = () => {
           {/* Quick Actions */}
           <Card
             title={t('dashboard.quick_actions')}
-            style={{ borderRadius: 12, border: 'none', marginTop: 16 }}
+            style={{ borderRadius: 12, border: appTheme.border, marginTop: 16 }}
             styles={{ body: { padding: 16 } }}
           >
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>

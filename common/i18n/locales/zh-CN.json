@@ -1,5 +1,9 @@
 {
   "invalid_input": "无效的输入，请检查您的输入",
   "send_email_failed": "发送邮件失败：",
-  "invalid_parameter": "无效的参数"
+  "invalid_parameter": "无效的参数",
+  "upload_not_enabled": "文件上传功能未启用",
+  "file_too_large": "文件大小超过10MB限制",
+  "file_type_not_allowed": "不支持的文件类型",
+  "upload_failed": "文件上传失败"
 }

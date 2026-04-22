@@ -177,8 +177,8 @@ func GetUsageDaily(c *gin.Context) {
 		return
 	}
 
-	// Default to last 7 days
-	end := time.Now().Unix()
+	// Default to last 7 days (end is yesterday so BETWEEN gives exactly 7 days)
+	end := time.Now().AddDate(0, 0, -1).Unix()
 	start := end - 7*24*60*60
 
 	startParam := c.Query("start")

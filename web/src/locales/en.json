@@ -738,7 +738,11 @@
     "model": "Model",
     "model_placeholder": "Please select a model",
     "api_key": "API Key",
-    "api_key_placeholder": "Please enter your API Key"
+    "api_key_placeholder": "Please enter your API Key",
+    "model_price": "Model Price",
+    "input_price": "Input",
+    "output_price": "Output",
+    "price_per_1k": "Yuan/1k tokens"
   },
   "chat": {
     "experience_center": "Experience Center",
@@ -752,6 +756,7 @@
     "send": "Send",
     "stop": "Stop",
     "input_placeholder": "Enter to send, Shift+Enter for new line",
+    "input_placeholder_compare": "Enter to send, Shift+Enter for new line (Compare Mode)",
     "disclaimer": "AI may generate inaccurate information, please use with caution",
     "send_failed": "Failed to send",
     "model": "Model",
@@ -766,7 +771,15 @@
     "enable_thinking": "Enable Thinking",
     "thinking_budget": "Thinking Budget",
     "add_comparison": "Add Comparison",
-    "remove_comparison": "Remove Comparison"
+    "remove_comparison": "Remove Comparison",
+    "vl_input_placeholder": "Enter prompt... (paste to upload images, delete to remove images)",
+    "select_image_file": "Please select an image file",
+    "image_size_limit": "Image size must not exceed 10MB",
+    "invalid_image_url": "Please enter a valid image URL",
+    "upload_image_file": "Upload Image File",
+    "upload_failed": "File upload failed",
+    "upload_image_button": "Upload Image (max 2MB)",
+    "input_image_url": "Enter image URL"
   },
   "provider": {
     "provider_management": "Provider Management",
