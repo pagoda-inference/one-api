@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, Upload, message, Popconfirm, Row, Checkbox } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, DatabaseOutlined, PictureOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -9,6 +10,7 @@ const { TextArea } = Input
 
 const ModelManagement: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [models, setModels] = useState<ModelItem[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -448,7 +450,7 @@ const ModelManagement: React.FC = () => {
                   <img
                     src={iconPreview}
                     alt="logo preview"
-                    style={{ width: 48, height: 48, objectFit: 'contain', background: '#f5f5f5', borderRadius: 8 }}
+                    style={{ width: 48, height: 48, objectFit: 'contain', background: appTheme.bgElevated, borderRadius: 8 }}
                     onError={() => setIconPreview('')}
                   />
                 </div>
@@ -535,7 +537,7 @@ const ModelManagement: React.FC = () => {
             </div>
           ))}
           {logos.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#999', padding: 40, width: '100%' }}>
+            <div style={{ textAlign: 'center', color: appTheme.textTertiary, padding: 40, width: '100%' }}>
               {t('modelManagement.no_logos_available')}
             </div>
           )}

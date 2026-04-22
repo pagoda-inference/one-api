@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Row, Col, Card, Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, message, Popconfirm, Tabs, Statistic } from 'antd'
 import { TeamOutlined, UserOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, AuditOutlined } from '@ant-design/icons'
 import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, getOpsUsers, Tenant, TenantUser, AuditLog, getAllCompanies, getDepartments, createCompany, createDepartment, deleteTenant, Company, Department } from '../services/api'
@@ -9,6 +10,7 @@ const { TabPane } = Tabs
 
 const Teams: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [, setLoading] = useState(false)
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null)
@@ -285,7 +287,7 @@ const Teams: React.FC = () => {
       <Space>
         <UserOutlined />
         <span>{r.display_name || v}</span>
-        <span style={{ color: '#999' }}>@{v}</span>
+        <span style={{ color: appTheme.textSecondary }}>@{v}</span>
       </Space>
     )},
     { title: t('user.role'), dataIndex: 'role', key: 'role', render: (v: number) => {
@@ -374,12 +376,12 @@ const Teams: React.FC = () => {
                 ) : (
                   departments.map(d => (
                     <div key={d.id}>
-                      <div style={{ fontWeight: 600, color: '#666', padding: '4px 0', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 600, color: appTheme.textSecondary, padding: '4px 0', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span>{d.name}</span>
                         <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)} />
                       </div>
                       {tenants.filter(tenant => tenant.department_id === d.id).map(tenant => (
-                        <Card key={tenant.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === tenant.id ? '#e6f7ff' : '#fafafa' }}
+                        <Card key={tenant.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === tenant.id ? appTheme.bgElevated : appTheme.bgContainer }}
                           onClick={() => selectTenant(tenant.id)}>
                           <Space>
                             <TeamOutlined />
@@ -397,7 +399,7 @@ const Teams: React.FC = () => {
               </>
             )}
             {!isRoot && tenants.map(t => (
-              <Card key={t.id} size="small" style={{ marginBottom: 8, cursor: 'pointer', background: currentTenant?.id === t.id ? '#f0f0f0' : '#fff' }}
+              <Card key={t.id} size="small" style={{ marginBottom: 8, cursor: 'pointer', background: currentTenant?.id === t.id ? appTheme.borderLight : appTheme.bgElevated }}
                 onClick={() => selectTenant(t.id)}>
                 <Space>
                   <TeamOutlined />
@@ -407,7 +409,7 @@ const Teams: React.FC = () => {
               </Card>
             ))}
             {!isRoot && tenants.length === 0 && (
-              <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
+              <div style={{ textAlign: 'center', color: appTheme.textSecondary, padding: 20 }}>
                 {t('teams.not_joined_any_team')}
               </div>
             )}
@@ -495,7 +497,7 @@ const Teams: React.FC = () => {
             </Tabs>
           ) : (
             <Card>
-              <div style={{ textAlign: 'center', color: '#999', padding: 40 }}>
+              <div style={{ textAlign: 'center', color: appTheme.textSecondary, padding: 40 }}>
                 <TeamOutlined style={{ fontSize: 48, marginBottom: 16 }} />
                 <p>{t('teams.select_team_prompt')}</p>
               </div>

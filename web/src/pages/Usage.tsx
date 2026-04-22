@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Row, Col, Card, Table, DatePicker, Select, Statistic, Spin } from 'antd'
 import { ApiOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
@@ -25,6 +26,7 @@ interface UserUsageItem {
 
 const Usage: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<UsageSummary | null>(null)
   const [modelUsage, setModelUsage] = useState<ModelUsage[]>([])
@@ -168,8 +170,8 @@ const Usage: React.FC = () => {
           name: t('usage.token_count'),
           nameLocation: 'middle',
           nameGap: 70,
-          nameTextStyle: { color: '#8c8c8c', fontSize: 11 },
-          axisLabel: { color: '#8c8c8c' }
+          nameTextStyle: { color: appTheme.textSecondary, fontSize: 11 },
+          axisLabel: { color: appTheme.textSecondary }
         },
         series: [
           {

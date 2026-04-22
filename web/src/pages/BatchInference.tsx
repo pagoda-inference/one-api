@@ -3,7 +3,7 @@ import { Table, Button, Space, Tag, Form, Input, Select, Upload, message, Popcon
 import { PlusOutlined, DeleteOutlined, CloudServerOutlined, UploadOutlined, DownloadOutlined, StopOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useTranslation } from 'react-i18next'
-import { relayApi } from '../services/api'
+import { relayApi, getMarketModels, Model } from '../services/api'
 
 const { Dragger } = Upload
 
@@ -44,15 +44,31 @@ const BatchInference: React.FC = () => {
   const { t } = useTranslation()
   const [batches, setBatches] = useState<BatchJob[]>([])
   const [files, setFiles] = useState<BatchFile[]>([])
+  const [models, setModels] = useState<Model[]>([])
   const [loading, setLoading] = useState(false)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
+  const [selectedBatchModel, setSelectedBatchModel] = useState<string | null>(null)
   const [form] = Form.useForm()
+
+  const batchModelIds = ['bedi/deepseek-v3.1', 'bedi/qwen3-235b-a22b', 'bedi/qwq-32b']
 
   useEffect(() => {
     loadBatches()
     loadFiles()
+    loadModels()
   }, [])
+
+  const loadModels = async () => {
+    try {
+      const res = await getMarketModels({ limit: 100 })
+      if (res.data.data?.models) {
+        setModels(res.data.data.models)
+      }
+    } catch (error) {
+      console.error('Failed to load models:', error)
+    }
+  }
 
   const loadBatches = async () => {
     try {
@@ -387,13 +403,31 @@ const BatchInference: React.FC = () => {
           >
             <Select
               placeholder={t('batch.model_placeholder')}
-              options={[
-                { value: 'bedi/deepseek-r1', label: 'DeepSeek-V3.1' },
-                { value: 'bedi/qwen3-235b-a22b', label: 'Qwen3-235B-A22B' },
-                { value: 'bedi/qwq-32b', label: 'QwQ-32B' },
-              ]}
+              value={selectedBatchModel}
+              onChange={(value) => setSelectedBatchModel(value)}
+              options={models.filter(m => batchModelIds.includes(m.id)).map(m => ({
+                value: m.id,
+                label: m.name,
+              }))}
             />
           </Form.Item>
+
+          {selectedBatchModel && (() => {
+            const m = models.find(m => m.id === selectedBatchModel)
+            if (!m) return null
+            return (
+              <div style={{ marginTop: -8, marginBottom: 16, fontSize: 13, color: 'textSecondary' }}>
+                <span style={{ color: '#667eea', fontWeight: 500 }}>
+                  {m.input_price === 0 ? t('modelMarket.free') : `¥${m.input_price.toFixed(4)}/1K`}
+                </span>
+                <span style={{ margin: '0 8px', color: '#999' }}>/</span>
+                <span style={{ color: '#764ba2', fontWeight: 500 }}>
+                  {m.output_price === 0 ? t('modelMarket.free') : `¥${m.output_price.toFixed(4)}/1K`}
+                </span>
+                <span style={{ marginLeft: 8, color: '#999' }}>{t('batch.input_price')} / {t('batch.output_price')}</span>
+              </div>
+            )
+          })()}
 
           <Form.Item
             name="description"

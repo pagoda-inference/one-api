@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Row, Col, Card, InputNumber, Select, Button, Table, Tag, Modal, message, Result, Empty } from 'antd'
 import { WechatOutlined, AlipayOutlined, CreditCardOutlined } from '@ant-design/icons'
 import { getTopupOrders, createTopupOrder, cancelTopupOrder, TopupOrder, User } from '../services/api'
@@ -8,6 +9,7 @@ const { Option } = Select
 
 const Topup: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [loading, setLoading] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [orders, setOrders] = useState<TopupOrder[]>([])
@@ -190,7 +192,7 @@ const Topup: React.FC = () => {
         <Col xs={24} lg={12}>
           <Card title={t('topup.quick_topup')}>
             <div style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 8, color: '#666' }}>{t('topup.select_amount')}</div>
+              <div style={{ marginBottom: 8, color: appTheme.textSecondary }}>{t('topup.select_amount')}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {quickAmounts.map(v => (
                   <Button
@@ -205,7 +207,7 @@ const Topup: React.FC = () => {
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 8, color: '#666' }}>{t('topup.custom_amount')}</div>
+              <div style={{ marginBottom: 8, color: appTheme.textSecondary }}>{t('topup.custom_amount')}</div>
               <InputNumber
                 style={{ width: '100%' }}
                 min={1}
@@ -218,7 +220,7 @@ const Topup: React.FC = () => {
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 8, color: '#666' }}>{t('topup.payment_method')}</div>
+              <div style={{ marginBottom: 8, color: appTheme.textSecondary }}>{t('topup.payment_method')}</div>
               <Select
                 style={{ width: '100%' }}
                 value={payMethod}
@@ -246,7 +248,7 @@ const Topup: React.FC = () => {
               {t('topup.topup_now')} ¥{amount}
             </Button>
 
-            <div style={{ marginTop: 16, color: '#999', fontSize: 12 }}>
+            <div style={{ marginTop: 16, color: appTheme.textSecondary, fontSize: 12 }}>
               <p>{t('topup.1rmb_7200quota')}</p>
               <p>{t('topup.no_handling_fee')}</p>
             </div>
@@ -255,7 +257,7 @@ const Topup: React.FC = () => {
 
         <Col xs={24} lg={12}>
           <Card title={t('topup.topup_ratio')}>
-            <div style={{ color: '#666' }}>
+            <div style={{ color: appTheme.textSecondary }}>
               <h4>{t('topup.topup_ratio')}</h4>
               <p>{t('topup.1rmb_7200quota')}</p>
 

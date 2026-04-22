@@ -4,11 +4,13 @@
   * [场景示例](README#场景示例)
   * [最佳实践](README#最佳实践)
 
-* 用户手册
+* 用户指南
   * [首页](/guide/)
   * [AI Agent 开发](/guide/SKILL)
   * [账户管理](/guide/account)
+  * [体验中心](/guide/chatplayground)
   * [模型广场](/guide/models)
+  * [批量推理](/guide/batch-inference)
   * [API Keys](/guide/api-keys)
   * [API 文档](/guide/api)
   * [用量明细](/guide/usage)

@@ -8,8 +8,8 @@
 |------|------|
 | [AI Agent 开发](/guide/SKILL) | 构建 AI Agent 指南 |
 | [账户管理](/guide/account) | 登录方式、个人信息、修改密码 |
-| [模型广场](/guide/models) | 浏览、搜索、试用 AI 模型 |
 | [体验中心](/guide/chatplayground) | 在线对话测试，无需编码 |
+| [模型广场](/guide/models) | 浏览、搜索、试用 AI 模型 |
 | [批量推理](/guide/batch-inference) | 离线批量处理大文件请求 |
 | [API Keys](/guide/api-keys) | 创建、管理 API 访问密钥 |
 | [API 文档](/guide/api) | API 接口文档 |

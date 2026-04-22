@@ -172,6 +172,15 @@ var TestPrompt = env.String("TEST_PROMPT", "Output only your specific model name
 // HTTP Connection Pool Settings
 var MaxIdleConns = env.Int("MAX_IDLE_CONNS", 1000)
 var MaxIdleConnsPerHost = env.Int("MAX_IDLE_CONNS_PER_HOST", 100)
+
+// MinIO / S3 Object Storage Settings
+var MinIOEnabled = env.Bool("MINIO_ENABLED", false)
+var MinIOEndpoint = env.String("MINIO_ENDPOINT", "baota-oneapi-s3-svc:9000")
+var MinIOAccessKey = env.String("MINIO_ACCESS_KEY", "minio")
+var MinIOSecretKey = env.String("MINIO_SECRET_KEY", "Baota1234.com")
+var MinIOBucket = env.String("MINIO_BUCKET", "minio-test")
+var MinIOPublicBaseURL = env.String("MINIO_PUBLIC_BASE_URL", "http://baota-oneapi-s3-svc:9000/minio-test")
+var MinIOUseSSL = env.Bool("MINIO_USE_SSL", false)
 var MaxConnsPerHost = env.Int("MAX_CONNS_PER_HOST", 200)
 
 // Health Check Settings

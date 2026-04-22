@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Card, Form, Input, Button, message, Spin, Divider } from 'antd'
 import { UserOutlined, MailOutlined, LockOutlined } from '@ant-design/icons'
 import { getUserInfo, updateUserInfo } from '../services/api'
@@ -13,6 +14,7 @@ interface UserInfo {
 
 const Profile: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
@@ -120,7 +122,7 @@ const Profile: React.FC = () => {
         {userInfo && (
           <>
             <Divider>{t('profile.account_info')}</Divider>
-            <div style={{ color: '#666', fontSize: 13 }}>
+            <div style={{ color: appTheme.textSecondary, fontSize: 13 }}>
               <p>{t('profile.role')}: {userInfo.role === 100 ? t('profile.super_admin') : userInfo.role === 10 ? t('profile.admin') : t('profile.normal_user')}</p>
               <p>{t('profile.status')}: {userInfo.status === 1 ? t('profile.normal') : t('profile.disabled')}</p>
             </div>

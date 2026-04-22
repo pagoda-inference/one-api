@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Popconfirm, Row, Col, Switch, Select, Tooltip } from 'antd'
 import { PlusOutlined, DeleteOutlined, CopyOutlined, EyeOutlined, EyeInvisibleOutlined, EditOutlined } from '@ant-design/icons'
 import { getTokens, createToken, deleteToken, updateToken, getMarketModels } from '../services/api'
@@ -24,6 +25,7 @@ interface Token {
 
 const ApiKeys: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [loading, setLoading] = useState(false)
   const [tokens, setTokens] = useState<Token[]>([])
   const [modalVisible, setModalVisible] = useState(false)
@@ -170,7 +172,7 @@ const ApiKeys: React.FC = () => {
       key: 'key',
       render: (key: string, record: Token) => (
         <Space>
-          <code style={{ background: '#f5f5f5', padding: '4px 8px', borderRadius: 4 }}>
+          <code style={{ background: appTheme.bgElevated, padding: '4px 8px', borderRadius: 4 }}>
             {showKey === record.id ? record.fullKey : key}
           </code>
           <Button
@@ -316,9 +318,9 @@ const ApiKeys: React.FC = () => {
       </Card>
 
       <Card title={t('token.usage_instructions')} style={{ marginTop: 16 }}>
-        <div style={{ color: '#666' }}>
+        <div style={{ color: appTheme.textSecondary }}>
           <h4>{t('token.api_key_usage_method')}</h4>
-          <pre style={{ background: '#f5f5f5', padding: 16, borderRadius: 8 }}>
+          <pre style={{ background: appTheme.bgElevated, padding: 16, borderRadius: 8 }}>
 {`import openai
 openai.api_key = "your-api-key"
 openai.api_base = "https://baotaai.bedicloud.net/v1"

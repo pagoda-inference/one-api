@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTheme } from '../contexts/ThemeContext'
 import { Row, Col, Card, Table, Statistic, Spin, Progress, Tag, Tabs, Button, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, message, Divider, Switch } from 'antd'
 import { DollarOutlined, UserOutlined, ApiOutlined, RiseOutlined, SafetyCertificateOutlined, DashboardOutlined, LineChartOutlined, PlusOutlined, EditOutlined, SaveOutlined, SettingOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
@@ -10,6 +11,7 @@ const { TabPane } = Tabs
 
 const OpsDashboard: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = searchParams.get('tab') || '1'
   const [loading, setLoading] = useState(true)
@@ -511,7 +513,7 @@ const OpsDashboard: React.FC = () => {
               suffix="%"
               precision={1}
             />
-            <div style={{ marginTop: 8, color: '#666', fontSize: 12 }}>
+            <div style={{ marginTop: 8, color: appTheme.textSecondary, fontSize: 12 }}>
               {t('ops.channels_online').replace('{count}', String(enabledCount)).replace('{total}', String(totalChannels))}
             </div>
           </Card>
@@ -707,7 +709,7 @@ const OpsDashboard: React.FC = () => {
                   style={{ fontFamily: 'monospace' }}
                 />
               </Form.Item>
-              <div style={{ color: '#999', fontSize: 12 }}>
+              <div style={{ color: appTheme.textTertiary, fontSize: 12 }}>
                 {t('ops.json_format_example')}
               </div>
             </Card>
@@ -920,7 +922,7 @@ const OpsDashboard: React.FC = () => {
           </Form.Item>
           <Form.Item name="hide_upstream_model" label={t('ops.hide_upstream_model')} valuePropName="checked">
             <Switch onChange={(checked) => channelForm.setFieldValue('hide_upstream_model', checked)} />
-            <span style={{ marginLeft: 8, color: '#999' }}>{t('ops.hide_upstream_model_tip')}</span>
+            <span style={{ marginLeft: 8, color: appTheme.textTertiary }}>{t('ops.hide_upstream_model_tip')}</span>
           </Form.Item>
         </Form>
       </Modal>

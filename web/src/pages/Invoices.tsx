@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Card, Table, Button, Modal, Form, Input, InputNumber, Tag, Space, message, Collapse, Empty } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { getInvoices, createInvoice, getTopupOrders, Invoice, TopupOrder, User } from '../services/api'
@@ -8,6 +9,7 @@ const { Panel } = Collapse
 const { TextArea } = Input
 const Invoices: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [loading, setLoading] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -187,7 +189,7 @@ const Invoices: React.FC = () => {
       <Card title={t('invoice.invoice_instructions')} style={{ marginTop: 16 }}>
         <Collapse defaultActiveKey={['1']}>
           <Panel header={t('invoice.billing_notice')} key="1">
-            <ul style={{ color: '#666', lineHeight: 2 }}>
+            <ul style={{ color: appTheme.textSecondary, lineHeight: 2 }}>
               <li>{t('invoice.billing_content_1')}</li>
               <li>{t('invoice.tax_rate_note')}</li>
               <li>{t('invoice.invoice_issued_3_5_days')}</li>
@@ -196,7 +198,7 @@ const Invoices: React.FC = () => {
             </ul>
           </Panel>
           <Panel header={t('invoice.billing_process')} key="2">
-            <ol style={{ color: '#666', lineHeight: 2 }}>
+            <ol style={{ color: appTheme.textSecondary, lineHeight: 2 }}>
               <li>{t('invoice.process_step_1')}</li>
               <li>{t('invoice.process_step_2')}</li>
               <li>{t('invoice.process_step_3')}</li>
@@ -205,7 +207,7 @@ const Invoices: React.FC = () => {
             </ol>
           </Panel>
           <Panel header={t('invoice.faq')} key="3">
-            <div style={{ color: '#666', lineHeight: 2 }}>
+            <div style={{ color: appTheme.textSecondary, lineHeight: 2 }}>
               <p><strong>Q: {t('invoice.q1')}</strong></p>
               <p>A: {t('invoice.a1')}</p>
               <p><strong>Q: {t('invoice.q2')}</strong></p>
@@ -246,7 +248,7 @@ const Invoices: React.FC = () => {
                 }
               })}
             />
-            <div style={{ marginTop: 8, color: '#666' }}>
+            <div style={{ marginTop: 8, color: appTheme.textSecondary }}>
               {t('invoice.orders_selected', { count: selectedOrders.length, amount: orders.filter(o => selectedOrders.includes(o.id)).reduce((sum, o) => sum + o.amount, 0).toFixed(2) })}
             </div>
           </Card>

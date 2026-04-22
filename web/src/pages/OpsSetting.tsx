@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Row, Col, Card, Form, Input, InputNumber, Button, message, Tabs, Switch } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import { getOptions, updateOption } from '../services/api'
@@ -8,6 +9,7 @@ const { TextArea } = Input
 
 const OpsSetting: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm()
   const [activeTab, setActiveTab] = useState('quota')
@@ -155,7 +157,7 @@ const OpsSetting: React.FC = () => {
                 style={{ fontFamily: 'monospace' }}
               />
             </Form.Item>
-            <div style={{ color: '#999', fontSize: 12 }}>
+            <div style={{ color: appTheme.textTertiary, fontSize: 12 }}>
               {t('ops.json_format_example')}
             </div>
           </Card>

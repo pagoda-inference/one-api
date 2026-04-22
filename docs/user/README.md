@@ -11,7 +11,9 @@
 - [用户指南首页](guide/) - 面向终端用户的使用指南
 - [AI Agent 开发](guide/SKILL) - 构建 AI Agent 指南（SDK、Function Calling、Streaming）
 - [账户管理](guide/account) - 登录、注册、修改密码
+- [体验中心](guide/chatplayground) - 在线对话测试
 - [模型广场](guide/models) - 浏览和试用 AI 模型
+- [批量推理](guide/batch-inference) - 离线批量处理大文件
 - [API Keys](guide/api-keys) - API 密钥管理
 - [API 文档](guide/api) - API 接口参考
 - [用量明细](guide/usage) - 查看用量统计

@@ -37,3 +37,12 @@ data:
   # Rate Limit
   GLOBAL_API_RATE_LIMIT: "480"
   GLOBAL_WEB_RATE_LIMIT: "240"
+
+  # MinIO / S3 Object Storage
+  MINIO_ENABLED: "true"
+  MINIO_ENDPOINT: "10.99.149.154:9000"
+  MINIO_ACCESS_KEY: "minio"
+  MINIO_SECRET_KEY: "Baota1234.com"
+  MINIO_BUCKET: "minio-test"
+  MINIO_PUBLIC_BASE_URL: "http://10.1.112.239:35001/minio-test"
+  MINIO_USE_SSL: "false"

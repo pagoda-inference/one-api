@@ -244,7 +244,7 @@ const ModelMarket: React.FC = () => {
       'reasoning': { bg: '#fff0f5', color: '#eb2f96' },
       'audio': { bg: '#e6fffb', color: '#13c2c2' }
     }
-    return styles[cap] || { bg: '#f5f5f5', color: '#8c8c8c' }
+    return styles[cap] || { bg: appTheme.bgElevated, color: appTheme.textSecondary }
   }
 
   const getCapabilityTags = (capabilities: string) => {
@@ -308,11 +308,11 @@ const ModelMarket: React.FC = () => {
     <Card
       style={{
         borderRadius: 12,
-        border: 'none',
-        boxShadow: '0 2px 8px var(--shadow)',
-        background: 'var(--bg-card)'
+        border: appTheme.border,
+        boxShadow: appTheme.shadow,
+        background: appTheme.bgContainer
       }}
-      styles={{ body: { padding: '16px 20px', background: 'var(--bg-card)' } }}
+      styles={{ body: { padding: '16px 20px', background: appTheme.bgContainer } }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
@@ -359,15 +359,15 @@ const ModelMarket: React.FC = () => {
       className="model-card"
       style={{
         borderRadius: 12,
-        border: isMaintenance ? '2px solid #faad14' : 'none',
-        boxShadow: '0 2px 8px var(--shadow)',
+        border: isMaintenance ? '2px solid #faad14' : appTheme.border,
+        boxShadow: appTheme.shadow,
         overflow: 'hidden',
         transition: 'all 0.3s',
-        background: isMaintenance ? 'var(--bg-card)' : 'var(--bg-card)',
+        background: appTheme.bgContainer,
         opacity: isMaintenance ? 0.75 : 1,
         cursor: isMaintenance ? 'not-allowed' : 'pointer'
       }}
-      styles={{ body: { padding: 16, background: 'var(--bg-card)' } }}
+      styles={{ body: { padding: 16, background: appTheme.bgContainer } }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         {getModelLogo(model) ? (
@@ -515,14 +515,14 @@ const ModelMarket: React.FC = () => {
       onClick={() => !isMaintenance && showModelDetail(model)}
       style={{
         borderRadius: 12,
-        border: isMaintenance ? '2px solid #faad14' : 'none',
-        boxShadow: '0 2px 8px var(--shadow)',
+        border: isMaintenance ? '2px solid #faad14' : appTheme.border,
+        boxShadow: appTheme.shadow,
         marginBottom: 8,
-        background: 'var(--bg-card)',
+        background: appTheme.bgContainer,
         opacity: isMaintenance ? 0.75 : 1,
         cursor: isMaintenance ? 'not-allowed' : 'pointer'
       }}
-      styles={{ body: { padding: '12px 16px', background: 'var(--bg-card)' } }}
+      styles={{ body: { padding: '12px 16px', background: appTheme.bgContainer } }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {getModelLogo(model) ? (
@@ -623,8 +623,8 @@ const ModelMarket: React.FC = () => {
 
       {/* Filters */}
       <Card
-        style={{ marginBottom: 16, borderRadius: 12, border: 'none', background: 'var(--bg-card)' }}
-        styles={{ body: { padding: '12px 20px', background: 'var(--bg-card)' } }}
+        style={{ marginBottom: 16, borderRadius: 12, border: appTheme.border, background: appTheme.bgContainer }}
+        styles={{ body: { padding: '12px 20px', background: appTheme.bgContainer } }}
       >
         {/* Search Row */}
         <Row gutter={[16, 12]} align="middle" style={{ marginBottom: filtersCollapsed ? 0 : 12 }}>
@@ -848,11 +848,11 @@ const ModelMarket: React.FC = () => {
                       }}
                       style={{
                         borderRadius: 12,
-                        border: 'none',
-                        boxShadow: '0 2px 8px var(--shadow)',
-                        background: 'var(--bg-card)'
+                        border: appTheme.border,
+                        boxShadow: appTheme.shadow,
+                        background: appTheme.bgContainer
                       }}
-                      styles={{ body: { padding: 16, background: 'var(--bg-card)' } }}
+                      styles={{ body: { padding: 16, background: appTheme.bgContainer } }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         {group.logo_url ? (
@@ -946,7 +946,7 @@ const ModelMarket: React.FC = () => {
               </Descriptions.Item>
               {selectedModel.description && (
                 <Descriptions.Item label={t('common.description')}>
-                  <span style={{ color: '#595959' }}>{selectedModel.description}</span>
+                  <span style={{ color: appTheme.textSecondary }}>{selectedModel.description}</span>
                 </Descriptions.Item>
               )}
             </Descriptions>
@@ -978,7 +978,7 @@ const ModelMarket: React.FC = () => {
                     </div>
                   ) : (
                     <div>
-                      <p style={{ color: '#8c8c8c', marginBottom: 12 }}>试用状态: {trialInfo.reason}</p>
+                      <p style={{ color: appTheme.textSecondary, marginBottom: 12 }}>试用状态: {trialInfo.reason}</p>
                       {trialInfo.quota_used > 0 && (
                         <Statistic
                           title={t('token.used_quota')}
@@ -990,7 +990,7 @@ const ModelMarket: React.FC = () => {
                   )
                 ) : (
                   <div>
-                    <p style={{ color: '#595959', marginBottom: 16 }}>
+                    <p style={{ color: appTheme.textSecondary, marginBottom: 16 }}>
                       {t('modelMarket.trial_quota_tokens', { quota: formatQuota(selectedModel.trial_quota || 0) })}
                     </p>
                     <Button
@@ -1013,7 +1013,7 @@ const ModelMarket: React.FC = () => {
             >
               <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: 6, color: '#8c8c8c', fontSize: 12 }}>{t('modelMarket.input_token_count')}</div>
+                  <div style={{ marginBottom: 6, color: appTheme.textTertiary, fontSize: 12 }}>{t('modelMarket.input_token_count')}</div>
                   <Input
                     type="number"
                     placeholder="如: 1000"
@@ -1022,7 +1022,7 @@ const ModelMarket: React.FC = () => {
                   />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: 6, color: '#8c8c8c', fontSize: 12 }}>{t('modelMarket.output_token_count')}</div>
+                  <div style={{ marginBottom: 6, color: appTheme.textTertiary, fontSize: 12 }}>{t('modelMarket.output_token_count')}</div>
                   <Input
                     type="number"
                     placeholder="如: 500"
@@ -1033,7 +1033,7 @@ const ModelMarket: React.FC = () => {
               </div>
               {priceCalc && (
                 <div style={{ textAlign: 'center', padding: '16px 0', background: '#f9f0ff', borderRadius: 8 }}>
-                  <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>{t('modelMarket.estimated_quota_consumption')}</div>
+                  <div style={{ fontSize: 12, color: appTheme.textTertiary, marginBottom: 4 }}>{t('modelMarket.estimated_quota_consumption')}</div>
                   <div style={{ fontSize: 28, fontWeight: 700, color: '#722ed1' }}>
                     {priceCalc.quota_cost.toLocaleString()}
                   </div>

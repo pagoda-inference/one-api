@@ -79,7 +79,8 @@ body {
 
 .model-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 4px 12px var(--shadow);
+  box-shadow: 0 8px 24px var(--shadow);
+  border-color: var(--color-primary);
 }
 
 .model-card .model-header {
@@ -230,6 +231,12 @@ body {
 
 [data-theme="dark"] .model-card {
   background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .model-card:hover {
+  border-color: rgba(124, 140, 255, 0.35);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
 }
 
 /* Topup card dark mode */

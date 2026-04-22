@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Card, Tabs, Table, Tag, Button, message, Input, Space, Modal, Form } from 'antd'
 import { ApiOutlined, BookOutlined, RocketOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons'
 
@@ -210,6 +211,7 @@ console.log(data);`
 }
 
 const ApiDocs: React.FC = () => {
+  const { appTheme } = useTheme()
   const [activeTab, setActiveTab] = useState('quickstart')
   const [activeExample, setActiveExample] = useState<'curl' | 'python' | 'javascript'>('curl')
   const [editModalVisible, setEditModalVisible] = useState(false)
@@ -289,10 +291,10 @@ const ApiDocs: React.FC = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: '#262626' }}>
+            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: appTheme.textPrimary }}>
               {apiDocsData.title}
             </h1>
-            <p style={{ color: '#8c8c8c', margin: '8px 0 0', fontSize: 14 }}>
+            <p style={{ color: appTheme.textSecondary, margin: '8px 0 0', fontSize: 14 }}>
               版本 {apiDocsData.version} · 最后更新 {apiDocsData.lastUpdated}
             </p>
           </div>
@@ -318,10 +320,10 @@ const ApiDocs: React.FC = () => {
                   <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
                     <Tag color="blue">{index + 1}</Tag> {step.title}
                   </h3>
-                  <p style={{ color: '#595959', lineHeight: 1.6 }}>{step.content}</p>
+                  <p style={{ color: appTheme.textPrimary, lineHeight: 1.6 }}>{step.content}</p>
                   {step.code && (
                     <div style={{
-                      background: '#f5f5f5',
+                      background: appTheme.bgElevated,
                       borderRadius: 8,
                       padding: 16,
                       position: 'relative',
@@ -365,11 +367,11 @@ const ApiDocs: React.FC = () => {
                       >
                         {endpoint.method}
                       </Tag>
-                      <code style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>
+                      <code style={{ fontSize: 14, fontWeight: 600, color: appTheme.textPrimary }}>
                         {endpoint.path}
                       </code>
                     </div>
-                    <p style={{ color: '#8c8c8c', margin: '8px 0 0', fontSize: 14 }}>
+                    <p style={{ color: appTheme.textSecondary, margin: '8px 0 0', fontSize: 14 }}>
                       {endpoint.description}
                     </p>
                   </div>
@@ -389,7 +391,7 @@ const ApiDocs: React.FC = () => {
                         dataSource={endpoint.parameters.map(p => ({ ...p, key: p.name }))}
                       />
                     ) : (
-                      <p style={{ color: '#8c8c8c', fontSize: 14 }}>无请求参数</p>
+                      <p style={{ color: appTheme.textSecondary, fontSize: 14 }}>无请求参数</p>
                     )}
 
                     <h4 style={{ fontSize: 14, fontWeight: 600, margin: '20px 0 12px' }}>示例代码</h4>
@@ -407,7 +409,7 @@ const ApiDocs: React.FC = () => {
                     </Space>
 
                     <div style={{
-                      background: '#f5f5f5',
+                      background: appTheme.bgElevated,
                       borderRadius: 8,
                       padding: 16,
                       position: 'relative'

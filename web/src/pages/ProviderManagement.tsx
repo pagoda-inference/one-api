@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTheme } from '../contexts/ThemeContext'
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, message, Popconfirm, Row, Image, Upload } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, CloudServerOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -9,6 +10,7 @@ const { TextArea } = Input
 
 const ProviderManagement: React.FC = () => {
   const { t } = useTranslation()
+  const { appTheme } = useTheme()
   const [providers, setProviders] = useState<Provider[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -150,10 +152,10 @@ const ProviderManagement: React.FC = () => {
           alt="logo"
           width={40}
           height={40}
-          style={{ objectFit: 'contain', background: '#f5f5f5', borderRadius: 4 }}
+          style={{ objectFit: 'contain', background: appTheme.bgElevated, borderRadius: 4 }}
           fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
         />
-      ) : <div style={{ width: 40, height: 40, background: '#f5f5f5', borderRadius: 4 }} />
+      ) : <div style={{ width: 40, height: 40, background: appTheme.bgElevated, borderRadius: 4 }} />
     },
     {
       title: t('provider.code'),
@@ -274,7 +276,7 @@ const ProviderManagement: React.FC = () => {
                   <img
                     src={logoPreview}
                     alt="logo preview"
-                    style={{ width: 48, height: 48, objectFit: 'contain', background: '#f5f5f5', borderRadius: 8 }}
+                    style={{ width: 48, height: 48, objectFit: 'contain', background: appTheme.bgElevated, borderRadius: 8 }}
                     onError={() => setLogoPreview('')}
                   />
                 </div>
