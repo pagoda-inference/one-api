@@ -9,6 +9,7 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons'
 import React, { useState, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
 import Logo from './components/Logo'
 import { useTheme } from './contexts/ThemeContext'
 import { useLanguage } from './contexts/LanguageContext'
@@ -122,7 +123,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             >
               <List.Item.Meta
                 title={<span>{item.is_read ? '' : <span style={{ color: '#1890ff' }}>•</span>} {item.title}</span>}
-                description={<span style={{ fontSize: 12 }}>{item.content}</span>}
+                description={<span style={{ fontSize: 12 }}><ReactMarkdown>{item.content}</ReactMarkdown></span>}
               />
             </List.Item>
           )}
