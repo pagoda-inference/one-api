@@ -1,5 +1,7 @@
 package model
 
+import "encoding/json"
+
 type ResponseFormat struct {
 	Type       string      `json:"type,omitempty"`
 	JsonSchema *JSONSchema `json:"json_schema,omitempty"`
@@ -28,6 +30,7 @@ type GeneralOpenAIRequest struct {
 	Store               *bool           `json:"store,omitempty"`
 	ReasoningEffort     *string         `json:"reasoning_effort,omitempty"`
 	Metadata            any             `json:"metadata,omitempty"`
+	ChatTemplateKwargs  map[string]any  `json:"chat_template_kwargs,omitempty"`
 	FrequencyPenalty    *float64        `json:"frequency_penalty,omitempty"`
 	LogitBias           any             `json:"logit_bias,omitempty"`
 	Logprobs            *bool           `json:"logprobs,omitempty"`
@@ -66,6 +69,100 @@ type GeneralOpenAIRequest struct {
 	// Others
 	Instruction string `json:"instruction,omitempty"`
 	NumCtx      int    `json:"num_ctx,omitempty"`
+	// Preserve unknown OpenAI-compatible extension fields to avoid dropping params
+	ExtraFields map[string]any `json:"-"`
+}
+
+func (r *GeneralOpenAIRequest) UnmarshalJSON(data []byte) error {
+	type Alias GeneralOpenAIRequest
+	aux := &Alias{}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	*r = GeneralOpenAIRequest(*aux)
+
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	for key := range generalOpenAIKnownKeys {
+		delete(raw, key)
+	}
+	if len(raw) > 0 {
+		r.ExtraFields = raw
+	} else {
+		r.ExtraFields = nil
+	}
+	return nil
+}
+
+func (r GeneralOpenAIRequest) MarshalJSON() ([]byte, error) {
+	type Alias GeneralOpenAIRequest
+	baseBytes, err := json.Marshal(Alias(r))
+	if err != nil {
+		return nil, err
+	}
+	if len(r.ExtraFields) == 0 {
+		return baseBytes, nil
+	}
+
+	var baseMap map[string]any
+	if err := json.Unmarshal(baseBytes, &baseMap); err != nil {
+		return nil, err
+	}
+
+	for k, v := range r.ExtraFields {
+		// Do not override known fields.
+		if _, exists := baseMap[k]; !exists {
+			baseMap[k] = v
+		}
+	}
+	return json.Marshal(baseMap)
+}
+
+var generalOpenAIKnownKeys = map[string]struct{}{
+	"messages":               {},
+	"model":                  {},
+	"store":                  {},
+	"reasoning_effort":       {},
+	"metadata":               {},
+	"chat_template_kwargs":   {},
+	"frequency_penalty":      {},
+	"logit_bias":             {},
+	"logprobs":               {},
+	"top_logprobs":           {},
+	"max_tokens":             {},
+	"max_completion_tokens":  {},
+	"n":                      {},
+	"modalities":             {},
+	"prediction":             {},
+	"audio":                  {},
+	"presence_penalty":       {},
+	"response_format":        {},
+	"seed":                   {},
+	"service_tier":           {},
+	"stop":                   {},
+	"stream":                 {},
+	"stream_options":         {},
+	"temperature":            {},
+	"top_p":                  {},
+	"top_k":                  {},
+	"tools":                  {},
+	"tool_choice":            {},
+	"parallel_tool_calls":    {},
+	"user":                   {},
+	"function_call":          {},
+	"functions":              {},
+	"input":                  {},
+	"encoding_format":        {},
+	"dimensions":             {},
+	"prompt":                 {},
+	"quality":                {},
+	"size":                   {},
+	"style":                  {},
+	"instruction":            {},
+	"num_ctx":                {},
 }
 
 func (r GeneralOpenAIRequest) ParseInput() []string {
