@@ -12,7 +12,6 @@
   * [模型广场](/guide/models)
   * [批量推理](/guide/batch-inference)
   * [API Keys](/guide/api-keys)
-  * [API 文档](/guide/api)
   * [用量明细](/guide/usage)
   * [充值中心](/guide/topup)
   * [发票管理](/guide/invoices)
@@ -20,20 +19,34 @@
   * [签到奖励](/guide/signin)
   * [团队管理](/guide/teams)
 
-* 场景示例
+* API 文档
+  * [API 概览](/api/)
+  * [认证方式](/api/authentication)
+  * [文本系列](/api/chat)
+  * [图像系列](/api/image)
+  * [语音系列](/api/audio)
+  * [视频系列](/api/video)
+  * [文件解析](/api/file-parse)
+  * [批量处理](/api/batch)
+  * [模型列表](/api/models)
+  * [SDK 示例](/api/sdk)
+  * [错误码](/api/error-codes)
+  * [限流说明](/api/rate-limit)
+  * [平台操作 API](/api/platform-api)
 
+* 场景示例
   * [场景示例首页](/examples/)
   * [RAG 检索系统](/examples/rag)
   * [Claude Code 接入](/examples/claude-code)
   * [多模型对比](/examples/multi-model)
 
 * 最佳实践
-
   * [最佳实践首页](/best-practices/)
   * [流式输出处理](/best-practices/streaming)
   * [错误处理与重试](/best-practices/error-handling)
   * [Token 成本优化](/best-practices/cost-optimization)
   * [Key 安全](/best-practices/key-security)
+
 
 ---
 

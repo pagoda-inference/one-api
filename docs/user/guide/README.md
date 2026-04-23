@@ -12,7 +12,6 @@
 | [模型广场](/guide/models) | 浏览、搜索、试用 AI 模型 |
 | [批量推理](/guide/batch-inference) | 离线批量处理大文件请求 |
 | [API Keys](/guide/api-keys) | 创建、管理 API 访问密钥 |
-| [API 文档](/guide/api) | API 接口文档 |
 | [用量明细](/guide/usage) | 查看用量统计和明细记录 |
 | [充值中心](/guide/topup) | 充值额度、支付方式 |
 | [发票管理](/guide/invoices) | 申请和管理发票 |

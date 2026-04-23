@@ -6,7 +6,7 @@
   * [模型广场](/guide/models)
   * [批量推理](/guide/batch-inference)
   * [API Keys](/guide/api-keys)
-  * [API 文档](/guide/api)
+  * [API 文档](/api/)
   * [用量明细](/guide/usage)
   * [充值中心](/guide/topup)
   * [发票管理](/guide/invoices)

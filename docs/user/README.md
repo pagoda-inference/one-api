@@ -15,13 +15,28 @@
 - [模型广场](guide/models) - 浏览和试用 AI 模型
 - [批量推理](guide/batch-inference) - 离线批量处理大文件
 - [API Keys](guide/api-keys) - API 密钥管理
-- [API 文档](guide/api) - API 接口参考
 - [用量明细](guide/usage) - 查看用量统计
 - [充值中心](guide/topup) - 充值额度
 - [发票管理](guide/invoices) - 申请发票
 - [系统通知](guide/notifications) - 查看通知
 - [签到奖励](guide/signin) - 每日签到
 - [团队管理](guide/teams) - 团队协作
+
+### API 文档
+
+- [API 文档首页](api/) - API 接口参考
+- [认证方式](api/authentication) - Bearer Token 认证
+- [文本系列](api/chat) - 文本对话
+- [图像系列](api/image) - 功能开发中
+- [语音系列](api/audio) - 功能开发中
+- [视频系列](api/video) - 功能开发中
+- [文件解析](api/file-parse) - 文档内容提取
+- [批量处理](api/batch) - 离线批量推理
+- [模型列表](api/models) - 获取可用模型
+- [SDK 示例](api/sdk) - Python / JS 调用示例
+- [错误码](api/error-codes) - 常见错误说明
+- [限流说明](api/rate-limit) - RPM / TPM 限制
+- [平台操作 API](api/platform-api) - 账户、充值、订单等
 
 ### 场景示例
 
@@ -37,6 +52,7 @@
 - [错误处理与重试](best-practices/error-handling) - 常见错误码、重试策略
 - [Token 成本优化](best-practices/cost-optimization) - 模型选择、上下文压缩
 - [Key 安全](best-practices/key-security) - 环境变量、定期轮换
+
 
 </div>
 
@@ -56,7 +72,7 @@
 
 1. 注册账号 → [立即注册](guide/account)
 2. 获取 API Key → [创建 Key](guide/api-keys)
-3. 开始调用 → [查看 API](guide/api)
+3. 开始调用 → [查看 API](api/)
 
 <div style="border-bottom: 1px solid var(--border-color); margin: 12px 0;"></div>
 
@@ -70,4 +86,5 @@
 
 </div>
 
+</div>
 </div>
