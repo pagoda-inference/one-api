@@ -64,7 +64,9 @@
     "name": "Name",
     "description": "Description",
     "remark": "Remark",
-    "role": "Role"
+    "role": "Role",
+    "update_success": "Updated successfully",
+    "create_success": "Created successfully"
   },
   "greeting": {
     "dawn": "Good dawn",
@@ -862,6 +864,9 @@
     "select_existing_logo": "Select existing logo",
     "upload_new_logo": "Upload new logo",
     "capabilities_json": "Capabilities (JSON)",
+    "description": "Description",
+    "logo_url": "Logo URL",
+    "capabilities": "Capabilities",
     "status_online": "Online",
     "status_maintenance": "Maintenance",
     "status_offline": "Offline",

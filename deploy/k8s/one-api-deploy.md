@@ -103,7 +103,7 @@ kubectl get pods -n baota 2>&1 | grep "one-api-" | grep -v "baota-one-api"
 # one-api-xxxxx-xxxxx   1/1     Running            0                  <time>
 
 # 健康检查
-curl -s https://baotaAI.bedicloud.net/api/status | head -20
+curl -s https://baotaai.bedicloud.net/api/status | head -20
 ```
 
 ## 回滚操作

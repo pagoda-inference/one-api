@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -121,9 +122,13 @@ func CreateModel(c *gin.Context) {
 
 	err := m.Create()
 	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "duplicate key") || strings.Contains(errMsg, "23505") {
+			errMsg = "该模型ID已存在，请换一个ID或留空自动生成"
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "创建失败: " + err.Error(),
+			"message": "创建失败: " + errMsg,
 		})
 		return
 	}

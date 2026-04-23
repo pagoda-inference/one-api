@@ -63,8 +63,10 @@
     "type": "类型",
     "name": "名称",
     "description": "描述",
-    "remark": "备注",
-    "role": "角色"
+"remark": "备注",
+    "role": "角色",
+    "update_success": "更新成功",
+    "create_success": "创建成功"
   },
   "greeting": {
     "dawn": "凌晨好",
@@ -863,6 +865,9 @@
     "select_existing_logo": "选择已有Logo",
     "upload_new_logo": "上传新Logo",
     "capabilities_json": "能力 (JSON)",
+    "description": "模型描述",
+    "logo_url": "Logo URL",
+    "capabilities": "能力配置",
     "status_online": "上线",
     "status_maintenance": "维护中",
     "status_offline": "下架",

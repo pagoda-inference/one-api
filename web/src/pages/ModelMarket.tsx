@@ -14,7 +14,7 @@ const { Search } = Input
 
 // 根据模型类型生成示例代码
 const getModelExample = (modelId: string, modelType: string): string => {
-  const apiBase = 'https://baotaAI.bedicloud.net/v1'
+  const apiBase = 'https://baotaai.bedicloud.net/v1'
 
   // MinerU special case
   if (modelId.toLowerCase().includes('mineru')) {
