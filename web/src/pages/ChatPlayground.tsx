@@ -24,7 +24,8 @@ import { uploadFile } from '../services/api'
 
 const { TextArea } = Input
 
-const TRIAL_API_KEY = 'sk-TRIAL_API_KEY_PLACEHOLDER'
+const TRIAL_API_KEY = import.meta.env.VITE_TRIAL_API_KEY || ''
+const SVG_MIME = 'image/svg+xml'
 
 function buildSystemPrompt(basePrompt: string, enableThinking: boolean) {
   const NO_THINK_PROMPT = `
@@ -131,6 +132,7 @@ const trialModels = [
   { value: 'bedi/qwen3-14b', label: 'Qwen3-14B', isVL: false, isReasoning: true },
   { value: 'bedi/qwen3-32b', label: 'Qwen3-32B', isVL: false, isReasoning: true },
   { value: 'bedi/qwen3-vl-8b', label: 'Qwen3-VL-8B', isVL: true, isReasoning: false },
+  { value: 'bedi/kimi-k2.6', label: 'Kimi-K2.6', isVL: true, isReasoning: true },
 ]
 
 const modelCapabilities: Record<
@@ -166,6 +168,14 @@ const modelCapabilities: Record<
     hasEnableThinking: false,
     hasThinkingBudget: false,
     hasPresencePenalty: false,
+    isVL: true,
+  },
+  'bedi/kimi-k2.6': {
+    hasTopK: true,
+    hasFrequencyPenalty: false,
+    hasEnableThinking: true,
+    hasThinkingBudget: true,
+    hasPresencePenalty: true,
     isVL: true,
   },
 }
@@ -236,6 +246,9 @@ const ChatPlayground: React.FC = () => {
 
   const capabilities = modelCapabilities[params.model] || modelCapabilities['bedi/qwen3-32b']
   const capabilities2 = modelCapabilities[params2.model] || modelCapabilities['bedi/qwen3-14b']
+  const vlImageProxyBaseUrl = (import.meta as any).env?.VITE_VL_IMAGE_PROXY_BASE_URL as string | undefined
+  const useVlProxyBaseUrl = String((import.meta as any).env?.VITE_VL_USE_PROXY_BASE_URL || '').toLowerCase() === 'true'
+  const inlineImageAsBase64 = String((import.meta as any).env?.VITE_VL_INLINE_IMAGE_AS_BASE64 || '').toLowerCase() === 'true'
 
   const primaryIsVL = capabilities.isVL
 
@@ -333,12 +346,25 @@ const ChatPlayground: React.FC = () => {
     fileInputRef.current?.click()
   }
 
+  const isSvgImage = (value: string) => {
+    const normalized = value.trim().toLowerCase()
+    if (!normalized) return false
+    if (normalized.startsWith('data:image/svg')) return true
+    const noQuery = normalized.split('?')[0].split('#')[0]
+    return noQuery.endsWith('.svg')
+  }
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     if (!file.type.startsWith('image/')) {
       message.error(t('chat.select_image_file'))
+      return
+    }
+    if (file.type === SVG_MIME) {
+      message.error('暂不支持 SVG 图片，请上传 PNG/JPG/WebP')
+      e.target.value = ''
       return
     }
 
@@ -372,6 +398,10 @@ const ChatPlayground: React.FC = () => {
     if (!value) return
     try {
       new URL(value)
+      if (isSvgImage(value)) {
+        message.error('暂不支持 SVG 图片，请使用 PNG/JPG/WebP 链接')
+        return
+      }
       setPendingImages((prev) => [...prev, value])
       setImageUrlInput('')
       setImageModalOpen(false)
@@ -386,6 +416,10 @@ const ChatPlayground: React.FC = () => {
 
   const handleSend = async () => {
     if ((!inputValue.trim() && pendingImages.length === 0) || loading || loading2) return
+    if (pendingImages.some(isSvgImage)) {
+      message.error('当前视觉模型暂不支持 SVG 图片，请改用 PNG/JPG/WebP')
+      return
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -424,19 +458,59 @@ const ChatPlayground: React.FC = () => {
       setThinkingExpanded2(true)
     }
 
-    const isRemoteHttpImage = (url: string) => /^https?:\/\//i.test(url)
+    const resolveImageUrl = (url: string) => {
+      const trimmed = url.trim()
+      if (!trimmed) return ''
+      if (trimmed.startsWith('/api/images/') && vlImageProxyBaseUrl && useVlProxyBaseUrl) {
+        const base = vlImageProxyBaseUrl.replace(/\/$/, '')
+        const key = trimmed.replace('/api/images/', '')
+        return `${base}/${key}`
+      }
+      try {
+        return new URL(trimmed, window.location.origin).toString()
+      } catch {
+        return ''
+      }
+    }
 
-    const buildUserContent = (text: string, images: string[], isVL: boolean) => {
+    const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+      reader.onerror = () => reject(new Error('failed_to_read_blob'))
+      reader.readAsDataURL(blob)
+    })
+
+    const toModelImageUrl = async (rawUrl: string) => {
+      const absoluteUrl = resolveImageUrl(rawUrl)
+      if (!absoluteUrl) return ''
+      if (absoluteUrl.startsWith('data:')) return absoluteUrl
+      // Default path: keep remote URL unchanged.
+      // Base64 inlining is opt-in via VITE_VL_INLINE_IMAGE_AS_BASE64=true.
+      if (!inlineImageAsBase64) return absoluteUrl
+      try {
+        const resp = await fetch(absoluteUrl)
+        if (!resp.ok) return absoluteUrl
+        const blob = await resp.blob()
+        const dataUrl = await blobToDataUrl(blob)
+        return dataUrl || absoluteUrl
+      } catch {
+        return absoluteUrl
+      }
+    }
+
+    const buildUserContent = async (text: string, images: string[], isVL: boolean) => {
       if (!isVL || images.length === 0) return text
 
       const parts: Array<any> = []
       if (text) {
         parts.push({ type: 'text', text })
       }
-      images.filter(isRemoteHttpImage).forEach((url) => {
+      const modelImageUrls = await Promise.all(images.map((url) => toModelImageUrl(url)))
+      modelImageUrls.forEach((modelImageUrl) => {
+        if (!modelImageUrl) return
         parts.push({
           type: 'image_url',
-          image_url: { url },
+          image_url: { url: modelImageUrl },
         })
       })
       return parts
@@ -447,19 +521,19 @@ const ChatPlayground: React.FC = () => {
     if (finalSystemPrompt) {
       chatMessages.push({ role: 'system', content: finalSystemPrompt })
     }
-    messages.forEach((msg) => {
+    for (const msg of messages) {
       if (msg.role === 'user' && msg.images?.length && capabilities.isVL) {
         chatMessages.push({
           role: msg.role,
-          content: buildUserContent(msg.content, msg.images, true),
+          content: await buildUserContent(msg.content, msg.images, true),
         })
       } else {
         chatMessages.push({ role: msg.role, content: msg.content })
       }
-    })
+    }
     chatMessages.push({
       role: 'user',
-      content: buildUserContent(userMessage.content, userMessage.images || [], capabilities.isVL),
+      content: await buildUserContent(userMessage.content, userMessage.images || [], capabilities.isVL),
     })
 
     const requestBody: Record<string, any> = {
@@ -484,19 +558,19 @@ const ChatPlayground: React.FC = () => {
     if (finalSystemPrompt2) {
       chatMessages2.push({ role: 'system', content: finalSystemPrompt2 })
     }
-    messages2.forEach((msg) => {
+    for (const msg of messages2) {
       if (msg.role === 'user' && msg.images?.length && capabilities2.isVL) {
         chatMessages2.push({
           role: msg.role,
-          content: buildUserContent(msg.content, msg.images, true),
+          content: await buildUserContent(msg.content, msg.images, true),
         })
       } else {
         chatMessages2.push({ role: msg.role, content: msg.content })
       }
-    })
+    }
     chatMessages2.push({
       role: 'user',
-      content: buildUserContent(userMessage.content, userMessage.images || [], capabilities2.isVL),
+      content: await buildUserContent(userMessage.content, userMessage.images || [], capabilities2.isVL),
     })
 
     const requestBody2: Record<string, any> = {
@@ -932,6 +1006,20 @@ const ChatPlayground: React.FC = () => {
                 topK: 50,
                 enableThinking: false,
               }))
+            } else if (value === 'bedi/kimi-k2.6') {
+              setParams((p) => ({
+                ...p,
+                model: value,
+                maxTokens: 8192,
+                temperature: 1.0,
+                topP: 0.95,
+                topK: 50,
+                frequencyPenalty: 0,
+                presencePenalty: 0.00,
+                systemPrompt: 'You are Kimi, an AI assistant.',
+                enableThinking: false,
+                thinkingBudget: 4096,
+              }))
             } else {
               setParams((p) => ({
                 ...p,
@@ -941,6 +1029,7 @@ const ChatPlayground: React.FC = () => {
                 topP: 0.95,
                 topK: 20,
                 enableThinking: false,
+                systemPrompt: '',
               }))
             }
           }}
@@ -1113,6 +1202,20 @@ const ChatPlayground: React.FC = () => {
                   topP: 0.7,
                   topK: 50,
                   enableThinking: false,
+                }))
+              } else if (value === 'bedi/kimi-k2.6') {
+                setParams2((p) => ({
+                  ...p,
+                  model: value,
+                  maxTokens: 8192,
+                  temperature: 1.0,
+                  topP: 0.95,
+                  topK: 50,
+                  frequencyPenalty: 0,
+                  presencePenalty: 0.00,
+                  systemPrompt: 'You are Kimi, an AI assistant.',
+                  enableThinking: false,
+                  thinkingBudget: 4096,
                 }))
               } else {
                 setParams2((p) => ({

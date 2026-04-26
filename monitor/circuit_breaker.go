@@ -237,8 +237,10 @@ func TryRecoverChannel(channelId int) {
 	}
 
 	cb := GetCircuitBreaker(channelId)
-	if cb.GetState() == StateClosed {
-		// Circuit breaker has recovered, re-enable the channel
+	state := cb.GetState()
+	// Recover if circuit breaker is closed OR if it's already half-open
+	// (half-open means it's already testing recovery)
+	if state == StateClosed || state == StateHalfOpen {
 		EnableChannel(channelId, channel.Name)
 	}
 }

@@ -127,6 +127,19 @@ const Dashboard: React.FC = () => {
     return (quota / 7200).toFixed(2)
   }
 
+  const formatAxisNumber = (value: number) => {
+    const abs = Math.abs(value)
+    if (abs >= 1000000000) return `${(value / 1000000000).toFixed(1)}B`
+    if (abs >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+    if (abs >= 1000) return `${(value / 1000).toFixed(1)}K`
+    return `${value}`
+  }
+
+  const shortenModelLabel = (name: string, max = 14) => {
+    if (!name) return ''
+    return name.length > max ? `${name.slice(0, max)}...` : name
+  }
+
   // Stat card helper
   const StatCard = ({ title, value, suffix, icon, color, gradient }: any) => (
     <Card
@@ -211,23 +224,41 @@ const Dashboard: React.FC = () => {
 
   // Model usage chart
   const getModelChartOption = () => ({
-    tooltip: { trigger: 'axis' },
-    grid: { left: 100, right: 30, top: 30, bottom: 80 },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params: any) => {
+        const p = Array.isArray(params) ? params[0] : params
+        if (!p) return ''
+        const fullName = modelUsage[p.dataIndex]?.model_name || modelUsage[p.dataIndex]?.model_id || ''
+        const value = typeof p.value === 'number' ? p.value : Number(p.value || 0)
+        return `${fullName}<br/>${t('dashboard.token_count')}: ${value.toLocaleString()}`
+      }
+    },
+    grid: { left: 130, right: 30, top: 30, bottom: 90 },
     xAxis: {
       type: 'category',
-      data: modelUsage.map(d => d.model_name?.slice(0, 12) || d.model_id?.slice(0, 12) || ''),
+      data: modelUsage.map(d => d.model_name || d.model_id || ''),
       axisLine: { lineStyle: { color: appTheme.border } },
-      axisLabel: { color: appTheme.textSecondary, rotate: 45, fontSize: 10 },
+      axisLabel: {
+        color: appTheme.textSecondary,
+        rotate: 40,
+        fontSize: 10,
+        formatter: (value: string) => shortenModelLabel(value)
+      },
     },
     yAxis: {
       type: 'value',
       name: t('dashboard.token_count'),
       nameLocation: 'middle',
-      nameGap: 70,
+      nameGap: 95,
       nameTextStyle: { color: appTheme.textSecondary, fontSize: 12 },
       axisLine: { show: false },
       splitLine: { lineStyle: { color: appTheme.borderLight } },
-      axisLabel: { color: appTheme.textSecondary }
+      axisLabel: {
+        color: appTheme.textSecondary,
+        formatter: (value: number) => formatAxisNumber(value)
+      }
     },
     series: [{
       data: modelUsage.map(d => ({

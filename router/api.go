@@ -10,6 +10,16 @@ import (
 )
 
 func SetApiRouter(router *gin.Engine) {
+	// Image proxy endpoints should NOT be gzip-compressed.
+	// Some upstream VL servers fetch these URLs and directly decode bytes as images.
+	// If gzip is applied, they may fail with "cannot identify image file".
+	imageRouter := router.Group("/api")
+	imageRouter.Use(middleware.GlobalAPIRateLimit())
+	{
+		imageRouter.GET("/images/:key", controller.GetMediaFile)
+		imageRouter.HEAD("/images/:key", controller.HeadMediaFile)
+	}
+
 	apiRouter := router.Group("/api")
 	apiRouter.Use(gzip.Gzip(gzip.DefaultCompression))
 	apiRouter.Use(middleware.GlobalAPIRateLimit())
@@ -17,7 +27,6 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/status", controller.GetStatus)
 		apiRouter.GET("/models", middleware.UserAuth(), controller.DashboardListModels)
 		apiRouter.GET("/notice", controller.GetNotice)
-		apiRouter.GET("/images/:key", controller.GetMediaFile)
 		apiRouter.GET("/about", controller.GetAbout)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/api-docs", controller.GetApiDocs)

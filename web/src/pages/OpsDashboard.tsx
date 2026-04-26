@@ -164,6 +164,7 @@ const OpsDashboard: React.FC = () => {
   const handleCreateChannel = () => {
     setEditingChannel(null)
     channelForm.resetFields()
+    channelForm.setFieldsValue({ hide_upstream_model: true })
     loadProviders()
     setChannelModalVisible(true)
   }
@@ -200,7 +201,7 @@ const OpsDashboard: React.FC = () => {
     try {
       if (fullRecord.config) {
         const configObj = JSON.parse(fullRecord.config)
-        hideUpstreamModel = configObj.hide_upstream_model || false
+        hideUpstreamModel = configObj.hide_upstream_model !== false
       }
     } catch (e) {
       console.error('Failed to parse config:', e)
@@ -921,7 +922,7 @@ const OpsDashboard: React.FC = () => {
             />
           </Form.Item>
           <Form.Item name="hide_upstream_model" label={t('ops.hide_upstream_model')} valuePropName="checked">
-            <Switch onChange={(checked) => channelForm.setFieldValue('hide_upstream_model', checked)} />
+            <Switch checked={channelForm.getFieldValue('hide_upstream_model')} onChange={(checked) => channelForm.setFieldValue('hide_upstream_model', checked)} />
             <span style={{ marginLeft: 8, color: appTheme.textTertiary }}>{t('ops.hide_upstream_model_tip')}</span>
           </Form.Item>
         </Form>
