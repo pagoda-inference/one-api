@@ -61,7 +61,7 @@ brew upgrade --cask cc-switch
 - Provider/Type：自定义配置(Custom)
 - Base URL：`https://baotaai.bedicloud.net/anthropic`
 - API Key：你的 BEDI API Key
-- 默认模型：建议 `bedi/minimax-m2.7`（也可替换为你有权限的其他模型）
+- 默认模型：建议 `bedi/glm-4.7`（也可替换为你有权限的其他模型）
 - Haiku/Sonnet/Opus 映射模型：全部填同一个可用模型（建议同上）
 
 说明：Claude Code 会在 Base URL 后拼接 `/v1/messages`，因此 Base URL 只需填到 `/anthropic`。
@@ -96,11 +96,11 @@ brew upgrade --cask cc-switch
     "ANTHROPIC_AUTH_TOKEN": "YOUR_BEDI_API_KEY",
     "API_TIMEOUT_MS": "3000000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "ANTHROPIC_MODEL": "bedi/minimax-m2.7",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "bedi/minimax-m2.7",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "bedi/minimax-m2.7",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "bedi/minimax-m2.7",
-    "CLAUDE_CODE_SUBAGENT_MODEL": "bedi/minimax-m2.7"
+    "ANTHROPIC_MODEL": "bedi/glm-4.7",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "bedi/glm-4.7",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "bedi/glm-4.7",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "bedi/glm-4.7",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "bedi/glm-4.7"
   }
 }
 ```
@@ -150,7 +150,7 @@ claude
 期望结果：
 
 - `/status` 中 `ANTHROPIC_BASE_URL` 指向 `https://baotaai.bedicloud.net/anthropic`
-- `/model` 显示当前模型为你配置的 BEDI 模型（例如 `bedi/minimax-m2.5`）
+- `/model` 显示当前模型为你配置的 BEDI 模型（例如 `bedi/glm-4.7`）
 
 ## 支持能力
 
@@ -222,19 +222,19 @@ claude
     },
     {
       "name": "ANTHROPIC_MODEL",
-      "value": "bedi/minimax-m2.7"
+      "value": "bedi/glm-4.7"
     },
     {
       "name": "ANTHROPIC_DEFAULT_SONNET_MODEL",
-      "value": "bedi/minimax-m2.7"
+      "value": "bedi/glm-4.7"
     },
     {
       "name": "ANTHROPIC_DEFAULT_OPUS_MODEL",
-      "value": "bedi/minimax-m2.7"
+      "value": "bedi/glm-4.7"
     },
     {
       "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-      "value": "bedi/minimax-m2.7"
+      "value": "bedi/glm-4.7"
     }
   ]
 }
