@@ -661,7 +661,11 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 	stopEventData, _ := json.Marshal(messageStop)
 	anthropicLines = append(anthropicLines, fmt.Sprintf("event: message_stop\ndata: %s", string(stopEventData)))
 
-	result := strings.Join(anthropicLines, "\n")
+	// SSE events must be separated by an empty line.
+	result := strings.Join(anthropicLines, "\n\n")
+	if result != "" {
+		result += "\n\n"
+	}
 	return []byte(result), nil
 }
 
@@ -980,6 +984,12 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 		}
 	}
 
+	// Track response content-type for final writeback.
+	responseContentType := resp.Header.Get("Content-Type")
+	if responseContentType == "" {
+		responseContentType = "application/json"
+	}
+
 	// Copy response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -1012,18 +1022,20 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 		convertedBody, err := ConvertOpenAIResponseToAnthropic(respBody, isStream, originModel, hideUpstreamModel)
 		if err != nil {
 			logger.Errorf(ctx, "failed to convert response: %s", err.Error())
-			c.Data(resp.StatusCode, "application/json", respBody)
+			c.Data(resp.StatusCode, responseContentType, respBody)
 			return
 		}
 		respBody = convertedBody
 		// Set content type based on stream mode
 		if isStream {
-			c.Header("Content-Type", "text/event-stream")
+			responseContentType = "text/event-stream; charset=utf-8"
+		} else {
+			responseContentType = "application/json"
 		}
 	}
 
 	// Return response
-	c.Data(resp.StatusCode, "application/json", respBody)
+	c.Data(resp.StatusCode, responseContentType, respBody)
 }
 
 // CountTokensAnthropic handles Anthropic /v1/messages/count_tokens requests
