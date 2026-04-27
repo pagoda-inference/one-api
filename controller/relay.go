@@ -26,29 +26,101 @@ import (
 
 // AnthropicRequest is the incoming Anthropic /v1/messages format
 type AnthropicRequest struct {
-	Model       string                 `json:"model"`
-	Messages    []AnthropicMessage     `json:"messages"`
-	System      string                 `json:"system,omitempty"`
-	MaxTokens   int                    `json:"max_tokens"`
-	Stream      bool                   `json:"stream,omitempty"`
-	Temperature *float64               `json:"temperature,omitempty"`
-	TopP        *float64               `json:"top_p,omitempty"`
+	Model          string                   `json:"model"`
+	Messages      []AnthropicMessage       `json:"messages"`
+	System        any                       `json:"system,omitempty"`           // string or []SystemBlock
+	MaxTokens     int                      `json:"max_tokens"`
+	Stream        bool                     `json:"stream,omitempty"`
+	StreamOptions *AnthropicStreamOptions  `json:"stream_options,omitempty"`
+	Temperature   *float64                 `json:"temperature,omitempty"`
+	TopP          *float64                 `json:"top_p,omitempty"`
+	TopK          *int                     `json:"top_k,omitempty"`
+	Tools         []AnthropicTool         `json:"tools,omitempty"`
+	ToolChoice    any                       `json:"tool_choice,omitempty"`     // string or ToolChoiceBlock
+	Metadata      map[string]any           `json:"metadata,omitempty"`
+	StopSequences []string                `json:"stop_sequences,omitempty"`
+	Thinking      *AnthropicThinking       `json:"thinking,omitempty"`
+	Betas         []string                  `json:"betas,omitempty"`
+	ExtraFields   map[string]any           `json:"-"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to preserve unknown fields
+func (r *AnthropicRequest) UnmarshalJSON(data []byte) error {
+	type Alias AnthropicRequest
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Collect unknown fields
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	knownKeys := map[string]struct{}{
+		"model": {}, "messages": {}, "system": {}, "max_tokens": {},
+		"stream": {}, "stream_options": {}, "temperature": {}, "top_p": {},
+		"top_k": {}, "tools": {}, "tool_choice": {}, "metadata": {},
+		"stop_sequences": {}, "thinking": {}, "betas": {},
+	}
+	for key := range knownKeys {
+		delete(raw, key)
+	}
+	if len(raw) > 0 {
+		r.ExtraFields = raw
+	}
+	return nil
+}
+
+type AnthropicStreamOptions struct {
+	IncludeUsage bool `json:"include_usage,omitempty"`
+}
+
+type AnthropicThinking struct {
+	Type         string `json:"type,omitempty"`
+	BudgetTokens int    `json:"budget_tokens,omitempty"`
+}
+
+type AnthropicTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	InputSchema any    `json:"input_schema"` // object or map
+}
+
+type ToolChoiceBlock struct {
+	Type string `json:"type"` // "auto", "any", "tool"
+	Name string `json:"name,omitempty"`
+}
+
+type SystemBlock struct {
+	Type string `json:"type"` // always "text"
+	Text string `json:"text"`
 }
 
 type AnthropicMessage struct {
-	Role    string       `json:"role"`
-	Content any          `json:"content"` // string or []AnthropicContent
+	Role    string `json:"role"`
+	Content any    `json:"content"` // string or []AnthropicContent
 }
 
 type AnthropicContent struct {
-	Type   string `json:"type"`
-	Text   string `json:"text,omitempty"`
-	Source *struct {
+	Type         string `json:"type"`
+	Text         string `json:"text,omitempty"`
+	Source       *struct {
 		Type      string `json:"type"`
 		MediaType string `json:"media_type,omitempty"`
 		Data      string `json:"data,omitempty"`
 		Url       string `json:"url,omitempty"`
 	} `json:"source,omitempty"`
+	CacheControl *struct {
+		Type string `json:"type"` // "ephemeral"
+	} `json:"cache_control,omitempty"`
+	// For tool_result blocks
+	ToolUseId string `json:"tool_use_id,omitempty"`
 }
 
 // parseAnthropicContent handles both string and array content formats
@@ -70,6 +142,9 @@ func parseAnthropicContent(content any) []AnthropicContent {
 				c := AnthropicContent{Type: fmt.Sprintf("%v", m["type"])}
 				if text, ok := m["text"].(string); ok {
 					c.Text = text
+				}
+				if toolUseId, ok := m["tool_use_id"].(string); ok {
+					c.ToolUseId = toolUseId
 				}
 				if source, ok := m["source"].(map[string]any); ok {
 					c.Source = &struct {
@@ -103,12 +178,35 @@ func parseAnthropicContent(content any) []AnthropicContent {
 func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest {
 	messages := make([]model.Message, 0, len(req.Messages)+1)
 
-	// Insert system prompt as first message if present
-	if req.System != "" {
-		messages = append(messages, model.Message{
-			Role:    "system",
-			Content: req.System,
-		})
+	// Handle system prompt - support both string and array formats
+	if req.System != nil {
+		switch s := req.System.(type) {
+		case string:
+			if s != "" {
+				messages = append(messages, model.Message{
+					Role:    "system",
+					Content: s,
+				})
+			}
+		case []any:
+			// Array of {type: "text", text: "..."} or similar
+			var sb strings.Builder
+			for _, item := range s {
+				if m, ok := item.(map[string]any); ok {
+					if text, ok := m["text"].(string); ok {
+						sb.WriteString(text)
+						sb.WriteString("\n\n")
+					}
+				}
+			}
+			systemContent := strings.TrimSpace(sb.String())
+			if systemContent != "" {
+				messages = append(messages, model.Message{
+					Role:    "system",
+					Content: systemContent,
+				})
+			}
+		}
 	}
 
 	for _, msg := range req.Messages {
@@ -118,13 +216,20 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 
 		// Convert content blocks - handle both string and array formats
 		contentBlocks := parseAnthropicContent(msg.Content)
-		if len(contentBlocks) == 1 && contentBlocks[0].Type == "text" {
+		if len(contentBlocks) == 1 && contentBlocks[0].Type == "text" && contentBlocks[0].ToolUseId == "" {
 			openaiMsg.Content = contentBlocks[0].Text
 		} else {
 			contentList := make([]any, 0, len(contentBlocks))
 			for _, c := range contentBlocks {
 				if c.Type == "text" {
 					contentList = append(contentList, map[string]string{"type": "text", "text": c.Text})
+				} else if c.Type == "tool_result" {
+					// tool_result -> OpenAI tool message
+					contentList = append(contentList, map[string]any{
+						"type":         "tool",
+						"tool_call_id": c.ToolUseId,
+						"content":      c.Text,
+					})
 				} else if c.Type == "image" && c.Source != nil {
 					if c.Source.Url != "" {
 						// Remote URL image
@@ -162,7 +267,69 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 		openaiReq.StreamOptions = &model.StreamOptions{IncludeUsage: true}
 	}
 
+	// Convert tools
+	if len(req.Tools) > 0 {
+		openaiReq.Tools = convertAnthropicTools(req.Tools)
+	}
+
+	// Convert tool_choice
+	if req.ToolChoice != nil {
+		openaiReq.ToolChoice = convertAnthropicToolChoice(req.ToolChoice)
+	}
+
+	// Handle thinking budget (some backends support this via custom fields)
+	if req.Thinking != nil && req.Thinking.BudgetTokens > 0 {
+		openaiReq.ExtraFields = map[string]any{
+			"thinking_budget_tokens": req.Thinking.BudgetTokens,
+		}
+	}
+
+	// Preserve any extra fields from original request
+	if len(req.ExtraFields) > 0 {
+		if openaiReq.ExtraFields == nil {
+			openaiReq.ExtraFields = make(map[string]any)
+		}
+		for k, v := range req.ExtraFields {
+			if k != "thinking_budget_tokens" { // Don't overwrite if already set
+				openaiReq.ExtraFields[k] = v
+			}
+		}
+	}
+
 	return openaiReq
+}
+
+func convertAnthropicTools(anthropicTools []AnthropicTool) []model.Tool {
+	tools := make([]model.Tool, 0, len(anthropicTools))
+	for _, t := range anthropicTools {
+		tools = append(tools, model.Tool{
+			Type: "function",
+			Function: model.Function{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  t.InputSchema,
+			},
+		})
+	}
+	return tools
+}
+
+func convertAnthropicToolChoice(toolChoice any) any {
+	switch tc := toolChoice.(type) {
+	case string:
+		if tc == "auto" {
+			return "auto"
+		} else if tc == "any" {
+			return "required" // OpenAI uses "required" instead of "any"
+		}
+	case map[string]any:
+		if toolType, ok := tc["type"].(string); ok && toolType == "tool" {
+			if name, ok := tc["name"].(string); ok {
+				return map[string]string{"type": "function", "function": name}
+			}
+		}
+	}
+	return "auto"
 }
 
 // ConvertOpenAIResponseToAnthropic converts OpenAI /v1/chat/completions response to Anthropic format
@@ -181,8 +348,16 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 		Model   string `json:"model"`
 		Choices []struct {
 			Message struct {
-				Content         string `json:"content"`
+				Content          string `json:"content"`
 				ReasoningContent string `json:"reasoning_content"`
+				ToolCalls        []struct {
+					ID       string `json:"id"`
+					Type     string `json:"type"`
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
@@ -197,14 +372,8 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 		return nil, err
 	}
 
-	content := ""
 	stopReason := "end_turn"
 	if len(openaiResp.Choices) > 0 {
-		content = openaiResp.Choices[0].Message.Content
-		// Fallback to reasoning_content if content is empty/null (e.g., GLM model)
-		if content == "" && openaiResp.Choices[0].Message.ReasoningContent != "" {
-			content = openaiResp.Choices[0].Message.ReasoningContent
-		}
 		switch openaiResp.Choices[0].FinishReason {
 		case "stop":
 			stopReason = "end_turn"
@@ -215,13 +384,62 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 		}
 	}
 
+	// Build content blocks - text and/or tool_use
+	var contentBlocks []map[string]any
+
+	// Text content (may be empty if only tool_calls)
+	textContent := ""
+	if len(openaiResp.Choices) > 0 {
+		textContent = openaiResp.Choices[0].Message.Content
+		// Fallback to reasoning_content if content is empty/null (e.g., GLM model)
+		if textContent == "" && openaiResp.Choices[0].Message.ReasoningContent != "" {
+			textContent = openaiResp.Choices[0].Message.ReasoningContent
+		}
+	}
+	if textContent != "" {
+		contentBlocks = append(contentBlocks, map[string]any{
+			"type": "text",
+			"text": textContent,
+		})
+	}
+
+	// Tool use blocks
+	if len(openaiResp.Choices) > 0 {
+		for _, tc := range openaiResp.Choices[0].Message.ToolCalls {
+			// Parse arguments JSON string to map
+			var toolInput any
+			if tc.Function.Arguments != "" {
+				_ = json.Unmarshal([]byte(tc.Function.Arguments), &toolInput)
+			}
+			// Generate tool use ID if not provided
+			toolUseId := tc.ID
+			if toolUseId == "" {
+				toolUseId = fmt.Sprintf("toolu_%d", len(contentBlocks))
+			}
+			contentBlocks = append(contentBlocks, map[string]any{
+				"type": "tool_use",
+				"id":   toolUseId,
+				"name": tc.Function.Name,
+				"input": toolInput,
+			})
+		}
+	}
+
+	// If no content blocks, add empty text block
+	if len(contentBlocks) == 0 {
+		contentBlocks = append(contentBlocks, map[string]any{
+			"type": "text",
+			"text": "",
+		})
+	}
+
 	anthropicResp := map[string]any{
-		"id":         openaiResp.Id,
-		"type":       "message",
-		"role":       "assistant",
-		"content":    []map[string]string{{"type": "text", "text": content}},
-		"model":      originModel,
-		"stop_reason": stopReason,
+		"id":          openaiResp.Id,
+		"type":        "message",
+		"role":        "assistant",
+		"content":     contentBlocks,
+		"model":       originModel,
+		"stop_reason":  stopReason,
 		"usage": map[string]int{
 			"input_tokens":  openaiResp.Usage.PromptTokens,
 			"output_tokens": openaiResp.Usage.CompletionTokens,
@@ -238,9 +456,13 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 }
 
 func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUpstreamModel bool) ([]byte, error) {
-	// SSE lines: data: {"id":"...","choices":[{"delta":{"content":"..."}}]}
+	// OpenAI SSE: data: {"id":"...","choices":[{"delta":{"content":"..."}}]}
 	lines := strings.Split(string(respBody), "\n")
 	var anthropicLines []string
+	var messageId, modelName string
+	var stopReasonStr string
+	var inputTokens, outputTokens int
+	contentStarted := false
 
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "data: ") {
@@ -248,8 +470,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
-			anthropicLines = append(anthropicLines, "data: [DONE]")
-			continue
+			continue // Don't output [DONE] in Anthropic SSE
 		}
 
 		var chunk struct {
@@ -257,8 +478,17 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			Model   string `json:"model"`
 			Choices []struct {
 				Delta struct {
-					Content         string `json:"content"`
+					Content          string `json:"content"`
 					ReasoningContent string `json:"reasoning_content"`
+					ToolCalls        []struct {
+						Index int `json:"index"`
+						Type  string `json:"type"`
+						ID    string `json:"id"`
+						Function struct {
+							Name      string `json:"name"`
+							Arguments string `json:"arguments"`
+						} `json:"function"`
+					} `json:"tool_calls"`
 				} `json:"delta"`
 				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
@@ -272,34 +502,164 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			continue
 		}
 
+		// Capture message metadata from first chunk
+		if messageId == "" && chunk.Id != "" {
+			messageId = chunk.Id
+		}
+		if modelName == "" {
+			if hideUpstreamModel {
+				modelName = originModel
+			} else {
+				modelName = chunk.Model
+			}
+		}
+
 		if len(chunk.Choices) == 0 {
 			continue
 		}
 
-		content := chunk.Choices[0].Delta.Content
-		if content == "" && chunk.Choices[0].Delta.ReasoningContent != "" {
-			content = chunk.Choices[0].Delta.ReasoningContent
+		delta := chunk.Choices[0].Delta
+		content := delta.Content
+		if content == "" && delta.ReasoningContent != "" {
+			content = delta.ReasoningContent
 		}
 		finishReason := chunk.Choices[0].FinishReason
 
-		// Build Anthropic SSE format
-		if content != "" {
-			anthropicLines = append(anthropicLines, fmt.Sprintf(`data: {"type":"content_block_delta","index":0,"delta":{"type":"text","text":"%s"}}`, content))
+		// Capture usage info
+		if chunk.Usage != nil {
+			inputTokens = chunk.Usage.PromptTokens
+			outputTokens = chunk.Usage.CompletionTokens
 		}
+
+		// Capture stop reason
 		if finishReason != "" && finishReason != "null" {
-			stopReason := "end_turn"
 			switch finishReason {
 			case "stop":
-				stopReason = "end_turn"
+				stopReasonStr = "end_turn"
 			case "length":
-				stopReason = "max_tokens"
+				stopReasonStr = "max_tokens"
+			case "tool_calls":
+				stopReasonStr = "tool_use"
+			default:
+				stopReasonStr = "end_turn"
 			}
-			anthropicLines = append(anthropicLines, fmt.Sprintf(`data: {"type":"message_delta","index":0,"delta":{"stop_reason":"%s"},"usage":{"output_tokens":0}}`, stopReason))
 		}
-		if chunk.Usage != nil {
-			anthropicLines = append(anthropicLines, fmt.Sprintf(`data: {"type":"message_stop","index":0}`))
+
+		// Output message_start on first content
+		if content != "" && !contentStarted {
+			contentStarted = true
+			// message_start event
+			messageStart := map[string]any{
+				"type": "message_start",
+				"message": map[string]any{
+					"id":          messageId,
+					"type":        "message",
+					"role":        "assistant",
+					"content":     []any{},
+					"model":       modelName,
+					"stop_reason": nil,
+					"stop_sequence": nil,
+					"usage": map[string]int{
+						"input_tokens":  inputTokens,
+						"output_tokens": 0,
+					},
+				},
+			}
+			startData, _ := json.Marshal(messageStart)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: message_start\ndata: %s", string(startData)))
+
+			// content_block_start event
+			contentBlockStart := map[string]any{
+				"type":  "content_block_start",
+				"index": 0,
+				"content_block": map[string]any{
+					"type": "text",
+					"text": "",
+				},
+			}
+			blockStartData, _ := json.Marshal(contentBlockStart)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(blockStartData)))
+		}
+
+		// content_block_delta event - use text_delta (not text)
+		if content != "" {
+			contentDelta := map[string]any{
+				"type":  "content_block_delta",
+				"index": 0,
+				"delta": map[string]string{
+					"type": "text_delta",
+					"text": content,
+				},
+			}
+			deltaData, _ := json.Marshal(contentDelta)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(deltaData)))
+		}
+
+		// Handle tool calls in delta (streaming tool_use)
+		for _, tc := range delta.ToolCalls {
+			// content_block_start for tool_use
+			toolBlockStart := map[string]any{
+				"type":  "content_block_start",
+				"index": tc.Index,
+				"content_block": map[string]any{
+					"type": "tool_use",
+					"id":   tc.ID,
+					"name": tc.Function.Name,
+					"input": map[string]any{},
+				},
+			}
+			toolBlockData, _ := json.Marshal(toolBlockStart)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(toolBlockData)))
+
+			// input_json_delta for tool arguments
+			if tc.Function.Arguments != "" {
+				inputDelta := map[string]any{
+					"type":  "content_block_delta",
+					"index": tc.Index,
+					"delta": map[string]string{
+						"type":       "input_json_delta",
+						"partial_json": tc.Function.Arguments,
+					},
+				}
+				inputDeltaData, _ := json.Marshal(inputDelta)
+				anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(inputDeltaData)))
+			}
 		}
 	}
+
+	// Ensure we have a stop_reason
+	if stopReasonStr == "" {
+		stopReasonStr = "end_turn"
+	}
+
+	// content_block_stop event
+	contentBlockStop := map[string]any{
+		"type":  "content_block_stop",
+		"index": 0,
+	}
+	stopData, _ := json.Marshal(contentBlockStop)
+	anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(stopData)))
+
+	// message_delta event with stop_reason
+	messageDelta := map[string]any{
+		"type": "message_delta",
+		"delta": map[string]any{
+			"stop_reason":   stopReasonStr,
+			"stop_sequence": nil,
+		},
+		"usage": map[string]int{
+			"output_tokens": outputTokens,
+		},
+	}
+	deltaData, _ := json.Marshal(messageDelta)
+	anthropicLines = append(anthropicLines, fmt.Sprintf("event: message_delta\ndata: %s", string(deltaData)))
+
+	// message_stop event
+	messageStop := map[string]any{
+		"type": "message_stop",
+	}
+	stopEventData, _ := json.Marshal(messageStop)
+	anthropicLines = append(anthropicLines, fmt.Sprintf("event: message_stop\ndata: %s", string(stopEventData)))
 
 	result := strings.Join(anthropicLines, "\n")
 	return []byte(result), nil
@@ -656,10 +1016,167 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 			return
 		}
 		respBody = convertedBody
-		// Set Anthropic SSE content type
-		c.Header("Content-Type", "text/event-stream")
+		// Set content type based on stream mode
+		if isStream {
+			c.Header("Content-Type", "text/event-stream")
+		}
 	}
 
 	// Return response
 	c.Data(resp.StatusCode, "application/json", respBody)
+}
+
+// CountTokensAnthropic handles Anthropic /v1/messages/count_tokens requests
+// Reference: https://docs.anthropic.com/en/api/messages#count-tokens
+// This endpoint validates auth and model permissions but does NOT deduct quota
+func CountTokensAnthropic(c *gin.Context) {
+	ctx := c.Request.Context()
+	requestId := c.GetString(helper.RequestIdKey)
+
+	// Read request body
+	requestBody, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": helper.MessageWithRequestId("Failed to read request body", requestId),
+			},
+		})
+		return
+	}
+
+	// Parse request - use map to handle flexible body structure
+	var reqBody map[string]any
+	if err := json.Unmarshal(requestBody, &reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": helper.MessageWithRequestId(fmt.Sprintf("Failed to parse request: %s", err.Error()), requestId),
+			},
+		})
+		return
+	}
+
+	// Get model from request
+	modelName, _ := reqBody["model"].(string)
+
+	// Validate model permission (TokenAuth middleware already set available models in context)
+	availableModels := c.GetString(ctxkey.AvailableModels)
+	if availableModels != "" && modelName != "" {
+		// Check if model is in allowed list
+		allowedModels := strings.Split(availableModels, ",")
+		found := false
+		for _, m := range allowedModels {
+			if strings.TrimSpace(m) == modelName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": gin.H{
+					"type":    "forbidden",
+					"message": helper.MessageWithRequestId(fmt.Sprintf("Token not allowed to use model: %s", modelName), requestId),
+				},
+			})
+			return
+		}
+	}
+
+	// Get user info for logging
+	userId := c.GetInt(ctxkey.Id)
+	tokenName := c.GetString(ctxkey.TokenName)
+
+	// Calculate input tokens (approximate counting)
+	inputTokens := countAnthropicInputTokens(requestBody)
+
+	// Log the request (but no quota consumption)
+	logger.Infof(ctx, "count_tokens: model=%s tokens=%d user=%d token=%s",
+		modelName, inputTokens, userId, tokenName)
+
+	// Return response - Anthropic format
+	c.JSON(http.StatusOK, gin.H{
+		"input_tokens": inputTokens,
+	})
+}
+
+// countAnthropicInputTokens calculates approximate token count for Anthropic request
+func countAnthropicInputTokens(body []byte) int {
+	// Simple approximation: count tokens by characters / 4
+	// For accurate counting, would need proper tokenizer
+	// Claude uses ~4 chars per token on average
+	text := string(body)
+	// Remove JSON structure overhead for more accurate count
+	var raw map[string]any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return len(text) / 4
+	}
+
+	// Count characters in key fields
+	tokenCount := 0
+
+	// Count model name
+	if model, ok := raw["model"].(string); ok {
+		tokenCount += len(model) / 4
+	}
+
+	// Count system prompt
+	if system, ok := raw["system"]; ok {
+		switch s := system.(type) {
+		case string:
+			tokenCount += len(s) / 4
+		case []any:
+			for _, item := range s {
+				if m, ok := item.(map[string]any); ok {
+					if text, ok := m["text"].(string); ok {
+						tokenCount += len(text) / 4
+					}
+				}
+			}
+		}
+	}
+
+	// Count messages
+	if messages, ok := raw["messages"].([]any); ok {
+		for _, msg := range messages {
+			if m, ok := msg.(map[string]any); ok {
+				// Count role
+				if role, ok := m["role"].(string); ok {
+					tokenCount += len(role) / 4
+				}
+				// Count content
+				if content, ok := m["content"]; ok {
+					switch c := content.(type) {
+					case string:
+						tokenCount += len(c) / 4
+					case []any:
+						for _, item := range c {
+							if itemMap, ok := item.(map[string]any); ok {
+								if text, ok := itemMap["text"].(string); ok {
+									tokenCount += len(text) / 4
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Add overhead for JSON structure (~10 tokens per message + system)
+	numMessages := 0
+	if messages, ok := raw["messages"].([]any); ok {
+		numMessages = len(messages)
+	}
+	tokenCount += numMessages * 10
+	if _, ok := raw["system"]; ok {
+		tokenCount += 10
+	}
+
+	// Minimum 1 token
+	if tokenCount < 1 {
+		tokenCount = 1
+	}
+
+	return tokenCount
 }
