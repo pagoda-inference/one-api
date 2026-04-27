@@ -45,6 +45,14 @@ func SetRelayRouter(router *gin.Engine) {
 		// Anthropic API endpoints - passthrough mode
 		relayV1Router.POST("/messages", controller.RelayAnthropicPassthrough)
 
+		// Claude Code dedicated Anthropic-compatible gateway
+		anthropicRouter := router.Group("/anthropic")
+		anthropicRouter.Use(middleware.RelayPanicRecover())
+		{
+			anthropicRouter.POST("/v1/messages", controller.RelayAnthropicPassthrough)
+			anthropicRouter.POST("/v1/messages/count_tokens", controller.CountTokensAnthropic)
+		}
+
 		// Batch API endpoints
 		relayV1Router.POST("/files", controller.UploadFile)
 		relayV1Router.GET("/files", controller.ListFiles)
