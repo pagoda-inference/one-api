@@ -18,4 +18,4 @@ temp
 .vite/
 web/dist/
 web/tsconfig.node.tsbuildinfo
-web/tsconfig.tsbuildinfo
+web/tsconfig.tsbuildinfodeploy/k8s/bedicloud.net.*
