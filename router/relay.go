@@ -47,7 +47,15 @@ func SetRelayRouter(router *gin.Engine) {
 
 		// Claude Code dedicated Anthropic-compatible gateway
 		anthropicRouter := router.Group("/anthropic")
-		anthropicRouter.Use(middleware.RelayPanicRecover(), middleware.Distribute())
+		anthropicRouter.Use(
+			middleware.RelayPanicRecover(),
+			middleware.QueueMiddleware(),
+			middleware.TokenAuth(),
+			middleware.TokenRateLimitMiddleware(),
+			middleware.TenantRateLimitMiddleware(),
+			middleware.ModelRateLimitMiddleware(),
+			middleware.Distribute(),
+		)
 		{
 			anthropicRouter.POST("/v1/messages", controller.RelayAnthropicPassthrough)
 			anthropicRouter.POST("/v1/messages/count_tokens", controller.CountTokensAnthropic)
