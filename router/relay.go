@@ -44,6 +44,8 @@ func SetRelayRouter(router *gin.Engine) {
 
 		// Anthropic API endpoints - passthrough mode
 		relayV1Router.POST("/messages", controller.RelayAnthropicPassthrough)
+		// Backward-compatible token count endpoint (kept for existing clients)
+		relayV1Router.POST("/messages/count_tokens", controller.CountTokensAnthropic)
 
 		// Claude Code dedicated Anthropic-compatible gateway
 		anthropicRouter := router.Group("/anthropic")
