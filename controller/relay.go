@@ -291,11 +291,26 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 		openaiReq.ToolChoice = convertAnthropicToolChoice(req.ToolChoice)
 	}
 
-	// Handle thinking budget (some backends support this via custom fields)
-	if req.Thinking != nil && req.Thinking.BudgetTokens > 0 {
-		openaiReq.ExtraFields = map[string]any{
-			"thinking_budget_tokens": req.Thinking.BudgetTokens,
+	// Preserve explicit thinking intent with higher priority than backend defaults.
+	// This allows client-side toggles (e.g. VS Code) to override model default settings.
+	if req.Thinking != nil {
+		if openaiReq.ExtraFields == nil {
+			openaiReq.ExtraFields = make(map[string]any)
 		}
+		thinkingType := strings.TrimSpace(strings.ToLower(req.Thinking.Type))
+		thinkingEnabled := thinkingType == "" || thinkingType == "enabled" || thinkingType == "thinking"
+		openaiReq.ExtraFields["enable_thinking"] = thinkingEnabled
+		if req.Thinking.BudgetTokens > 0 {
+			openaiReq.ExtraFields["thinking_budget_tokens"] = req.Thinking.BudgetTokens
+		}
+		thinkingPayload := map[string]any{
+			"type":          "enabled",
+			"budget_tokens": req.Thinking.BudgetTokens,
+		}
+		if !thinkingEnabled {
+			thinkingPayload["type"] = "disabled"
+		}
+		openaiReq.ExtraFields["thinking"] = thinkingPayload
 	}
 
 	// Preserve any extra fields from original request
