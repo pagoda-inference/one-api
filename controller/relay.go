@@ -143,6 +143,29 @@ func parseAnthropicContent(content any) []AnthropicContent {
 				if text, ok := m["text"].(string); ok {
 					c.Text = text
 				}
+				// Anthropic tool_result uses `content`, not `text`.
+				// Preserve textual content for conversion into OpenAI tool message.
+				if c.Type == "tool_result" && c.Text == "" {
+					switch v := m["content"].(type) {
+					case string:
+						c.Text = v
+					case []any:
+						var sb strings.Builder
+						for _, item := range v {
+							itemMap, ok := item.(map[string]any)
+							if !ok {
+								continue
+							}
+							if t, ok := itemMap["text"].(string); ok && t != "" {
+								if sb.Len() > 0 {
+									sb.WriteString("\n")
+								}
+								sb.WriteString(t)
+							}
+						}
+						c.Text = sb.String()
+					}
+				}
 				if toolUseId, ok := m["tool_use_id"].(string); ok {
 					c.ToolUseId = toolUseId
 				}
@@ -494,6 +517,8 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 	nextIndex := 0
 	toolIndexByKey := make(map[string]int)
 	toolOrder := make([]string, 0)
+	toolNameByKey := make(map[string]string)
+	pendingToolArgsByKey := make(map[string]string)
 
 	appendMessageStart := func() {
 		if messageStarted {
@@ -571,12 +596,16 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		nextIndex++
 		toolIndexByKey[key] = idx
 		toolOrder = append(toolOrder, key)
+		toolID := tcId
+		if toolID == "" {
+			toolID = fmt.Sprintf("toolu_%s", key)
+		}
 		toolBlockStart := map[string]any{
 			"type":  "content_block_start",
 			"index": idx,
 			"content_block": map[string]any{
 				"type":  "tool_use",
-				"id":    tcId,
+				"id":    toolID,
 				"name":  name,
 				"input": map[string]any{},
 			},
@@ -700,19 +729,36 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 
 		for _, tc := range delta.ToolCalls {
 			appendMessageStart()
-			toolIndex := startToolBlock(tc.ID, tc.Index, tc.Function.Name)
-
+			key := tc.ID
+			if key == "" {
+				key = fmt.Sprintf("tool_%d", tc.Index)
+			}
+			if tc.Function.Name != "" {
+				toolNameByKey[key] = tc.Function.Name
+			}
 			if tc.Function.Arguments != "" {
+				pendingToolArgsByKey[key] += tc.Function.Arguments
+			}
+			toolName := toolNameByKey[key]
+			// Some upstreams stream arguments before function.name.
+			// Do not emit tool_use block with empty name.
+			if toolName == "" {
+				continue
+			}
+			toolIndex := startToolBlock(tc.ID, tc.Index, toolName)
+
+			if pending := pendingToolArgsByKey[key]; pending != "" {
 				inputDelta := map[string]any{
 					"type":  "content_block_delta",
 					"index": toolIndex,
 					"delta": map[string]string{
 						"type":         "input_json_delta",
-						"partial_json": tc.Function.Arguments,
+						"partial_json": pending,
 					},
 				}
 				inputDeltaData, _ := json.Marshal(inputDelta)
 				anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(inputDeltaData)))
+				pendingToolArgsByKey[key] = ""
 			}
 		}
 	}
