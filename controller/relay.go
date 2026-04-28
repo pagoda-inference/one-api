@@ -379,6 +379,8 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 			Message struct {
 				Content          string `json:"content"`
 				ReasoningContent string `json:"reasoning_content"`
+				Reasoning        string `json:"reasoning"`
+				Thinking         string `json:"thinking"`
 				ToolCalls        []struct {
 					ID       string `json:"id"`
 					Type     string `json:"type"`
@@ -416,10 +418,17 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 	var contentBlocks []map[string]any
 	if len(openaiResp.Choices) > 0 {
 		msg := openaiResp.Choices[0].Message
-		if msg.ReasoningContent != "" {
+		thinkingText := msg.ReasoningContent
+		if thinkingText == "" {
+			thinkingText = msg.Reasoning
+		}
+		if thinkingText == "" {
+			thinkingText = msg.Thinking
+		}
+		if thinkingText != "" {
 			contentBlocks = append(contentBlocks, map[string]any{
 				"type":      "thinking",
-				"thinking":  msg.ReasoningContent,
+				"thinking":  thinkingText,
 				"signature": "",
 			})
 		}
@@ -480,8 +489,11 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 	var stopReasonStr string
 	var inputTokens, outputTokens int
 	messageStarted := false
-	thinkingStarted := false
-	textStarted := false
+	thinkingIndex := -1
+	textIndex := -1
+	nextIndex := 0
+	toolIndexByKey := make(map[string]int)
+	toolOrder := make([]string, 0)
 
 	appendMessageStart := func() {
 		if messageStarted {
@@ -508,6 +520,72 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		anthropicLines = append(anthropicLines, fmt.Sprintf("event: message_start\ndata: %s", string(startData)))
 	}
 
+	startTextBlock := func() int {
+		if textIndex >= 0 {
+			return textIndex
+		}
+		textIndex = nextIndex
+		nextIndex++
+		textBlockStart := map[string]any{
+			"type":  "content_block_start",
+			"index": textIndex,
+			"content_block": map[string]any{
+				"type": "text",
+				"text": "",
+			},
+		}
+		textBlockStartData, _ := json.Marshal(textBlockStart)
+		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(textBlockStartData)))
+		return textIndex
+	}
+
+	startThinkingBlock := func() int {
+		if thinkingIndex >= 0 {
+			return thinkingIndex
+		}
+		thinkingIndex = nextIndex
+		nextIndex++
+		thinkingBlockStart := map[string]any{
+			"type":  "content_block_start",
+			"index": thinkingIndex,
+			"content_block": map[string]any{
+				"type":      "thinking",
+				"thinking":  "",
+				"signature": "",
+			},
+		}
+		thinkingBlockStartData, _ := json.Marshal(thinkingBlockStart)
+		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(thinkingBlockStartData)))
+		return thinkingIndex
+	}
+
+	startToolBlock := func(tcId string, fallbackIdx int, name string) int {
+		key := tcId
+		if key == "" {
+			key = fmt.Sprintf("tool_%d", fallbackIdx)
+		}
+		if idx, ok := toolIndexByKey[key]; ok {
+			return idx
+		}
+		idx := nextIndex
+		nextIndex++
+		toolIndexByKey[key] = idx
+		toolOrder = append(toolOrder, key)
+		toolBlockStart := map[string]any{
+			"type":  "content_block_start",
+			"index": idx,
+			"content_block": map[string]any{
+				"type":  "tool_use",
+				"id":    tcId,
+				"name":  name,
+				"input": map[string]any{},
+			},
+		}
+		toolBlockData, _ := json.Marshal(toolBlockStart)
+		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(toolBlockData)))
+		return idx
+	}
+
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "data: ") {
 			continue
@@ -524,6 +602,8 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 				Delta struct {
 					Content          string `json:"content"`
 					ReasoningContent string `json:"reasoning_content"`
+					Reasoning        string `json:"reasoning"`
+					Thinking         string `json:"thinking"`
 					ToolCalls        []struct {
 						Index    int    `json:"index"`
 						Type     string `json:"type"`
@@ -562,6 +642,12 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		delta := chunk.Choices[0].Delta
 		content := delta.Content
 		reasoningContent := delta.ReasoningContent
+		if reasoningContent == "" {
+			reasoningContent = delta.Reasoning
+		}
+		if reasoningContent == "" {
+			reasoningContent = delta.Thinking
+		}
 		finishReason := chunk.Choices[0].FinishReason
 
 		if chunk.Usage != nil {
@@ -584,23 +670,10 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 
 		if reasoningContent != "" {
 			appendMessageStart()
-			if !thinkingStarted {
-				thinkingStarted = true
-				thinkingBlockStart := map[string]any{
-					"type":  "content_block_start",
-					"index": 0,
-					"content_block": map[string]any{
-						"type":      "thinking",
-						"thinking":  "",
-						"signature": "",
-					},
-				}
-				thinkingBlockStartData, _ := json.Marshal(thinkingBlockStart)
-				anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(thinkingBlockStartData)))
-			}
+			idx := startThinkingBlock()
 			thinkingDelta := map[string]any{
 				"type":  "content_block_delta",
-				"index": 0,
+				"index": idx,
 				"delta": map[string]string{
 					"type":     "thinking_delta",
 					"thinking": reasoningContent,
@@ -612,23 +685,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 
 		if content != "" {
 			appendMessageStart()
-			textBlockIndex := 0
-			if thinkingStarted {
-				textBlockIndex = 1
-			}
-			if !textStarted {
-				textStarted = true
-				textBlockStart := map[string]any{
-					"type":  "content_block_start",
-					"index": textBlockIndex,
-					"content_block": map[string]any{
-						"type": "text",
-						"text": "",
-					},
-				}
-				textBlockStartData, _ := json.Marshal(textBlockStart)
-				anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(textBlockStartData)))
-			}
+			textBlockIndex := startTextBlock()
 			contentDelta := map[string]any{
 				"type":  "content_block_delta",
 				"index": textBlockIndex,
@@ -643,22 +700,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 
 		for _, tc := range delta.ToolCalls {
 			appendMessageStart()
-			toolIndex := tc.Index
-			if thinkingStarted {
-				toolIndex++
-			}
-			toolBlockStart := map[string]any{
-				"type":  "content_block_start",
-				"index": toolIndex,
-				"content_block": map[string]any{
-					"type":  "tool_use",
-					"id":    tc.ID,
-					"name":  tc.Function.Name,
-					"input": map[string]any{},
-				},
-			}
-			toolBlockData, _ := json.Marshal(toolBlockStart)
-			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(toolBlockData)))
+			toolIndex := startToolBlock(tc.ID, tc.Index, tc.Function.Name)
 
 			if tc.Function.Arguments != "" {
 				inputDelta := map[string]any{
@@ -680,19 +722,21 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 	}
 
 	appendMessageStart()
-	if thinkingStarted {
-		thinkingBlockStop := map[string]any{"type": "content_block_stop", "index": 0}
+	if thinkingIndex >= 0 {
+		thinkingBlockStop := map[string]any{"type": "content_block_stop", "index": thinkingIndex}
 		thinkingStopData, _ := json.Marshal(thinkingBlockStop)
 		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(thinkingStopData)))
 	}
-	if textStarted {
-		textBlockIndex := 0
-		if thinkingStarted {
-			textBlockIndex = 1
-		}
-		textBlockStop := map[string]any{"type": "content_block_stop", "index": textBlockIndex}
+	if textIndex >= 0 {
+		textBlockStop := map[string]any{"type": "content_block_stop", "index": textIndex}
 		textStopData, _ := json.Marshal(textBlockStop)
 		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(textStopData)))
+	}
+	for _, key := range toolOrder {
+		idx := toolIndexByKey[key]
+		toolBlockStop := map[string]any{"type": "content_block_stop", "index": idx}
+		toolStopData, _ := json.Marshal(toolBlockStop)
+		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(toolStopData)))
 	}
 
 	messageDelta := map[string]any{
