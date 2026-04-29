@@ -102,6 +102,63 @@ type SystemBlock struct {
 	Text string `json:"text"`
 }
 
+var hopByHopResponseHeaders = map[string]struct{}{
+	"connection":          {},
+	"keep-alive":          {},
+	"proxy-authenticate":  {},
+	"proxy-authorization": {},
+	"te":                  {},
+	"trailer":             {},
+	"transfer-encoding":   {},
+	"upgrade":             {},
+	"proxy-connection":    {},
+	"content-length":      {},
+}
+
+func copySafeResponseHeaders(c *gin.Context, src http.Header) {
+	for k, vv := range src {
+		lk := strings.ToLower(strings.TrimSpace(k))
+		if _, skip := hopByHopResponseHeaders[lk]; skip {
+			continue
+		}
+		for _, v := range vv {
+			c.Writer.Header().Add(k, v)
+		}
+	}
+}
+
+func stringifyToolArguments(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	default:
+		b, err := json.Marshal(x)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
+}
+
+func mergeToolArguments(existing string, incoming any) string {
+	switch x := incoming.(type) {
+	case nil:
+		return existing
+	case string:
+		// Streaming OpenAI-compatible backends usually send JSON fragments as strings.
+		return existing + x
+	default:
+		// If backend sends object/array directly, treat it as the full argument payload.
+		b, err := json.Marshal(x)
+		if err != nil {
+			return existing
+		}
+		return string(b)
+	}
+}
+
 type AnthropicMessage struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"` // string or []AnthropicContent
@@ -254,6 +311,14 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 			}
 
 			if c.Type == "tool_result" {
+				if c.ToolUseId == "" {
+					// Invalid tool_result block (missing tool_use_id) should not produce
+					// malformed OpenAI tool messages; keep as plain user text fallback.
+					if c.Text != "" {
+						contentList = append(contentList, map[string]string{"type": "text", "text": c.Text})
+					}
+					continue
+				}
 				toolMessages = append(toolMessages, model.Message{
 					Role:       "tool",
 					ToolCallId: c.ToolUseId,
@@ -377,7 +442,12 @@ func convertAnthropicToolChoice(toolChoice any) any {
 	case map[string]any:
 		if toolType, ok := tc["type"].(string); ok && toolType == "tool" {
 			if name, ok := tc["name"].(string); ok {
-				return map[string]string{"type": "function", "function": name}
+				return map[string]any{
+					"type": "function",
+					"function": map[string]any{
+						"name": name,
+					},
+				}
 			}
 		}
 	}
@@ -409,7 +479,7 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 					Type     string `json:"type"`
 					Function struct {
 						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
+						Arguments any    `json:"arguments"`
 					} `json:"function"`
 				} `json:"tool_calls"`
 			} `json:"message"`
@@ -463,8 +533,9 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 		}
 		for _, tc := range msg.ToolCalls {
 			var toolInput any
-			if tc.Function.Arguments != "" {
-				_ = json.Unmarshal([]byte(tc.Function.Arguments), &toolInput)
+			argsText := stringifyToolArguments(tc.Function.Arguments)
+			if argsText != "" {
+				_ = json.Unmarshal([]byte(argsText), &toolInput)
 			}
 			toolUseId := tc.ID
 			if toolUseId == "" {
@@ -639,7 +710,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 						ID       string `json:"id"`
 						Function struct {
 							Name      string `json:"name"`
-							Arguments string `json:"arguments"`
+							Arguments any    `json:"arguments"`
 						} `json:"function"`
 					} `json:"tool_calls"`
 				} `json:"delta"`
@@ -736,9 +807,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			if tc.Function.Name != "" {
 				toolNameByKey[key] = tc.Function.Name
 			}
-			if tc.Function.Arguments != "" {
-				pendingToolArgsByKey[key] += tc.Function.Arguments
-			}
+			pendingToolArgsByKey[key] = mergeToolArguments(pendingToolArgsByKey[key], tc.Function.Arguments)
 			toolName := toolNameByKey[key]
 			// Some upstreams stream arguments before function.name.
 			// Do not emit tool_use block with empty name.
@@ -1115,12 +1184,9 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	// Record success
 	monitor.RecordChannelSuccess(channelId)
 
-	// Copy response headers
-	for k, vv := range resp.Header {
-		for _, v := range vv {
-			c.Header(k, v)
-		}
-	}
+	// Copy response headers with gateway-safe filtering.
+	// We rewrite body in some branches, so hop-by-hop and length headers must be regenerated.
+	copySafeResponseHeaders(c, resp.Header)
 
 	// Track response content-type for final writeback.
 	responseContentType := resp.Header.Get("Content-Type")
@@ -1173,6 +1239,10 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	}
 
 	// Return response
+	c.Writer.Header().Del("Content-Length")
+	c.Writer.Header().Del("Transfer-Encoding")
+	c.Writer.Header().Del("Connection")
+	c.Writer.Header().Set("Content-Type", responseContentType)
 	c.Data(resp.StatusCode, responseContentType, respBody)
 }
 
