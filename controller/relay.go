@@ -84,6 +84,7 @@ type AnthropicStreamOptions struct {
 type AnthropicThinking struct {
 	Type         string `json:"type,omitempty"`
 	BudgetTokens int    `json:"budget_tokens,omitempty"`
+	Display      string `json:"display,omitempty"` // "summarized" | "omitted"
 }
 
 type AnthropicTool struct {
@@ -159,6 +160,25 @@ func mergeToolArguments(existing string, incoming any) string {
 	}
 }
 
+func mapFinishReasonToAnthropic(reason string) string {
+	switch reason {
+	case "stop":
+		return "end_turn"
+	case "length":
+		return "max_tokens"
+	case "tool_calls":
+		return "tool_use"
+	case "stop_sequence":
+		return "stop_sequence"
+	case "pause_turn":
+		return "pause_turn"
+	case "refusal":
+		return "refusal"
+	default:
+		return "end_turn"
+	}
+}
+
 type AnthropicMessage struct {
 	Role    string `json:"role"`
 	Content any    `json:"content"` // string or []AnthropicContent
@@ -202,7 +222,7 @@ func parseAnthropicContent(content any) []AnthropicContent {
 				}
 				// Anthropic tool_result uses `content`, not `text`.
 				// Preserve textual content for conversion into OpenAI tool message.
-				if c.Type == "tool_result" && c.Text == "" {
+				if strings.HasSuffix(c.Type, "_tool_result") && c.Text == "" {
 					switch v := m["content"].(type) {
 					case string:
 						c.Text = v
@@ -310,7 +330,7 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 				continue
 			}
 
-			if c.Type == "tool_result" {
+			if strings.HasSuffix(c.Type, "_tool_result") {
 				if c.ToolUseId == "" {
 					// Invalid tool_result block (missing tool_use_id) should not produce
 					// malformed OpenAI tool messages; keep as plain user text fallback.
@@ -395,6 +415,9 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 			"type":          "enabled",
 			"budget_tokens": req.Thinking.BudgetTokens,
 		}
+		if req.Thinking.Display != "" {
+			thinkingPayload["display"] = req.Thinking.Display
+		}
 		if !thinkingEnabled {
 			thinkingPayload["type"] = "disabled"
 		}
@@ -474,6 +497,7 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 				ReasoningContent string `json:"reasoning_content"`
 				Reasoning        string `json:"reasoning"`
 				Thinking         string `json:"thinking"`
+				RedactedThinking string `json:"redacted_thinking"`
 				ToolCalls        []struct {
 					ID       string `json:"id"`
 					Type     string `json:"type"`
@@ -498,14 +522,7 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 
 	stopReason := "end_turn"
 	if len(openaiResp.Choices) > 0 {
-		switch openaiResp.Choices[0].FinishReason {
-		case "stop":
-			stopReason = "end_turn"
-		case "length":
-			stopReason = "max_tokens"
-		case "tool_calls":
-			stopReason = "tool_use"
-		}
+		stopReason = mapFinishReasonToAnthropic(openaiResp.Choices[0].FinishReason)
 	}
 
 	var contentBlocks []map[string]any
@@ -517,6 +534,9 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 		}
 		if thinkingText == "" {
 			thinkingText = msg.Thinking
+		}
+		if thinkingText == "" {
+			thinkingText = msg.RedactedThinking
 		}
 		if thinkingText != "" {
 			contentBlocks = append(contentBlocks, map[string]any{
@@ -541,8 +561,12 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 			if toolUseId == "" {
 				toolUseId = fmt.Sprintf("toolu_%d", len(contentBlocks))
 			}
+			toolUseType := "tool_use"
+			if strings.TrimSpace(tc.Type) == "server_tool_use" {
+				toolUseType = "server_tool_use"
+			}
 			contentBlocks = append(contentBlocks, map[string]any{
-				"type":  "tool_use",
+				"type":  toolUseType,
 				"id":    toolUseId,
 				"name":  tc.Function.Name,
 				"input": toolInput,
@@ -584,6 +608,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 	var inputTokens, outputTokens int
 	messageStarted := false
 	thinkingIndex := -1
+	redactedThinkingIndex := -1
 	textIndex := -1
 	nextIndex := 0
 	toolIndexByKey := make(map[string]int)
@@ -655,7 +680,26 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		return thinkingIndex
 	}
 
-	startToolBlock := func(tcId string, fallbackIdx int, name string) int {
+	startRedactedThinkingBlock := func() int {
+		if redactedThinkingIndex >= 0 {
+			return redactedThinkingIndex
+		}
+		redactedThinkingIndex = nextIndex
+		nextIndex++
+		blockStart := map[string]any{
+			"type":  "content_block_start",
+			"index": redactedThinkingIndex,
+			"content_block": map[string]any{
+				"type": "redacted_thinking",
+				"data": "",
+			},
+		}
+		blockStartData, _ := json.Marshal(blockStart)
+		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(blockStartData)))
+		return redactedThinkingIndex
+	}
+
+	startToolBlock := func(tcId string, fallbackIdx int, name string, blockType string) int {
 		key := tcId
 		if key == "" {
 			key = fmt.Sprintf("tool_%d", fallbackIdx)
@@ -675,7 +719,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			"type":  "content_block_start",
 			"index": idx,
 			"content_block": map[string]any{
-				"type":  "tool_use",
+				"type":  blockType,
 				"id":    toolID,
 				"name":  name,
 				"input": map[string]any{},
@@ -704,6 +748,9 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 					ReasoningContent string `json:"reasoning_content"`
 					Reasoning        string `json:"reasoning"`
 					Thinking         string `json:"thinking"`
+					RedactedThinking string `json:"redacted_thinking"`
+					Signature        string `json:"signature"`
+					Citation         any    `json:"citation"`
 					ToolCalls        []struct {
 						Index    int    `json:"index"`
 						Type     string `json:"type"`
@@ -742,6 +789,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		delta := chunk.Choices[0].Delta
 		content := delta.Content
 		reasoningContent := delta.ReasoningContent
+		redactedThinking := delta.RedactedThinking
 		if reasoningContent == "" {
 			reasoningContent = delta.Reasoning
 		}
@@ -756,16 +804,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		}
 
 		if finishReason != "" && finishReason != "null" {
-			switch finishReason {
-			case "stop":
-				stopReasonStr = "end_turn"
-			case "length":
-				stopReasonStr = "max_tokens"
-			case "tool_calls":
-				stopReasonStr = "tool_use"
-			default:
-				stopReasonStr = "end_turn"
-			}
+			stopReasonStr = mapFinishReasonToAnthropic(finishReason)
 		}
 
 		if reasoningContent != "" {
@@ -781,6 +820,32 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			}
 			thinkingDeltaData, _ := json.Marshal(thinkingDelta)
 			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(thinkingDeltaData)))
+			if delta.Signature != "" {
+				signatureDelta := map[string]any{
+					"type":  "content_block_delta",
+					"index": idx,
+					"delta": map[string]string{
+						"type":      "signature_delta",
+						"signature": delta.Signature,
+					},
+				}
+				signatureDeltaData, _ := json.Marshal(signatureDelta)
+				anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(signatureDeltaData)))
+			}
+		}
+		if redactedThinking != "" {
+			appendMessageStart()
+			idx := startRedactedThinkingBlock()
+			redactedDelta := map[string]any{
+				"type":  "content_block_delta",
+				"index": idx,
+				"delta": map[string]string{
+					"type": "text_delta",
+					"text": redactedThinking,
+				},
+			}
+			redactedDeltaData, _ := json.Marshal(redactedDelta)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(redactedDeltaData)))
 		}
 
 		if content != "" {
@@ -796,6 +861,20 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			}
 			deltaData, _ := json.Marshal(contentDelta)
 			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(deltaData)))
+		}
+		if delta.Citation != nil {
+			appendMessageStart()
+			textBlockIndex := startTextBlock()
+			citationDelta := map[string]any{
+				"type":  "content_block_delta",
+				"index": textBlockIndex,
+				"delta": map[string]any{
+					"type":     "citations_delta",
+					"citation": delta.Citation,
+				},
+			}
+			citationDeltaData, _ := json.Marshal(citationDelta)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(citationDeltaData)))
 		}
 
 		for _, tc := range delta.ToolCalls {
@@ -814,7 +893,11 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			if toolName == "" {
 				continue
 			}
-			toolIndex := startToolBlock(tc.ID, tc.Index, toolName)
+			toolBlockType := "tool_use"
+			if strings.TrimSpace(tc.Type) == "server_tool_use" {
+				toolBlockType = "server_tool_use"
+			}
+			toolIndex := startToolBlock(tc.ID, tc.Index, toolName, toolBlockType)
 
 			if pending := pendingToolArgsByKey[key]; pending != "" {
 				inputDelta := map[string]any{
@@ -841,6 +924,11 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		thinkingBlockStop := map[string]any{"type": "content_block_stop", "index": thinkingIndex}
 		thinkingStopData, _ := json.Marshal(thinkingBlockStop)
 		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(thinkingStopData)))
+	}
+	if redactedThinkingIndex >= 0 {
+		redactedBlockStop := map[string]any{"type": "content_block_stop", "index": redactedThinkingIndex}
+		redactedStopData, _ := json.Marshal(redactedBlockStop)
+		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(redactedStopData)))
 	}
 	if textIndex >= 0 {
 		textBlockStop := map[string]any{"type": "content_block_stop", "index": textIndex}
