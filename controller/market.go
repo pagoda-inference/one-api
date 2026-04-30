@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
+	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
 )
 
@@ -167,15 +168,15 @@ func GetMarketStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"total_models":      len(visibleModels),
-			"total_providers":   len(providerSet),
-			"total_groups":      len(providerSet),
-			"chat_models":       chatModels,
-			"embedding_models":   embeddingModels,
-			"image_models":      imageModels,
-			"trial_models":      trialModels,
-			"avg_input_price":   0,
-			"avg_output_price":  0,
+			"total_models":     len(visibleModels),
+			"total_providers":  len(providerSet),
+			"total_groups":     len(providerSet),
+			"chat_models":      chatModels,
+			"embedding_models": embeddingModels,
+			"image_models":     imageModels,
+			"trial_models":     trialModels,
+			"avg_input_price":  0,
+			"avg_output_price": 0,
 		},
 	})
 }
@@ -208,13 +209,13 @@ func CalculatePrice(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"model_id":         m.Id,
-			"model_name":       m.Name,
+			"model_id":          m.Id,
+			"model_name":        m.Name,
 			"prompt_tokens":     promptTokens,
 			"completion_tokens": completionTokens,
-			"input_price":      m.InputPrice,
-			"output_price":     m.OutputPrice,
-			"quota_cost":       quota,
+			"input_price":       m.InputPrice,
+			"output_price":      m.OutputPrice,
+			"quota_cost":        quota,
 		},
 	})
 }
@@ -253,20 +254,39 @@ func GetMarketGroups(c *gin.Context) {
 		return
 	}
 
-	// Build response with model count per provider
-	data := make([]gin.H, len(providers))
-	for i, p := range providers {
-		var modelCount int64
-		model.DB.Model(&model.ModelInfo{}).
+	userId := c.GetInt(ctxkey.Id)
+	tenantIds, _ := model.GetUserTenantIds(userId)
+
+	// Build response with model count per provider (filtered by user visibility)
+	data := make([]gin.H, 0)
+	for _, p := range providers {
+		var models []*model.ModelInfo
+		err := model.DB.
 			Where("status = ? AND LOWER(provider) = ?", model.ModelStatusActive, strings.ToLower(p.Code)).
-			Count(&modelCount)
-		data[i] = gin.H{
-			"id":          p.Id,
-			"code":        p.Code,
-			"name":        p.Name,
-			"logo_url":    p.LogoUrl,
-			"description": p.Description,
-			"model_count": modelCount,
+			Find(&models).Error
+		if err != nil {
+			logger.SysErrorf("GetMarketGroups: failed to load models for provider=%s: %v", p.Code, err)
+			continue
+		}
+
+		// Count models visible to user
+		modelCount := 0
+		for _, m := range models {
+			if isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+				modelCount++
+			}
+		}
+
+		// Only include providers with visible models
+		if modelCount > 0 {
+			data = append(data, gin.H{
+				"id":          p.Id,
+				"code":        p.Code,
+				"name":        p.Name,
+				"logo_url":    p.LogoUrl,
+				"description": p.Description,
+				"model_count": modelCount,
+			})
 		}
 	}
 
@@ -338,10 +358,10 @@ func GetModelTrial(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"available":     true,
-			"model":          formatModelInfo(modelInfo),
-			"quota_used":     currentTrial.QuotaUsed,
-			"quota_limit":    modelInfo.TrialQuota,
+			"available":       true,
+			"model":           formatModelInfo(modelInfo),
+			"quota_used":      currentTrial.QuotaUsed,
+			"quota_limit":     modelInfo.TrialQuota,
 			"quota_remaining": modelInfo.TrialQuota - currentTrial.QuotaUsed,
 		},
 	})
@@ -390,7 +410,7 @@ func GetUserTrials(c *gin.Context) {
 	for i, t := range trials {
 		modelInfo, _ := model.GetModelById(t.ModelId)
 		data[i] = gin.H{
-			"trial":      t,
+			"trial":       t,
 			"model":       formatModelInfo(modelInfo),
 			"quota_used":  t.QuotaUsed,
 			"quota_limit": modelInfo.TrialQuota,
@@ -400,6 +420,146 @@ func GetUserTrials(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    data,
+	})
+}
+
+// GetPlaygroundModels handles GET /api/market/playground/models
+// Returns trial models with their playground configuration for ChatPlayground
+func GetPlaygroundModels(c *gin.Context) {
+	userId := c.GetInt(ctxkey.Id)
+	tenantIds, _ := model.GetUserTenantIds(userId)
+
+	models, err := model.GetTrialModels()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to get models: " + err.Error(),
+		})
+		return
+	}
+
+	// Filter by visibility and format response
+	data := make([]gin.H, 0)
+	for _, m := range models {
+		if !isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+			continue
+		}
+		isVL := m.PlaygroundEnableVL
+		if !isVL && strings.Contains(strings.ToLower(m.Capabilities), "vision") {
+			isVL = true
+		}
+		isReasoning := m.PlaygroundEnableReasoning
+		if !isReasoning && strings.Contains(strings.ToLower(m.Capabilities), "reasoning") {
+			isReasoning = true
+		}
+		data = append(data, gin.H{
+			"id":                        m.Id,
+			"name":                      m.Name,
+			"model_type":                m.ModelType,
+			"is_vl":                     isVL,
+			"is_reasoning":              isReasoning,
+			"max_tokens":                m.PlaygroundMaxTokens,
+			"temperature":               m.PlaygroundTemperature,
+			"min_p":                     m.PlaygroundMinP,
+			"top_p":                     m.PlaygroundTopP,
+			"top_k":                     m.PlaygroundTopK,
+			"frequency_penalty":         m.PlaygroundFrequencyPenalty,
+			"presence_penalty":          m.PlaygroundPresencePenalty,
+			"repetition_penalty":        m.PlaygroundRepetitionPenalty,
+			"system_prompt":             m.PlaygroundSystemPrompt,
+			"enable_thinking":           m.PlaygroundEnableThinking,
+			"thinking_budget":           m.PlaygroundThinkingBudget,
+			"enable_temperature":        m.PlaygroundEnableTemperature,
+			"enable_min_p":              m.PlaygroundEnableMinP,
+			"enable_top_p":              m.PlaygroundEnableTopP,
+			"enable_top_k":              m.PlaygroundEnableTopK,
+			"enable_frequency_penalty":  m.PlaygroundEnableFrequencyPenalty,
+			"enable_presence_penalty":   m.PlaygroundEnablePresencePenalty,
+			"enable_repetition_penalty": m.PlaygroundEnableRepetitionPenalty,
+			"enable_system_prompt":      m.PlaygroundEnableSystemPrompt,
+			"enable_thinking_budget":    m.PlaygroundEnableThinkingBudget,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    data,
+	})
+}
+
+// UpdatePlaygroundModel handles PUT /api/admin/market/playground/models/:id
+// Updates playground configuration for a model (admin only)
+func UpdatePlaygroundModel(c *gin.Context) {
+	modelId := strings.TrimPrefix(c.Param("id"), "/")
+
+	var req struct {
+		MaxTokens               int     `json:"max_tokens"`
+		Temperature             float64 `json:"temperature"`
+		MinP                    float64 `json:"min_p"`
+		TopP                    float64 `json:"top_p"`
+		TopK                    int     `json:"top_k"`
+		FrequencyPenalty        float64 `json:"frequency_penalty"`
+		PresencePenalty         float64 `json:"presence_penalty"`
+		RepetitionPenalty       float64 `json:"repetition_penalty"`
+		SystemPrompt            string  `json:"system_prompt"`
+		EnableThinking          bool    `json:"enable_thinking"`
+		ThinkingBudget          int     `json:"thinking_budget"`
+		EnableTemperature       bool    `json:"enable_temperature"`
+		EnableMinP              bool    `json:"enable_min_p"`
+		EnableTopP              bool    `json:"enable_top_p"`
+		EnableTopK              bool    `json:"enable_top_k"`
+		EnableFrequencyPenalty  bool    `json:"enable_frequency_penalty"`
+		EnablePresencePenalty   bool    `json:"enable_presence_penalty"`
+		EnableRepetitionPenalty bool    `json:"enable_repetition_penalty"`
+		EnableSystemPrompt      bool    `json:"enable_system_prompt"`
+		EnableVL                bool    `json:"is_vl"`
+		EnableReasoning         bool    `json:"is_reasoning"`
+		EnableThinkingBudget    bool    `json:"enable_thinking_budget"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid request",
+		})
+		return
+	}
+
+	if err := model.UpdatePlaygroundConfig(
+		modelId,
+		req.MaxTokens,
+		req.Temperature,
+		req.MinP,
+		req.TopP,
+		req.TopK,
+		req.FrequencyPenalty,
+		req.PresencePenalty,
+		req.RepetitionPenalty,
+		req.SystemPrompt,
+		req.EnableThinking,
+		req.ThinkingBudget,
+		req.EnableTemperature,
+		req.EnableMinP,
+		req.EnableTopP,
+		req.EnableTopK,
+		req.EnableFrequencyPenalty,
+		req.EnablePresencePenalty,
+		req.EnableRepetitionPenalty,
+		req.EnableSystemPrompt,
+		req.EnableVL,
+		req.EnableReasoning,
+		req.EnableThinkingBudget,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to update model",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Model updated successfully",
 	})
 }
 
@@ -462,10 +622,10 @@ func GetModelPricing(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"model_id":     modelId,
-			"input_price":   inputPrice,
-			"output_price":  outputPrice,
-			"default_input": modelInfo.InputPrice,
+			"model_id":       modelId,
+			"input_price":    inputPrice,
+			"output_price":   outputPrice,
+			"default_input":  modelInfo.InputPrice,
 			"default_output": modelInfo.OutputPrice,
 		},
 	})
@@ -507,7 +667,7 @@ func GetUserDashboardV2(c *gin.Context) {
 			"user": gin.H{
 				"id":           user.Id,
 				"username":     user.Username,
-				"email":       user.Email,
+				"email":        user.Email,
 				"quota":        user.Quota,
 				"display_name": user.DisplayName,
 			},
@@ -517,7 +677,7 @@ func GetUserDashboardV2(c *gin.Context) {
 				"total_providers": marketStats.TotalProviders,
 			},
 			"recent_tokens": tokens,
-			"recent_orders":  orders,
+			"recent_orders": orders,
 		},
 	})
 }

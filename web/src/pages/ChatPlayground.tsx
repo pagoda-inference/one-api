@@ -20,7 +20,35 @@ import {
   InboxOutlined,
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { uploadFile } from '../services/api'
+import { uploadFile, getPlaygroundModels } from '../services/api'
+
+interface PlaygroundModel {
+  id: string
+  name: string
+  model_type: string
+  is_vl: boolean
+  is_reasoning: boolean
+  max_tokens: number
+  temperature: number
+  min_p: number
+  top_p: number
+  top_k: number
+  frequency_penalty: number
+  presence_penalty: number
+  repetition_penalty: number
+  system_prompt: string
+  enable_thinking: boolean
+  thinking_budget: number
+  enable_temperature: boolean
+  enable_min_p: boolean
+  enable_top_p: boolean
+  enable_top_k: boolean
+  enable_frequency_penalty: boolean
+  enable_presence_penalty: boolean
+  enable_repetition_penalty: boolean
+  enable_system_prompt: boolean
+  enable_thinking_budget: boolean
+}
 
 const { TextArea } = Input
 
@@ -64,9 +92,11 @@ interface ChatParams {
   maxTokens: number
   temperature: number
   topP: number
+  minP: number
   topK: number
   frequencyPenalty: number
   presencePenalty: number
+  repetitionPenalty: number
   systemPrompt: string
   enableThinking: boolean
   thinkingBudget: number
@@ -128,61 +158,11 @@ const ParamControl: React.FC<ParamControlProps> = ({
   )
 }
 
-const trialModels = [
-  { value: 'bedi/qwen3-14b', label: 'Qwen3-14B', isVL: false, isReasoning: true },
-  { value: 'bedi/qwen3-32b', label: 'Qwen3-32B', isVL: false, isReasoning: true },
-  { value: 'bedi/qwen3-vl-8b', label: 'Qwen3-VL-8B', isVL: true, isReasoning: false },
-  { value: 'bedi/kimi-k2.6', label: 'Kimi-K2.6', isVL: true, isReasoning: true },
-]
-
-const modelCapabilities: Record<
-  string,
-  {
-    hasTopK: boolean
-    hasFrequencyPenalty: boolean
-    hasEnableThinking: boolean
-    hasThinkingBudget: boolean
-    hasPresencePenalty: boolean
-    isVL: boolean
-  }
-> = {
-  'bedi/qwen3-14b': {
-    hasTopK: true,
-    hasFrequencyPenalty: true,
-    hasEnableThinking: true,
-    hasThinkingBudget: true,
-    hasPresencePenalty: true,
-    isVL: false,
-  },
-  'bedi/qwen3-32b': {
-    hasTopK: true,
-    hasFrequencyPenalty: true,
-    hasEnableThinking: true,
-    hasThinkingBudget: true,
-    hasPresencePenalty: true,
-    isVL: false,
-  },
-  'bedi/qwen3-vl-8b': {
-    hasTopK: true,
-    hasFrequencyPenalty: true,
-    hasEnableThinking: false,
-    hasThinkingBudget: false,
-    hasPresencePenalty: false,
-    isVL: true,
-  },
-  'bedi/kimi-k2.6': {
-    hasTopK: true,
-    hasFrequencyPenalty: false,
-    hasEnableThinking: true,
-    hasThinkingBudget: true,
-    hasPresencePenalty: true,
-    isVL: true,
-  },
-}
-
 const ChatPlayground: React.FC = () => {
   const { t } = useTranslation()
   const { appTheme } = useTheme()
+  const [playgroundModels, setPlaygroundModels] = useState<PlaygroundModel[]>([])
+  const [modelsLoading, setModelsLoading] = useState(true)
 
   const [messages, setMessages] = useState<Message[]>([])
   const [messages2, setMessages2] = useState<Message[]>([])
@@ -223,9 +203,11 @@ const ChatPlayground: React.FC = () => {
     maxTokens: 8192,
     temperature: 0.6,
     topP: 0.95,
+    minP: 0,
     topK: 20,
     frequencyPenalty: 0,
     presencePenalty: 0.00,
+    repetitionPenalty: 1.0,
     systemPrompt: '',
     enableThinking: false,
     thinkingBudget: 4096,
@@ -236,16 +218,54 @@ const ChatPlayground: React.FC = () => {
     maxTokens: 8192,
     temperature: 0.6,
     topP: 0.95,
+    minP: 0,
     topK: 20,
     frequencyPenalty: 0,
     presencePenalty: 0.00,
+    repetitionPenalty: 1.0,
     systemPrompt: '',
     enableThinking: false,
     thinkingBudget: 4096,
   })
 
-  const capabilities = modelCapabilities[params.model] || modelCapabilities['bedi/qwen3-32b']
-  const capabilities2 = modelCapabilities[params2.model] || modelCapabilities['bedi/qwen3-14b']
+  const getModelConfig = (modelId: string) => {
+    return playgroundModels.find((m) => m.id === modelId)
+  }
+
+  const getModelCapabilities = (modelId: string) => {
+    const config = getModelConfig(modelId)
+    if (!config) {
+      return {
+        hasTopK: true,
+        hasFrequencyPenalty: true,
+        hasEnableThinking: false,
+        hasThinkingBudget: false,
+        hasPresencePenalty: true,
+        hasRepetitionPenalty: false,
+        hasMinP: false,
+        hasTemperature: true,
+        hasTopP: true,
+        hasSystemPrompt: true,
+        isVL: false,
+      }
+    }
+    return {
+      hasTopK: config.enable_top_k,
+      hasFrequencyPenalty: config.enable_frequency_penalty,
+      hasEnableThinking: config.is_reasoning,
+      hasThinkingBudget: config.is_reasoning && config.enable_thinking_budget,
+      hasPresencePenalty: config.enable_presence_penalty,
+      hasRepetitionPenalty: config.enable_repetition_penalty,
+      hasMinP: config.enable_min_p,
+      hasTemperature: config.enable_temperature,
+      hasTopP: config.enable_top_p,
+      hasSystemPrompt: config.enable_system_prompt,
+      isVL: config.is_vl,
+    }
+  }
+
+  const capabilities = getModelCapabilities(params.model)
+  const capabilities2 = getModelCapabilities(params2.model)
   const vlImageProxyBaseUrl = (import.meta as any).env?.VITE_VL_IMAGE_PROXY_BASE_URL as string | undefined
   const useVlProxyBaseUrl = String((import.meta as any).env?.VITE_VL_USE_PROXY_BASE_URL || '').toLowerCase() === 'true'
   const inlineImageAsBase64 = String((import.meta as any).env?.VITE_VL_INLINE_IMAGE_AS_BASE64 || '').toLowerCase() === 'true'
@@ -315,6 +335,49 @@ const ChatPlayground: React.FC = () => {
     }
   }, [])
 
+  useEffect(() => {
+    const loadPlaygroundModels = async () => {
+      try {
+        const res = await getPlaygroundModels()
+        setPlaygroundModels(res.data.data || [])
+      } catch (error) {
+        console.error('Failed to load playground models:', error)
+      } finally {
+        setModelsLoading(false)
+      }
+    }
+    loadPlaygroundModels()
+  }, [])
+
+  // Handle URL params for model selection (e.g., from ModelMarket)
+  useEffect(() => {
+    if (modelsLoading) return
+
+    const params = new URLSearchParams(window.location.search)
+    const modelParam = params.get('model')
+    if (modelParam) {
+      // Check if this model is in our playground models list
+      const modelConfig = getModelConfig(modelParam)
+      if (modelConfig) {
+        setParams((p) => ({
+          ...p,
+          model: modelParam,
+          maxTokens: modelConfig.max_tokens,
+          temperature: modelConfig.temperature,
+          topP: modelConfig.top_p,
+          minP: modelConfig.min_p,
+          topK: modelConfig.top_k,
+          frequencyPenalty: modelConfig.frequency_penalty,
+          presencePenalty: modelConfig.presence_penalty,
+          repetitionPenalty: modelConfig.repetition_penalty,
+          systemPrompt: modelConfig.system_prompt || '',
+          enableThinking: modelConfig.enable_thinking,
+          thinkingBudget: modelConfig.thinking_budget,
+        }))
+      }
+    }
+  }, [modelsLoading, playgroundModels])
+
   const handleRemoveComparison = () => {
     setComparisonMode(false)
     setMessages2([])
@@ -333,9 +396,11 @@ const ChatPlayground: React.FC = () => {
       maxTokens: params.maxTokens,
       temperature: params.temperature,
       topP: params.topP,
+      minP: params.minP,
       topK: params.topK,
       frequencyPenalty: params.frequencyPenalty,
       presencePenalty: params.presencePenalty,
+      repetitionPenalty: params.repetitionPenalty,
       enableThinking: params.enableThinking,
       thinkingBudget: params.thinkingBudget,
     }))
@@ -517,7 +582,9 @@ const ChatPlayground: React.FC = () => {
     }
 
     const chatMessages: Array<{ role: string; content: any }> = []
-    const finalSystemPrompt = buildSystemPrompt(params.systemPrompt, params.enableThinking)
+    const finalSystemPrompt = capabilities.hasSystemPrompt
+      ? buildSystemPrompt(params.systemPrompt, params.enableThinking)
+      : ''
     if (finalSystemPrompt) {
       chatMessages.push({ role: 'system', content: finalSystemPrompt })
     }
@@ -540,13 +607,15 @@ const ChatPlayground: React.FC = () => {
       model: params.model,
       messages: chatMessages,
       max_tokens: params.maxTokens,
-      temperature: params.temperature,
-      top_p: params.topP,
+      temperature: capabilities.hasTemperature ? params.temperature : undefined,
+      top_p: capabilities.hasTopP ? params.topP : undefined,
+      min_p: capabilities.hasMinP ? params.minP : undefined,
       stream: true,
     }
     if (capabilities.hasTopK) requestBody.top_k = params.topK
     if (capabilities.hasFrequencyPenalty) requestBody.frequency_penalty = params.frequencyPenalty
     if (capabilities.hasPresencePenalty) requestBody.presence_penalty = params.presencePenalty
+    if (capabilities.hasRepetitionPenalty) requestBody.repetition_penalty = params.repetitionPenalty
     if (capabilities.hasEnableThinking) {
       requestBody.thinking = params.enableThinking
         ? { type: 'thinking', thinking: { budget_tokens: params.thinkingBudget } }
@@ -554,7 +623,9 @@ const ChatPlayground: React.FC = () => {
     }
 
     const chatMessages2: Array<{ role: string; content: any }> = []
-    const finalSystemPrompt2 = buildSystemPrompt(params2.systemPrompt, params2.enableThinking)
+    const finalSystemPrompt2 = capabilities2.hasSystemPrompt
+      ? buildSystemPrompt(params2.systemPrompt, params2.enableThinking)
+      : ''
     if (finalSystemPrompt2) {
       chatMessages2.push({ role: 'system', content: finalSystemPrompt2 })
     }
@@ -577,13 +648,15 @@ const ChatPlayground: React.FC = () => {
       model: params2.model,
       messages: chatMessages2,
       max_tokens: params2.maxTokens,
-      temperature: params2.temperature,
-      top_p: params2.topP,
+      temperature: capabilities2.hasTemperature ? params2.temperature : undefined,
+      top_p: capabilities2.hasTopP ? params2.topP : undefined,
+      min_p: capabilities2.hasMinP ? params2.minP : undefined,
       stream: true,
     }
     if (capabilities2.hasTopK) requestBody2.top_k = params2.topK
     if (capabilities2.hasFrequencyPenalty) requestBody2.frequency_penalty = params2.frequencyPenalty
     if (capabilities2.hasPresencePenalty) requestBody2.presence_penalty = params2.presencePenalty
+    if (capabilities2.hasRepetitionPenalty) requestBody2.repetition_penalty = params2.repetitionPenalty
     if (capabilities2.hasEnableThinking) {
       requestBody2.thinking = params2.enableThinking
         ? { type: 'thinking', thinking: { budget_tokens: params2.thinkingBudget } }
@@ -996,52 +1069,45 @@ const ChatPlayground: React.FC = () => {
         <Select
           value={params.model}
           onChange={(value) => {
-            if (value === 'bedi/qwen3-vl-8b') {
+            // 清空对话历史
+            setMessages([])
+            setMessages2([])
+            setStreamedContent('')
+            setStreamedContent2('')
+            setThinkingContent('')
+            setThinkingContent2('')
+            setInputValue('')
+            setChatStarted(false)
+
+            // 从动态模型配置中获取参数
+            const config = getModelConfig(value)
+            if (config) {
               setParams((p) => ({
                 ...p,
                 model: value,
-                maxTokens: 4096,
-                temperature: 0.7,
-                topP: 0.7,
-                topK: 50,
-                enableThinking: false,
-              }))
-            } else if (value === 'bedi/kimi-k2.6') {
-              setParams((p) => ({
-                ...p,
-                model: value,
-                maxTokens: 8192,
-                temperature: 1.0,
-                topP: 0.95,
-                topK: 50,
-                frequencyPenalty: 0,
-                presencePenalty: 0.00,
-                systemPrompt: 'You are Kimi, an AI assistant.',
-                enableThinking: false,
-                thinkingBudget: 4096,
-              }))
-            } else {
-              setParams((p) => ({
-                ...p,
-                model: value,
-                maxTokens: 8192,
-                temperature: 0.6,
-                topP: 0.95,
-                topK: 20,
-                enableThinking: false,
-                systemPrompt: '',
+                maxTokens: config.max_tokens,
+                temperature: config.temperature,
+                topP: config.top_p,
+                minP: config.min_p,
+                topK: config.top_k,
+                frequencyPenalty: config.frequency_penalty,
+                presencePenalty: config.presence_penalty,
+                repetitionPenalty: config.repetition_penalty,
+                systemPrompt: config.system_prompt || '',
+                enableThinking: config.enable_thinking,
+                thinkingBudget: config.thinking_budget,
               }))
             }
           }}
-          options={trialModels.map((m) => ({
-            value: m.value,
-            label: m.label,
+          options={playgroundModels.map((m) => ({
+            value: m.id,
+            label: m.name,
           }))}
           style={{ width: '100%' }}
         />
       </div>
 
-      {renderSystemPromptBlock(
+      {capabilities.hasSystemPrompt && renderSystemPromptBlock(
         params.systemPrompt,
         (value) => setParams((p) => ({ ...p, systemPrompt: value }))
       )}
@@ -1056,25 +1122,40 @@ const ChatPlayground: React.FC = () => {
         suffix="tokens"
       />
 
-      <ParamControl
-        label={t('chat.temperature')}
-        value={params.temperature}
-        min={0}
-        max={2}
-        step={0.1}
-        precision={1}
-        onChange={(v) => setParams((p) => ({ ...p, temperature: v }))}
-      />
+      {capabilities.hasTemperature && (
+        <ParamControl
+          label={t('chat.temperature')}
+          value={params.temperature}
+          min={0}
+          max={2}
+          step={0.1}
+          precision={1}
+          onChange={(v) => setParams((p) => ({ ...p, temperature: v }))}
+        />
+      )}
 
-      <ParamControl
-        label={t('chat.top_p')}
-        value={params.topP}
-        min={0}
-        max={1}
-        step={0.05}
-        precision={2}
-        onChange={(v) => setParams((p) => ({ ...p, topP: v }))}
-      />
+      {capabilities.hasTopP && (
+        <ParamControl
+          label={t('chat.top_p')}
+          value={params.topP}
+          min={0}
+          max={1}
+          step={0.05}
+          precision={2}
+          onChange={(v) => setParams((p) => ({ ...p, topP: v }))}
+        />
+      )}
+      {capabilities.hasMinP && (
+        <ParamControl
+          label={t('chat.min_p')}
+          value={params.minP}
+          min={0}
+          max={1}
+          step={0.01}
+          precision={2}
+          onChange={(v) => setParams((p) => ({ ...p, minP: v }))}
+        />
+      )}
 
       {capabilities.hasTopK && (
         <ParamControl
@@ -1108,6 +1189,17 @@ const ChatPlayground: React.FC = () => {
           step={0.01}
           precision={2}
           onChange={(v) => setParams((p) => ({ ...p, presencePenalty: v }))}
+        />
+      )}
+      {capabilities.hasRepetitionPenalty && (
+        <ParamControl
+          label={t('chat.repetition_penalty')}
+          value={params.repetitionPenalty}
+          min={0}
+          max={2}
+          step={0.1}
+          precision={1}
+          onChange={(v) => setParams((p) => ({ ...p, repetitionPenalty: v }))}
         />
       )}
 
@@ -1193,51 +1285,33 @@ const ChatPlayground: React.FC = () => {
           <Select
             value={params2.model}
             onChange={(value) => {
-              if (value === 'bedi/qwen3-vl-8b') {
-                setParams2((p) => ({
-                  ...p,
-                  model: value,
-                  maxTokens: 4096,
-                  temperature: 0.7,
-                  topP: 0.7,
-                  topK: 50,
-                  enableThinking: false,
-                }))
-              } else if (value === 'bedi/kimi-k2.6') {
-                setParams2((p) => ({
-                  ...p,
-                  model: value,
-                  maxTokens: 8192,
-                  temperature: 1.0,
-                  topP: 0.95,
-                  topK: 50,
-                  frequencyPenalty: 0,
-                  presencePenalty: 0.00,
-                  systemPrompt: 'You are Kimi, an AI assistant.',
-                  enableThinking: false,
-                  thinkingBudget: 4096,
-                }))
-              } else {
-                setParams2((p) => ({
-                  ...p,
-                  model: value,
-                  maxTokens: 8192,
-                  temperature: 0.6,
-                  topP: 0.95,
-                  topK: 20,
-                  enableThinking: false,
-                }))
-              }
+              const config = getModelConfig(value)
+              if (!config) return
+              setParams2((p) => ({
+                ...p,
+                model: value,
+                maxTokens: config.max_tokens,
+                temperature: config.temperature,
+                topP: config.top_p,
+                minP: config.min_p,
+                topK: config.top_k,
+                frequencyPenalty: config.frequency_penalty,
+                presencePenalty: config.presence_penalty,
+                repetitionPenalty: config.repetition_penalty,
+                systemPrompt: config.system_prompt || '',
+                enableThinking: config.enable_thinking,
+                thinkingBudget: config.thinking_budget,
+              }))
             }}
-            options={trialModels.map((m) => ({
-              value: m.value,
-              label: m.label,
+            options={playgroundModels.map((m) => ({
+              value: m.id,
+              label: m.name,
             }))}
             style={{ width: '100%' }}
           />
         </div>
 
-        {renderSystemPromptBlock(
+        {capabilities2.hasSystemPrompt && renderSystemPromptBlock(
           params2.systemPrompt,
           (value) => setParams2((p) => ({ ...p, systemPrompt: value }))
         )}
@@ -1252,25 +1326,40 @@ const ChatPlayground: React.FC = () => {
           suffix="tokens"
         />
 
-        <ParamControl
-          label={t('chat.temperature')}
-          value={params2.temperature}
-          min={0}
-          max={2}
-          step={0.1}
-          precision={1}
-          onChange={(v) => setParams2((p) => ({ ...p, temperature: v }))}
-        />
+        {capabilities2.hasTemperature && (
+          <ParamControl
+            label={t('chat.temperature')}
+            value={params2.temperature}
+            min={0}
+            max={2}
+            step={0.1}
+            precision={1}
+            onChange={(v) => setParams2((p) => ({ ...p, temperature: v }))}
+          />
+        )}
 
-        <ParamControl
-          label={t('chat.top_p')}
-          value={params2.topP}
-          min={0}
-          max={1}
-          step={0.05}
-          precision={2}
-          onChange={(v) => setParams2((p) => ({ ...p, topP: v }))}
-        />
+        {capabilities2.hasTopP && (
+          <ParamControl
+            label={t('chat.top_p')}
+            value={params2.topP}
+            min={0}
+            max={1}
+            step={0.05}
+            precision={2}
+            onChange={(v) => setParams2((p) => ({ ...p, topP: v }))}
+          />
+        )}
+        {capabilities2.hasMinP && (
+          <ParamControl
+            label={t('chat.min_p')}
+            value={params2.minP}
+            min={0}
+            max={1}
+            step={0.01}
+            precision={2}
+            onChange={(v) => setParams2((p) => ({ ...p, minP: v }))}
+          />
+        )}
 
         {capabilities2.hasTopK && (
           <ParamControl
@@ -1304,6 +1393,17 @@ const ChatPlayground: React.FC = () => {
             step={0.01}
             precision={2}
             onChange={(v) => setParams2((p) => ({ ...p, presencePenalty: v }))}
+          />
+        )}
+        {capabilities2.hasRepetitionPenalty && (
+          <ParamControl
+            label={t('chat.repetition_penalty')}
+            value={params2.repetitionPenalty}
+            min={0}
+            max={2}
+            step={0.1}
+            precision={1}
+            onChange={(v) => setParams2((p) => ({ ...p, repetitionPenalty: v }))}
           />
         )}
 
@@ -1447,7 +1547,7 @@ const ChatPlayground: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexShrink: 0 }}>
               <span style={{ fontSize: 14, fontWeight: 500, color: appTheme.textPrimary }}>
-                {trialModels.find((m) => m.value === params.model)?.label || params.model}
+                {playgroundModels.find((m) => m.id === params.model)?.name || params.model}
               </span>
               <Tag color="green">Trial</Tag>
             </div>
@@ -1609,7 +1709,7 @@ const ChatPlayground: React.FC = () => {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexShrink: 0 }}>
                 <span style={{ fontSize: 14, fontWeight: 500, color: appTheme.textPrimary }}>
-                  {trialModels.find((m) => m.value === params2.model)?.label || params2.model}
+                  {playgroundModels.find((m) => m.id === params2.model)?.name || params2.model}
                 </span>
                 <Tag color="green">Trial</Tag>
               </div>

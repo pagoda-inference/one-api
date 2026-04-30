@@ -107,6 +107,7 @@ func SetApiRouter(router *gin.Engine) {
 				marketRoute.GET("/stats", controller.GetMarketStats)
 				marketRoute.GET("/calculate", controller.CalculatePrice)
 				marketRoute.GET("/trials", controller.GetUserTrials)
+				marketRoute.GET("/playground/models", controller.GetPlaygroundModels)
 			}
 		}
 
@@ -115,7 +116,7 @@ func SetApiRouter(router *gin.Engine) {
 		adminMarketRoute.Use(middleware.AdminTokenAuth())
 		{
 			adminMarketRoute.POST("/pricing", controller.SetModelPricing)
-			// ModelGroup CRUD is deprecated - use channels.group for provider concept
+			adminMarketRoute.PUT("/playground/models/*id", controller.UpdatePlaygroundModel)
 		}
 
 		// Tenant routes (multi-tenancy)

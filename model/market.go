@@ -12,28 +12,51 @@ import (
 
 // ModelInfo represents a model available in the marketplace
 type ModelInfo struct {
-	Id           string   `json:"id" gorm:"primaryKey;size:64"`
-	Name         string   `json:"name" gorm:"size:128"`        // 显示名称
-	Provider     string   `json:"provider" gorm:"size:64"`    // 提供商
-	ModelType    string   `json:"model_type" gorm:"size:32"` // chat/embedding/image/audio
-	Description  string   `json:"description" gorm:"type:text"`
-	ContextLen   int      `json:"context_len" gorm:"default:4096"` // 上下文长度
-	InputPrice   float64  `json:"input_price" gorm:"type:decimal(10,4);default:0"`  // 输入价格(元/千token)
-	OutputPrice  float64  `json:"output_price" gorm:"type:decimal(10,4);default:0"` // 输出价格(元/千token)
-	Capabilities string   `json:"capabilities" gorm:"type:text"` // JSON array of capabilities
-	Status       string   `json:"status" gorm:"size:32;default:active"` // active/maintenance/deprecated
-	SortOrder    int      `json:"sort_order" gorm:"default:0"`
-	IconUrl      string   `json:"icon_url" gorm:"size:255"`
-	GroupId      int      `json:"group_id" gorm:"default:0"`       // 模型分组ID
-	Tags         string   `json:"tags" gorm:"type:text"`           // JSON array of tags
-	IsTrial      bool     `json:"is_trial" gorm:"default:false"`   // 是否支持试用
-	TrialQuota   int64    `json:"trial_quota" gorm:"default:0"`    // 试用额度
-	SLA          string   `json:"sla" gorm:"size:32;default:standard"` // SLA等级: standard/premium/enterprise
-	RateLimitRPM int      `json:"rate_limit_rpm" gorm:"default:0"`       // 模型级别 RPM 限流 (0=不限)
-	RateLimitTPM int      `json:"rate_limit_tpm" gorm:"default:0"`       // 模型级别 TPM 限流 (0=不限)
-	VisibleToTeams string `json:"visible_to_teams" gorm:"type:text"`      // 可见团队，格式",1,2,3,"，空=公共模型
-	CreatedAt    int64    `json:"created_at" gorm:"bigint"`
-	UpdatedAt    int64    `json:"updated_at" gorm:"bigint"`
+	Id             string  `json:"id" gorm:"primaryKey;size:64"`
+	Name           string  `json:"name" gorm:"size:128"`      // 显示名称
+	Provider       string  `json:"provider" gorm:"size:64"`   // 提供商
+	ModelType      string  `json:"model_type" gorm:"size:32"` // chat/embedding/image/audio
+	Description    string  `json:"description" gorm:"type:text"`
+	ContextLen     int     `json:"context_len" gorm:"default:4096"`                  // 上下文长度
+	InputPrice     float64 `json:"input_price" gorm:"type:decimal(10,4);default:0"`  // 输入价格(元/千token)
+	OutputPrice    float64 `json:"output_price" gorm:"type:decimal(10,4);default:0"` // 输出价格(元/千token)
+	Capabilities   string  `json:"capabilities" gorm:"type:text"`                    // JSON array of capabilities
+	Status         string  `json:"status" gorm:"size:32;default:active"`             // active/maintenance/deprecated
+	SortOrder      int     `json:"sort_order" gorm:"default:0"`
+	IconUrl        string  `json:"icon_url" gorm:"size:255"`
+	GroupId        int     `json:"group_id" gorm:"default:0"`           // 模型分组ID
+	Tags           string  `json:"tags" gorm:"type:text"`               // JSON array of tags
+	IsTrial        bool    `json:"is_trial" gorm:"default:false"`       // 是否支持试用
+	TrialQuota     int64   `json:"trial_quota" gorm:"default:0"`        // 试用额度
+	SLA            string  `json:"sla" gorm:"size:32;default:standard"` // SLA等级: standard/premium/enterprise
+	RateLimitRPM   int     `json:"rate_limit_rpm" gorm:"default:0"`     // 模型级别 RPM 限流 (0=不限)
+	RateLimitTPM   int     `json:"rate_limit_tpm" gorm:"default:0"`     // 模型级别 TPM 限流 (0=不限)
+	VisibleToTeams string  `json:"visible_to_teams" gorm:"type:text"`   // 可见团队，格式",1,2,3,"，空=公共模型
+	// 体验中心配置
+	PlaygroundMaxTokens               int     `json:"playground_max_tokens" gorm:"default:8192"`                 // 体验中心最大token
+	PlaygroundTemperature             float64 `json:"playground_temperature" gorm:"default:0.6"`                 // 体验中心温度
+	PlaygroundMinP                    float64 `json:"playground_min_p" gorm:"default:0"`                         // 体验中心min_p
+	PlaygroundTopP                    float64 `json:"playground_top_p" gorm:"default:0.95"`                      // 体验中心topP
+	PlaygroundTopK                    int     `json:"playground_top_k" gorm:"default:20"`                        // 体验中心topK
+	PlaygroundFrequencyPenalty        float64 `json:"playground_frequency_penalty" gorm:"default:0"`             // 体验中心frequency penalty
+	PlaygroundPresencePenalty         float64 `json:"playground_presence_penalty" gorm:"default:0"`              // 体验中心presence penalty
+	PlaygroundRepetitionPenalty       float64 `json:"playground_repetition_penalty" gorm:"default:1"`            // 体验中心repetition penalty
+	PlaygroundSystemPrompt            string  `json:"playground_system_prompt" gorm:"type:text"`                 // 体验中心系统提示词
+	PlaygroundEnableThinking          bool    `json:"playground_enable_thinking" gorm:"default:false"`           // 体验中心启用思考
+	PlaygroundThinkingBudget          int     `json:"playground_thinking_budget" gorm:"default:4096"`            // 体验中心思考预算
+	PlaygroundEnableTemperature       bool    `json:"playground_enable_temperature" gorm:"default:true"`         // 体验中心显示temperature
+	PlaygroundEnableMinP              bool    `json:"playground_enable_min_p" gorm:"default:false"`              // 体验中心显示min_p
+	PlaygroundEnableTopP              bool    `json:"playground_enable_top_p" gorm:"default:true"`               // 体验中心显示top_p
+	PlaygroundEnableTopK              bool    `json:"playground_enable_top_k" gorm:"default:true"`               // 体验中心显示top_k
+	PlaygroundEnableFrequencyPenalty  bool    `json:"playground_enable_frequency_penalty" gorm:"default:true"`   // 体验中心显示frequency penalty
+	PlaygroundEnablePresencePenalty   bool    `json:"playground_enable_presence_penalty" gorm:"default:true"`    // 体验中心显示presence penalty
+	PlaygroundEnableRepetitionPenalty bool    `json:"playground_enable_repetition_penalty" gorm:"default:false"` // 体验中心显示repetition penalty
+	PlaygroundEnableSystemPrompt      bool    `json:"playground_enable_system_prompt" gorm:"default:true"`       // 体验中心显示system prompt
+	PlaygroundEnableVL                bool    `json:"playground_enable_vl" gorm:"default:false"`                 // 体验中心启用视觉输入
+	PlaygroundEnableReasoning         bool    `json:"playground_enable_reasoning" gorm:"default:false"`          // 体验中心启用推理能力
+	PlaygroundEnableThinkingBudget    bool    `json:"playground_enable_thinking_budget" gorm:"default:true"`     // 体验中心显示thinking budget
+	CreatedAt                         int64   `json:"created_at" gorm:"bigint"`
+	UpdatedAt                         int64   `json:"updated_at" gorm:"bigint"`
 }
 
 // ModelGroup is deprecated - use channels.group for provider concept
@@ -57,7 +80,7 @@ type ModelInfo struct {
 type ModelPricing struct {
 	Id          int64   `json:"id" gorm:"primaryKey"`
 	ModelId     string  `json:"model_id" gorm:"size:64;index"`
-	TenantId    int     `json:"tenant_id" gorm:"index"`          // 0 means default pricing
+	TenantId    int     `json:"tenant_id" gorm:"index"` // 0 means default pricing
 	InputPrice  float64 `json:"input_price" gorm:"type:decimal(10,4)"`
 	OutputPrice float64 `json:"output_price" gorm:"type:decimal(10,4)"`
 	Discount    float64 `json:"discount" gorm:"type:decimal(5,2);default:100"` // 折扣百分比
@@ -71,15 +94,15 @@ func (ModelPricing) TableName() string {
 
 // ModelTrial records trial usage
 type ModelTrial struct {
-	Id        int   `json:"id" gorm:"primaryKey"`
-	UserId    int   `json:"user_id" gorm:"index"`
+	Id        int    `json:"id" gorm:"primaryKey"`
+	UserId    int    `json:"user_id" gorm:"index"`
 	ModelId   string `json:"model_id" gorm:"size:64;index"`
-	TenantId  int   `json:"tenant_id" gorm:"index"`
-	QuotaUsed int64 `json:"quota_used" gorm:"bigint;default:0"`
+	TenantId  int    `json:"tenant_id" gorm:"index"`
+	QuotaUsed int64  `json:"quota_used" gorm:"bigint;default:0"`
 	Status    string `json:"status" gorm:"size:32;default:active"` // active/expired/disabled
-	CreatedAt int64 `json:"created_at" gorm:"bigint"`
-	UpdatedAt int64 `json:"updated_at" gorm:"bigint"`
-	ExpiresAt int64 `json:"expires_at" gorm:"bigint"`
+	CreatedAt int64  `json:"created_at" gorm:"bigint"`
+	UpdatedAt int64  `json:"updated_at" gorm:"bigint"`
+	ExpiresAt int64  `json:"expires_at" gorm:"bigint"`
 }
 
 func (ModelTrial) TableName() string {
@@ -269,6 +292,62 @@ func CountAllModels(modelType string) (int64, error) {
 	return count, err
 }
 
+// GetTrialModels retrieves all trial models
+func GetTrialModels() ([]*ModelInfo, error) {
+	var models []*ModelInfo
+	err := DB.Where("is_trial = ? AND status = ?", true, ModelStatusActive).
+		Order("sort_order ASC, id ASC").
+		Find(&models).Error
+	return models, err
+}
+
+// UpdatePlaygroundConfig updates playground configuration for a model
+func UpdatePlaygroundConfig(modelId string, maxTokens int, temperature float64, minP float64, topP float64, topK int, frequencyPenalty float64, presencePenalty float64, repetitionPenalty float64, systemPrompt string, enableThinking bool, thinkingBudget int, enableTemperature bool, enableMinP bool, enableTopP bool, enableTopK bool, enableFrequencyPenalty bool, enablePresencePenalty bool, enableRepetitionPenalty bool, enableSystemPrompt bool, enableVL bool, enableReasoning bool, enableThinkingBudget bool) error {
+	updates := map[string]interface{}{
+		"playground_max_tokens":                maxTokens,
+		"playground_temperature":               temperature,
+		"playground_min_p":                     minP,
+		"playground_top_p":                     topP,
+		"playground_top_k":                     topK,
+		"playground_frequency_penalty":         frequencyPenalty,
+		"playground_presence_penalty":          presencePenalty,
+		"playground_repetition_penalty":        repetitionPenalty,
+		"playground_system_prompt":             systemPrompt,
+		"playground_enable_thinking":           enableThinking,
+		"playground_thinking_budget":           thinkingBudget,
+		"playground_enable_temperature":        enableTemperature,
+		"playground_enable_min_p":              enableMinP,
+		"playground_enable_top_p":              enableTopP,
+		"playground_enable_top_k":              enableTopK,
+		"playground_enable_frequency_penalty":  enableFrequencyPenalty,
+		"playground_enable_presence_penalty":   enablePresencePenalty,
+		"playground_enable_repetition_penalty": enableRepetitionPenalty,
+		"playground_enable_system_prompt":      enableSystemPrompt,
+		"playground_enable_vl":                 enableVL,
+		"playground_enable_reasoning":          enableReasoning,
+		"playground_enable_thinking_budget":    enableThinkingBudget,
+		"updated_at":                           helper.GetTimestamp(),
+	}
+	filtered := make(map[string]interface{}, len(updates))
+	colTypes, err := DB.Migrator().ColumnTypes(&ModelInfo{})
+	if err != nil {
+		return err
+	}
+	existingCols := make(map[string]struct{}, len(colTypes))
+	for _, c := range colTypes {
+		existingCols[strings.ToLower(c.Name())] = struct{}{}
+	}
+	for k, v := range updates {
+		if _, ok := existingCols[strings.ToLower(k)]; ok {
+			filtered[k] = v
+		}
+	}
+	if len(filtered) == 0 {
+		return fmt.Errorf("no updatable playground columns found in model_info")
+	}
+	return DB.Model(&ModelInfo{}).Where("id = ?", modelId).Updates(filtered).Error
+}
+
 // CalculateQuota calculates quota cost for a model
 // InputPrice and OutputPrice are in yuan per 1000 tokens
 func (m *ModelInfo) CalculateQuota(promptTokens, completionTokens int) int64 {
@@ -290,15 +369,15 @@ func (m *ModelInfo) GetCapabilityList() []string {
 
 // ModelMarketStats represents marketplace statistics
 type ModelMarketStats struct {
-	TotalModels      int64   `json:"total_models"`
-	TotalProviders   int64   `json:"total_providers"`
-	TotalGroups      int64   `json:"total_groups"`
-	ChatModels       int64   `json:"chat_models"`
-	EmbeddingModels  int64   `json:"embedding_models"`
-	ImageModels      int64   `json:"image_models"`
-	AvgInputPrice    float64 `json:"avg_input_price"`
-	AvgOutputPrice   float64 `json:"avg_output_price"`
-	TrialModels      int64   `json:"trial_models"`
+	TotalModels     int64   `json:"total_models"`
+	TotalProviders  int64   `json:"total_providers"`
+	TotalGroups     int64   `json:"total_groups"`
+	ChatModels      int64   `json:"chat_models"`
+	EmbeddingModels int64   `json:"embedding_models"`
+	ImageModels     int64   `json:"image_models"`
+	AvgInputPrice   float64 `json:"avg_input_price"`
+	AvgOutputPrice  float64 `json:"avg_output_price"`
+	TrialModels     int64   `json:"trial_models"`
 }
 
 // GetModelMarketStats returns marketplace statistics

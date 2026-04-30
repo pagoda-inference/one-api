@@ -606,6 +606,10 @@ export const startModelTrial = (modelId: string) =>
 export const getUserTrials = () =>
   api.get('/user/market/trials')
 
+// Playground models API
+export const getPlaygroundModels = () =>
+  api.get('/user/market/playground/models')
+
 // Model Management APIs (Admin)
 export interface ModelItem {
   id: string
