@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -148,6 +149,16 @@ func mergeToolArguments(existing string, incoming any) string {
 	case nil:
 		return existing
 	case string:
+		part := strings.TrimSpace(x)
+		if part == "" {
+			return existing
+		}
+		// Some backends emit full JSON snapshots per chunk instead of deltas.
+		// When we detect a complete JSON value, replace instead of append.
+		if (strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}")) ||
+			(strings.HasPrefix(part, "[") && strings.HasSuffix(part, "]")) {
+			return part
+		}
 		// Streaming OpenAI-compatible backends usually send JSON fragments as strings.
 		return existing + x
 	default:
@@ -158,6 +169,217 @@ func mergeToolArguments(existing string, incoming any) string {
 		}
 		return string(b)
 	}
+}
+
+func parseToolInputJSON(args string) (any, bool) {
+	trimmed := strings.TrimSpace(args)
+	if trimmed == "" {
+		return nil, false
+	}
+	var v any
+	if err := json.Unmarshal([]byte(trimmed), &v); err != nil {
+		return nil, false
+	}
+	return v, true
+}
+
+var toolCallXMLRe = regexp.MustCompile(`(?is)<tool_call>\s*(\{.*?\})\s*</tool_call>`)
+var kvLineRe = regexp.MustCompile(`(?m)^\s*[-*]?\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+?)\s*$`)
+
+func trimQuotedValue(v string) string {
+	s := strings.TrimSpace(v)
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			s = s[1 : len(s)-1]
+		}
+	}
+	return strings.TrimSpace(s)
+}
+
+func tryExtractToolUseFromYamlLike(input string) (name string, toolInput any, ok bool) {
+	if strings.TrimSpace(input) == "" {
+		return "", nil, false
+	}
+	matches := kvLineRe.FindAllStringSubmatch(input, -1)
+	if len(matches) == 0 {
+		return "", nil, false
+	}
+	kv := make(map[string]string)
+	for _, m := range matches {
+		if len(m) < 3 {
+			continue
+		}
+		k := strings.ToLower(strings.TrimSpace(m[1]))
+		v := trimQuotedValue(m[2])
+		if k == "" || v == "" {
+			continue
+		}
+		kv[k] = v
+	}
+	if len(kv) == 0 {
+		return "", nil, false
+	}
+
+	toolName := strings.TrimSpace(kv["tool_name"])
+	if toolName == "" {
+		toolName = strings.TrimSpace(kv["name"])
+	}
+	if toolName == "" {
+		toolName = strings.TrimSpace(kv["tool"])
+	}
+	// Heuristic: if common write args are present, infer Write.
+	if toolName == "" {
+		if kv["file_path"] != "" && kv["content"] != "" {
+			toolName = "Write"
+		}
+	}
+	if toolName == "" {
+		return "", nil, false
+	}
+
+	inputMap := make(map[string]any)
+	for k, v := range kv {
+		switch k {
+		case "tool_name", "name", "tool", "function":
+			continue
+		default:
+			inputMap[k] = v
+		}
+	}
+	if len(inputMap) == 0 {
+		return "", nil, false
+	}
+	return toolName, inputMap, true
+}
+
+func tryExtractToolUseFromText(input string) (name string, toolInput any, ok bool) {
+	if strings.TrimSpace(input) == "" {
+		return "", nil, false
+	}
+	matches := toolCallXMLRe.FindAllStringSubmatch(input, -1)
+	for _, m := range matches {
+		if len(m) < 2 {
+			continue
+		}
+		raw := strings.TrimSpace(m[1])
+		if raw == "" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+			continue
+		}
+		n, _ := payload["name"].(string)
+		n = strings.TrimSpace(n)
+		if n == "" {
+			// Some variants use function.name
+			if f, ok := payload["function"].(map[string]any); ok {
+				if fn, ok := f["name"].(string); ok {
+					n = strings.TrimSpace(fn)
+				}
+				if n == "" {
+					if fn, ok := f["tool_name"].(string); ok {
+						n = strings.TrimSpace(fn)
+					}
+				}
+			}
+		}
+		if n == "" {
+			continue
+		}
+		if args, exists := payload["arguments"]; exists {
+			switch v := args.(type) {
+			case map[string]any:
+				return n, v, true
+			case string:
+				if parsed, ok := parseToolInputJSON(v); ok {
+					return n, parsed, true
+				}
+			}
+		}
+		if in, exists := payload["input"]; exists {
+			switch v := in.(type) {
+			case map[string]any:
+				return n, v, true
+			case string:
+				if parsed, ok := parseToolInputJSON(v); ok {
+					return n, parsed, true
+				}
+			}
+		}
+	}
+	if n, in, ok := tryExtractToolUseFromYamlLike(input); ok {
+		return n, in, true
+	}
+	return "", nil, false
+}
+
+var thinkBlockRe = regexp.MustCompile(`(?is)<think>(.*?)</think>`)
+
+func splitThinkBlocksFromText(input string) (cleanText string, thinkingText string) {
+	if input == "" {
+		return "", ""
+	}
+	var thinkParts []string
+	matches := thinkBlockRe.FindAllStringSubmatch(input, -1)
+	for _, m := range matches {
+		if len(m) >= 2 {
+			part := strings.TrimSpace(m[1])
+			if part != "" {
+				thinkParts = append(thinkParts, part)
+			}
+		}
+	}
+	clean := thinkBlockRe.ReplaceAllString(input, "")
+	clean = strings.ReplaceAll(clean, "<think>", "")
+	clean = strings.ReplaceAll(clean, "</think>", "")
+	clean = strings.TrimSpace(clean)
+	return clean, strings.Join(thinkParts, "\n")
+}
+
+func longestSuffixPrefix(s, pattern string) int {
+	max := len(pattern) - 1
+	if max > len(s) {
+		max = len(s)
+	}
+	for k := max; k > 0; k-- {
+		if strings.HasSuffix(s, pattern[:k]) {
+			return k
+		}
+	}
+	return 0
+}
+
+func splitThinkTaggedChunk(chunk string, inThink *bool, carry *string) (textOut string, thinkingOut string) {
+	input := *carry + chunk
+	*carry = ""
+	for len(input) > 0 {
+		if *inThink {
+			if idx := strings.Index(strings.ToLower(input), "</think>"); idx >= 0 {
+				thinkingOut += input[:idx]
+				input = input[idx+len("</think>"):]
+				*inThink = false
+			} else {
+				k := longestSuffixPrefix(strings.ToLower(input), "</think>")
+				thinkingOut += input[:len(input)-k]
+				*carry = input[len(input)-k:]
+				input = ""
+			}
+			continue
+		}
+
+		if idx := strings.Index(strings.ToLower(input), "<think>"); idx >= 0 {
+			textOut += input[:idx]
+			input = input[idx+len("<think>"):]
+			*inThink = true
+			continue
+		}
+		k := longestSuffixPrefix(strings.ToLower(input), "<think>")
+		textOut += input[:len(input)-k]
+		*carry = input[len(input)-k:]
+		input = ""
+	}
+	return textOut, thinkingOut
 }
 
 func mapFinishReasonToAnthropic(reason string) string {
@@ -397,6 +619,19 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 	// Convert tool_choice
 	if req.ToolChoice != nil {
 		openaiReq.ToolChoice = convertAnthropicToolChoice(req.ToolChoice)
+	} else if len(req.Tools) > 0 {
+		// Compatibility default for non-Anthropic upstreams:
+		// when tools are provided but no explicit tool_choice is set,
+		// prefer required tool call to avoid "thinking + plain text" fallback.
+		openaiReq.ToolChoice = "required"
+	}
+	// Some Anthropic clients explicitly send tool_choice=auto.
+	// For OpenAI-compatible upstreams in this gateway path, auto often degrades to text-only.
+	// If tools exist, force required to keep tool loop reliable.
+	if len(req.Tools) > 0 {
+		if choice, ok := openaiReq.ToolChoice.(string); ok && strings.TrimSpace(strings.ToLower(choice)) == "auto" {
+			openaiReq.ToolChoice = "required"
+		}
 	}
 
 	// Preserve explicit thinking intent with higher priority than backend defaults.
@@ -422,6 +657,18 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 			thinkingPayload["type"] = "disabled"
 		}
 		openaiReq.ExtraFields["thinking"] = thinkingPayload
+	}
+	// Tool-use reliability guard:
+	// For some OpenAI-compatible upstreams, thinking mode can lead to "thought-only"
+	// responses without actual tool_calls. When tools are present, prioritize tool execution.
+	if len(req.Tools) > 0 {
+		if openaiReq.ExtraFields == nil {
+			openaiReq.ExtraFields = make(map[string]any)
+		}
+		openaiReq.ExtraFields["enable_thinking"] = false
+		openaiReq.ExtraFields["thinking"] = map[string]any{
+			"type": "disabled",
+		}
 	}
 
 	// Preserve any extra fields from original request
@@ -498,7 +745,11 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 				Reasoning        string `json:"reasoning"`
 				Thinking         string `json:"thinking"`
 				RedactedThinking string `json:"redacted_thinking"`
-				ToolCalls        []struct {
+				FunctionCall     *struct {
+					Name      string `json:"name"`
+					Arguments any    `json:"arguments"`
+				} `json:"function_call"`
+				ToolCalls []struct {
 					ID       string `json:"id"`
 					Type     string `json:"type"`
 					Function struct {
@@ -538,6 +789,10 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 		if thinkingText == "" {
 			thinkingText = msg.RedactedThinking
 		}
+		cleanContent, taggedThinking := splitThinkBlocksFromText(msg.Content)
+		if thinkingText == "" && taggedThinking != "" {
+			thinkingText = taggedThinking
+		}
 		if thinkingText != "" {
 			contentBlocks = append(contentBlocks, map[string]any{
 				"type":      "thinking",
@@ -545,13 +800,35 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 				"signature": "",
 			})
 		}
-		if msg.Content != "" {
+		if cleanContent != "" {
 			contentBlocks = append(contentBlocks, map[string]any{
 				"type": "text",
-				"text": msg.Content,
+				"text": cleanContent,
 			})
 		}
-		for _, tc := range msg.ToolCalls {
+		toolCalls := msg.ToolCalls
+		if len(toolCalls) == 0 && msg.FunctionCall != nil && strings.TrimSpace(msg.FunctionCall.Name) != "" {
+			toolCalls = append(toolCalls, struct {
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments any    `json:"arguments"`
+				} `json:"function"`
+			}{
+				ID:   "",
+				Type: "function",
+				Function: struct {
+					Name      string `json:"name"`
+					Arguments any    `json:"arguments"`
+				}{
+					Name:      msg.FunctionCall.Name,
+					Arguments: msg.FunctionCall.Arguments,
+				},
+			})
+		}
+
+		for _, tc := range toolCalls {
 			var toolInput any
 			argsText := stringifyToolArguments(tc.Function.Arguments)
 			if argsText != "" {
@@ -579,6 +856,19 @@ func convertOpenAITextToAnthropic(respBody []byte, originModel string, hideUpstr
 			"type": "text",
 			"text": "",
 		})
+	}
+	// Guard: tool_use stop reason must have at least one tool_use content block.
+	if stopReason == "tool_use" {
+		hasToolUse := false
+		for _, b := range contentBlocks {
+			if t, ok := b["type"].(string); ok && (t == "tool_use" || t == "server_tool_use") {
+				hasToolUse = true
+				break
+			}
+		}
+		if !hasToolUse {
+			stopReason = "end_turn"
+		}
 	}
 
 	anthropicResp := map[string]any{
@@ -611,10 +901,18 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 	redactedThinkingIndex := -1
 	textIndex := -1
 	nextIndex := 0
-	toolIndexByKey := make(map[string]int)
-	toolOrder := make([]string, 0)
+	seenToolKeys := make([]string, 0)
+	seenToolKeySet := make(map[string]struct{})
+	toolIDByKey := make(map[string]string)
+	toolTypeByKey := make(map[string]string)
 	toolNameByKey := make(map[string]string)
 	pendingToolArgsByKey := make(map[string]string)
+	emittedToolUse := false
+	var collectedText strings.Builder
+	var collectedThinking strings.Builder
+	legacyFunctionCallName := ""
+	inThinkTag := false
+	thinkTagCarry := ""
 
 	appendMessageStart := func() {
 		if messageStarted {
@@ -699,37 +997,6 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		return redactedThinkingIndex
 	}
 
-	startToolBlock := func(tcId string, fallbackIdx int, name string, blockType string) int {
-		key := tcId
-		if key == "" {
-			key = fmt.Sprintf("tool_%d", fallbackIdx)
-		}
-		if idx, ok := toolIndexByKey[key]; ok {
-			return idx
-		}
-		idx := nextIndex
-		nextIndex++
-		toolIndexByKey[key] = idx
-		toolOrder = append(toolOrder, key)
-		toolID := tcId
-		if toolID == "" {
-			toolID = fmt.Sprintf("toolu_%s", key)
-		}
-		toolBlockStart := map[string]any{
-			"type":  "content_block_start",
-			"index": idx,
-			"content_block": map[string]any{
-				"type":  blockType,
-				"id":    toolID,
-				"name":  name,
-				"input": map[string]any{},
-			},
-		}
-		toolBlockData, _ := json.Marshal(toolBlockStart)
-		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(toolBlockData)))
-		return idx
-	}
-
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "data: ") {
 			continue
@@ -751,7 +1018,11 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 					RedactedThinking string `json:"redacted_thinking"`
 					Signature        string `json:"signature"`
 					Citation         any    `json:"citation"`
-					ToolCalls        []struct {
+					FunctionCall     *struct {
+						Name      string `json:"name"`
+						Arguments any    `json:"arguments"`
+					} `json:"function_call"`
+					ToolCalls []struct {
 						Index    int    `json:"index"`
 						Type     string `json:"type"`
 						ID       string `json:"id"`
@@ -787,7 +1058,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		}
 
 		delta := chunk.Choices[0].Delta
-		content := delta.Content
+		content, taggedThinking := splitThinkTaggedChunk(delta.Content, &inThinkTag, &thinkTagCarry)
 		reasoningContent := delta.ReasoningContent
 		redactedThinking := delta.RedactedThinking
 		if reasoningContent == "" {
@@ -795,6 +1066,9 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		}
 		if reasoningContent == "" {
 			reasoningContent = delta.Thinking
+		}
+		if reasoningContent == "" && taggedThinking != "" {
+			reasoningContent = taggedThinking
 		}
 		finishReason := chunk.Choices[0].FinishReason
 
@@ -808,6 +1082,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		}
 
 		if reasoningContent != "" {
+			collectedThinking.WriteString(reasoningContent)
 			appendMessageStart()
 			idx := startThinkingBlock()
 			thinkingDelta := map[string]any{
@@ -834,6 +1109,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			}
 		}
 		if redactedThinking != "" {
+			collectedThinking.WriteString(redactedThinking)
 			appendMessageStart()
 			idx := startRedactedThinkingBlock()
 			redactedDelta := map[string]any{
@@ -848,7 +1124,36 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(redactedDeltaData)))
 		}
 
-		if content != "" {
+		streamToolCalls := delta.ToolCalls
+		if len(streamToolCalls) == 0 && delta.FunctionCall != nil {
+			if strings.TrimSpace(delta.FunctionCall.Name) != "" {
+				legacyFunctionCallName = delta.FunctionCall.Name
+			}
+			streamToolCalls = append(streamToolCalls, struct {
+				Index    int    `json:"index"`
+				Type     string `json:"type"`
+				ID       string `json:"id"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments any    `json:"arguments"`
+				} `json:"function"`
+			}{
+				Index: 0,
+				Type:  "function",
+				ID:    "",
+				Function: struct {
+					Name      string `json:"name"`
+					Arguments any    `json:"arguments"`
+				}{
+					Name:      legacyFunctionCallName,
+					Arguments: delta.FunctionCall.Arguments,
+				},
+			})
+		}
+		// When tool calls are present, ignore whitespace-only text deltas.
+		// Some clients may treat a leading blank text block as a normal completion path.
+		if content != "" && !(len(streamToolCalls) > 0 && strings.TrimSpace(content) == "") {
+			collectedText.WriteString(content)
 			appendMessageStart()
 			textBlockIndex := startTextBlock()
 			contentDelta := map[string]any{
@@ -877,41 +1182,26 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(citationDeltaData)))
 		}
 
-		for _, tc := range delta.ToolCalls {
+		for _, tc := range streamToolCalls {
 			appendMessageStart()
 			key := tc.ID
 			if key == "" {
 				key = fmt.Sprintf("tool_%d", tc.Index)
 			}
+			if _, ok := seenToolKeySet[key]; !ok {
+				seenToolKeySet[key] = struct{}{}
+				seenToolKeys = append(seenToolKeys, key)
+			}
 			if tc.Function.Name != "" {
 				toolNameByKey[key] = tc.Function.Name
 			}
+			if tc.ID != "" {
+				toolIDByKey[key] = tc.ID
+			}
+			if strings.TrimSpace(tc.Type) != "" {
+				toolTypeByKey[key] = strings.TrimSpace(tc.Type)
+			}
 			pendingToolArgsByKey[key] = mergeToolArguments(pendingToolArgsByKey[key], tc.Function.Arguments)
-			toolName := toolNameByKey[key]
-			// Some upstreams stream arguments before function.name.
-			// Do not emit tool_use block with empty name.
-			if toolName == "" {
-				continue
-			}
-			toolBlockType := "tool_use"
-			if strings.TrimSpace(tc.Type) == "server_tool_use" {
-				toolBlockType = "server_tool_use"
-			}
-			toolIndex := startToolBlock(tc.ID, tc.Index, toolName, toolBlockType)
-
-			if pending := pendingToolArgsByKey[key]; pending != "" {
-				inputDelta := map[string]any{
-					"type":  "content_block_delta",
-					"index": toolIndex,
-					"delta": map[string]string{
-						"type":         "input_json_delta",
-						"partial_json": pending,
-					},
-				}
-				inputDeltaData, _ := json.Marshal(inputDelta)
-				anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(inputDeltaData)))
-				pendingToolArgsByKey[key] = ""
-			}
 		}
 	}
 
@@ -935,11 +1225,73 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		textStopData, _ := json.Marshal(textBlockStop)
 		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(textStopData)))
 	}
-	for _, key := range toolOrder {
-		idx := toolIndexByKey[key]
+	for _, key := range seenToolKeys {
+		name := strings.TrimSpace(toolNameByKey[key])
+		if name == "" {
+			continue
+		}
+		parsedInput, ok := parseToolInputJSON(pendingToolArgsByKey[key])
+		if !ok {
+			continue
+		}
+		toolType := "tool_use"
+		if toolTypeByKey[key] == "server_tool_use" {
+			toolType = "server_tool_use"
+		}
+		toolID := strings.TrimSpace(toolIDByKey[key])
+		if toolID == "" {
+			toolID = fmt.Sprintf("toolu_%s", key)
+		}
+		idx := nextIndex
+		nextIndex++
+		toolBlockStart := map[string]any{
+			"type":  "content_block_start",
+			"index": idx,
+			"content_block": map[string]any{
+				"type":  toolType,
+				"id":    toolID,
+				"name":  name,
+				"input": parsedInput,
+			},
+		}
+		toolBlockData, _ := json.Marshal(toolBlockStart)
+		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(toolBlockData)))
+		emittedToolUse = true
 		toolBlockStop := map[string]any{"type": "content_block_stop", "index": idx}
 		toolStopData, _ := json.Marshal(toolBlockStop)
 		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(toolStopData)))
+	}
+	// Fallback: some upstreams put tool call payload into thinking/text (e.g. <tool_call>{...}</tool_call>)
+	// instead of structured tool_calls in stream. Recover a synthetic tool_use block.
+	if !emittedToolUse {
+		if toolName, toolInput, ok := tryExtractToolUseFromText(collectedThinking.String() + "\n" + collectedText.String()); ok {
+			idx := nextIndex
+			nextIndex++
+			toolBlockStart := map[string]any{
+				"type":  "content_block_start",
+				"index": idx,
+				"content_block": map[string]any{
+					"type":  "tool_use",
+					"id":    fmt.Sprintf("toolu_fallback_%d", idx),
+					"name":  toolName,
+					"input": toolInput,
+				},
+			}
+			toolBlockData, _ := json.Marshal(toolBlockStart)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(toolBlockData)))
+			toolBlockStop := map[string]any{"type": "content_block_stop", "index": idx}
+			toolStopData, _ := json.Marshal(toolBlockStop)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(toolStopData)))
+			emittedToolUse = true
+		}
+	}
+	// If upstream says tool_use but no valid tool_use block was emitted,
+	// fallback to end_turn to avoid Anthropic SDK parse failure.
+	if stopReasonStr == "tool_use" && !emittedToolUse {
+		stopReasonStr = "end_turn"
+	}
+	if emittedToolUse {
+		stopReasonStr = "tool_use"
 	}
 
 	messageDelta := map[string]any{
