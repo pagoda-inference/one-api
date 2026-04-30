@@ -32,6 +32,7 @@ import Profile from './pages/Profile'
 import NotificationManage from './pages/NotificationManage'
 import BatchInference from './pages/BatchInference'
 import ChatPlayground from './pages/ChatPlayground'
+import PlaygroundConfig from './pages/PlaygroundConfig'
 import { logout, User, getUnreadNotificationCount, getNotifications, markNotificationAsRead } from './services/api'
 
 const { Content } = Layout
@@ -179,7 +180,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     label: t('menu.experience_center'),
     key: 'experience',
     children: [
-      { key: '/experience', icon: <ExperimentOutlined />, label: t('menu.text_chat') }
+      { key: '/experience', icon: <ExperimentOutlined />, label: t('menu.text_chat') },
+      ...(isAdmin ? [{ key: '/ops/playground-config', icon: <SettingOutlined />, label: '文本对话配置' }] : [])
     ]
   }
 
@@ -441,6 +443,7 @@ const App: React.FC = () => {
         <Route path="/ops/notifications" element={<ProtectedPage><NotificationManage /></ProtectedPage>} />
         <Route path="/batch" element={<ProtectedPage><BatchInference /></ProtectedPage>} />
         <Route path="/experience" element={<ProtectedPage><ChatPlayground /></ProtectedPage>} />
+        <Route path="/ops/playground-config" element={<ProtectedPage><PlaygroundConfig /></ProtectedPage>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

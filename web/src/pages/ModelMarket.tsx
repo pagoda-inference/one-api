@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Row, Col, Card, Input, Tag, Button, Drawer, Descriptions, Statistic, message, Tabs, Badge, Segmented } from 'antd'
+import { Row, Col, Card, Input, Tag, Button, Drawer, Descriptions, message, Tabs, Badge, Segmented } from 'antd'
 import {
   SearchOutlined, RobotOutlined, SyncOutlined,
   ExperimentOutlined, AppstoreOutlined, BarsOutlined,
@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../contexts/ThemeContext'
-import { getMarketModels, getMarketStats, getMarketGroups, getModelTrial, startModelTrial, calculatePrice, Model, ModelGroup, MarketStats } from '../services/api'
+import { getMarketModels, getMarketStats, getMarketGroups, calculatePrice, Model, ModelGroup, MarketStats } from '../services/api'
 
 const { Search } = Input
 
@@ -98,8 +98,6 @@ const ModelMarket: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<Model | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [priceCalc, setPriceCalc] = useState<{ prompt_tokens: number; completion_tokens: number; quota_cost: number } | null>(null)
-  const [trialInfo, setTrialInfo] = useState<any>(null)
-  const [trialLoading, setTrialLoading] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [activeTab, setActiveTab] = useState<string>('all')
   useEffect(() => {
@@ -174,29 +172,6 @@ const ModelMarket: React.FC = () => {
     setSelectedModel(model)
     setDrawerVisible(true)
     setPriceCalc(null)
-    setTrialInfo(null)
-
-    try {
-      const res = await getModelTrial(model.id)
-      setTrialInfo(res.data.data)
-    } catch (error) {
-      console.error('Failed to load trial info:', error)
-    }
-  }
-
-  const handleStartTrial = async () => {
-    if (!selectedModel) return
-    setTrialLoading(true)
-    try {
-      await startModelTrial(selectedModel.id)
-      message.success(t('modelMarket.trial_enabled'))
-      const res = await getModelTrial(selectedModel.id)
-      setTrialInfo(res.data.data)
-    } catch (error) {
-      message.error(t('modelMarket.trial_failed'))
-    } finally {
-      setTrialLoading(false)
-    }
   }
 
   const calcPrice = async (promptTokens: number, completionTokens: number) => {
@@ -275,12 +250,6 @@ const ModelMarket: React.FC = () => {
   const formatPrice = (price: number) => {
     if (price === 0) return t('modelMarket.free')
     return `¥${price.toFixed(4)}/1K`
-  }
-
-  const formatQuota = (quota: number) => {
-    if (quota >= 1000000) return (quota / 1000000).toFixed(1) + 'M'
-    if (quota >= 1000) return (quota / 1000).toFixed(0) + 'K'
-    return quota.toString()
   }
 
   const getSLAColor = (sla: string) => {
@@ -951,59 +920,31 @@ const ModelMarket: React.FC = () => {
               )}
             </Descriptions>
 
-            <Card title={t('modelMarket.trial_function')} style={{ marginBottom: 16, borderRadius: 12 }} styles={{ body: { padding: 12 } }}>
+            {/* Capabilities Tags */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: appTheme.textSecondary, marginBottom: 8 }}>能力配置</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {getCapabilityTags(selectedModel.capabilities)}
               </div>
-            </Card>
+            </div>
 
+            {/* 试用体验按钮 */}
             {selectedModel.is_trial && (
-              <Card
-                title={t('modelMarket.trial_function')}
-                style={{ marginBottom: 16, borderRadius: 12 }}
-                styles={{ header: { borderRadius: '12px 12px 0 0' } }}
+              <Button
+                type="default"
+                onClick={() => {
+                  window.location.href = `/experience?model=${selectedModel.id}`
+                }}
+                style={{
+                  marginBottom: 16,
+                  borderRadius: 8,
+                  border: '1px solid #1890ff',
+                  color: '#1890ff',
+                  background: '#fff'
+                }}
               >
-                {trialInfo ? (
-                  trialInfo.available ? (
-                    <div>
-                      <Statistic
-                        title={t('modelMarket.remaining_trial_quota')}
-                        value={formatQuota(trialInfo.quota_limit - trialInfo.quota_used)}
-                        suffix="tokens"
-                        valueStyle={{ color: '#52c41a' }}
-                      />
-                      <Button type="primary" disabled style={{ marginTop: 16, borderRadius: 8 }}>
-                        {t('modelMarket.trial_enabled')}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div>
-                      <p style={{ color: appTheme.textSecondary, marginBottom: 12 }}>试用状态: {trialInfo.reason}</p>
-                      {trialInfo.quota_used > 0 && (
-                        <Statistic
-                          title={t('token.used_quota')}
-                          value={formatQuota(trialInfo.quota_used)}
-                          suffix={`/ ${formatQuota(trialInfo.quota_limit || 0)}`}
-                        />
-                      )}
-                    </div>
-                  )
-                ) : (
-                  <div>
-                    <p style={{ color: appTheme.textSecondary, marginBottom: 16 }}>
-                      {t('modelMarket.trial_quota_tokens', { quota: formatQuota(selectedModel.trial_quota || 0) })}
-                    </p>
-                    <Button
-                      type="primary"
-                      loading={trialLoading}
-                      onClick={handleStartTrial}
-                      style={{ borderRadius: 8, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none' }}
-                    >
-                      {t('modelMarket.start_trial')}
-                    </Button>
-                  </div>
-                )}
-              </Card>
+                试用体验
+              </Button>
             )}
 
             <Card
