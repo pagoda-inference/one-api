@@ -217,7 +217,20 @@ const ModelMarket: React.FC = () => {
       'reranker': { bg: '#fff1f0', color: '#ff4d4f' },
       'ocr': { bg: '#f0f5ff', color: '#597ef7' },
       'reasoning': { bg: '#fff0f5', color: '#eb2f96' },
-      'audio': { bg: '#e6fffb', color: '#13c2c2' }
+      'audio': { bg: '#e6fffb', color: '#13c2c2' },
+      '推理模型': { bg: '#fff0f5', color: '#eb2f96' },
+      'MoE': { bg: '#fff3e6', color: '#fa8c16' },
+      'Tools': { bg: '#f6ffed', color: '#52c41a' },
+      '嵌入': { bg: '#f9f0ff', color: '#722ed1' },
+      '重排序': { bg: '#fff1f0', color: '#ff4d4f' },
+      '通用助手': { bg: '#e8f4ff', color: '#1890ff' },
+      '文案创作': { bg: '#f9f0ff', color: '#722ed1' },
+      'Vibe Coding': { bg: '#f6ffed', color: '#52c41a' },
+      '数学推理': { bg: '#fff0f5', color: '#eb2f96' },
+      '旗舰全能': { bg: '#fff7e6', color: '#fa8c16' },
+      '长文本处理': { bg: '#e6fffb', color: '#13c2c2' },
+      'FIM': { bg: '#f0f5ff', color: '#597ef7' },
+      'Prefix': { bg: '#f0f5ff', color: '#597ef7' },
     }
     return styles[cap] || { bg: appTheme.bgElevated, color: appTheme.textSecondary }
   }
@@ -692,11 +705,11 @@ const ModelMarket: React.FC = () => {
           <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginRight: 8 }}>{t('modelMarket.filter_by_capability')}:</span>
           {[
             { value: 'vision', label: t('modelMarket.cap_vision') },
-            { value: 'moe', label: t('modelMarket.cap_moe') },
-            { value: 'reasoning', label: t('modelMarket.cap_reasoning') },
-            { value: 'function_call', label: t('modelMarket.cap_tools') },
-            { value: 'embedding', label: t('modelMarket.embedding') },
-            { value: 'reranker', label: t('modelMarket.reranker') },
+            { value: 'MoE', label: 'MoE' },
+            { value: '推理模型', label: t('modelMarket.cap_reasoning') },
+            { value: 'Tools', label: t('modelMarket.cap_tools') },
+            { value: '嵌入', label: t('modelMarket.embedding') },
+            { value: '重排序', label: t('modelMarket.reranker') },
           ].map(opt => (
             <Tag
               key={opt.value}
