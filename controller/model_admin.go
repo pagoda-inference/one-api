@@ -213,7 +213,7 @@ func UpdateModel(c *gin.Context) {
 	m.UpdatedAt = time.Now().Unix()
 
 	// 如果 sort_order 发生了变化，需要重排其他模型
-	if newSortOrder != oldSortOrder && newSortOrder > 0 {
+	if newSortOrder != oldSortOrder && newSortOrder >= 0 {
 		if newSortOrder > oldSortOrder {
 			// 将 >= oldSortOrder+1 且 <= newSortOrder 的模型往后移动一位
 			model.DB.Model(&model.ModelInfo{}).

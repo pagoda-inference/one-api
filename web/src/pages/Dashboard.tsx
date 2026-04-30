@@ -12,7 +12,7 @@ import dayjs from 'dayjs'
 import {
   getDashboard, getUsageByDay, getUsageByModel, getTokens, getMarketStats,
   getSignInRecords, signIn, SignInRecord,
-  getOpsStats, getAdminUsageByModels, User
+  getOpsStats, getAdminUsageByModels, getAdminUsageDaily, User
 } from '../services/api'
 import { message } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -68,11 +68,11 @@ const Dashboard: React.FC = () => {
       }
 
       if (isAdminUser) {
-        // Admin: load ops stats and daily usage
+        // Admin: load ops stats and daily usage (all users aggregated)
         const [opsRes, modelsRes, usageRes] = await Promise.all([
           getOpsStats(),
           getAdminUsageByModels({}),
-          getUsageByDay({ start: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0] })
+          getAdminUsageDaily({ start: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0] })
         ])
         setOpsStats(opsRes.data?.data || {})
         setModelUsage(modelsRes.data?.data?.models || [])

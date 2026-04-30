@@ -308,6 +308,9 @@ export const getUsageByModel = (params?: { start?: string; end?: string }) =>
 export const getUsageByDay = (params?: { start?: string; end?: string }) =>
   api.get('/usage/daily', { params })
 
+export const getAdminUsageDaily = (params?: { start?: string; end?: string }) =>
+  api.get('/admin/usage/daily', { params })
+
 export const getUsageDetail = (params?: { model?: string; start?: string; end?: string }) =>
   api.get('/usage/detail', { params })
 

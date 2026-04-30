@@ -206,6 +206,38 @@ func GetUsageDaily(c *gin.Context) {
 	})
 }
 
+// AdminGetUsageDaily handles GET /api/admin/usage/daily
+// Returns aggregated daily usage for ALL users (admin view)
+func AdminGetUsageDaily(c *gin.Context) {
+	// Default to last 7 days (end is yesterday so BETWEEN gives exactly 7 days)
+	end := time.Now().AddDate(0, 0, -1).Unix()
+	start := end - 7*24*60*60
+
+	startParam := c.Query("start")
+	endParam := c.Query("end")
+
+	if startParam != "" {
+		start = parseTimestamp(startParam)
+	}
+	if endParam != "" {
+		end = parseTimestamp(endParam)
+	}
+
+	stats, err := model.SearchAllLogsByDay(int(start), int(end))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to get daily usage: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    stats,
+	})
+}
+
 // AdminGetUsageSummary handles GET /api/admin/usage/summary (admin only)
 func AdminGetUsageSummary(c *gin.Context) {
 	startTimestamp := parseTimestamp(c.Query("start"))

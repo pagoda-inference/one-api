@@ -285,6 +285,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminUsageRoute.GET("/summary", controller.AdminGetUsageSummary)
 			adminUsageRoute.GET("/by-users", controller.AdminGetUsageByUsers)
 			adminUsageRoute.GET("/by-models", controller.AdminGetUsageByModels)
+			adminUsageRoute.GET("/daily", controller.AdminGetUsageDaily)
 		}
 		groupRoute := apiRouter.Group("/group")
 		groupRoute.Use(middleware.AdminTokenAuth())

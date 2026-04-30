@@ -306,14 +306,15 @@ type LogStatistic struct {
 }
 
 func SearchLogsByDayAndModel(userId, start, end int) (LogStatistics []*LogStatistic, err error) {
-	groupSelect := "DATE_FORMAT(FROM_UNIXTIME(created_at), '%Y-%m-%d') as day"
+	// Use UTC for date grouping to ensure consistent results regardless of server timezone
+	groupSelect := "DATE_FORMAT(CONVERT_TZ(FROM_UNIXTIME(created_at), @@session.time_zone, '+00:00'), '%Y-%m-%d') as day"
 
 	if common.UsingPostgreSQL {
-		groupSelect = "TO_CHAR(date_trunc('day', to_timestamp(created_at)), 'YYYY-MM-DD') as day"
+		groupSelect = "TO_CHAR(date_trunc('day', to_timestamp(created_at) AT TIME ZONE 'UTC'), 'YYYY-MM-DD') as day"
 	}
 
 	if common.UsingSQLite {
-		groupSelect = "strftime('%Y-%m-%d', datetime(created_at, 'unixepoch')) as day"
+		groupSelect = "date(datetime(created_at, 'unixepoch', 'utc')) as day"
 	}
 
 	err = LOG_DB.Raw(`
@@ -329,6 +330,35 @@ func SearchLogsByDayAndModel(userId, start, end int) (LogStatistics []*LogStatis
 		GROUP BY day, model_name
 		ORDER BY day, model_name
 	`, userId, start, end).Scan(&LogStatistics).Error
+
+	return LogStatistics, err
+}
+
+// SearchAllLogsByDay returns aggregated daily usage for all users (admin view)
+func SearchAllLogsByDay(start, end int) (LogStatistics []*LogStatistic, err error) {
+	// Use UTC for date grouping to ensure consistent results regardless of server timezone
+	groupSelect := "DATE_FORMAT(CONVERT_TZ(FROM_UNIXTIME(created_at), @@session.time_zone, '+00:00'), '%Y-%m-%d') as day"
+
+	if common.UsingPostgreSQL {
+		groupSelect = "TO_CHAR(date_trunc('day', to_timestamp(created_at) AT TIME ZONE 'UTC'), 'YYYY-MM-DD') as day"
+	}
+
+	if common.UsingSQLite {
+		groupSelect = "date(datetime(created_at, 'unixepoch', 'utc')) as day"
+	}
+
+	err = LOG_DB.Raw(`
+		SELECT `+groupSelect+`,
+		model_name, count(1) as request_count,
+		sum(quota) as quota,
+		sum(prompt_tokens) as prompt_tokens,
+		sum(completion_tokens) as completion_tokens
+		FROM logs
+		WHERE type=2
+		AND created_at BETWEEN ? AND ?
+		GROUP BY day, model_name
+		ORDER BY day, model_name
+	`, start, end).Scan(&LogStatistics).Error
 
 	return LogStatistics, err
 }
