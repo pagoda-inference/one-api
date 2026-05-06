@@ -375,6 +375,44 @@ func getLarkUserDetailByUserID(tenantAccessToken, userID string) (string, string
 	return email, avatar, nil
 }
 
+func getLarkUserDetailByOpenID(tenantAccessToken, openID string) (string, string, error) {
+	client := &http.Client{Timeout: 8 * time.Second}
+	detailURL := fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/users/%s?user_id_type=open_id", openID)
+	req, err := http.NewRequest("GET", detailURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantAccessToken)
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("contact detail by open_id http status %d", resp.StatusCode)
+	}
+	var detailResp larkContactUserDetailResp
+	if err = json.Unmarshal(body, &detailResp); err != nil {
+		return "", "", err
+	}
+	if detailResp.Code != 0 {
+		return "", "", fmt.Errorf("contact detail by open_id failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
+	}
+	email := strings.TrimSpace(detailResp.Data.User.Email)
+	if email == "" {
+		email = strings.TrimSpace(detailResp.Data.User.EnterpriseEmail)
+	}
+	avatar := strings.TrimSpace(detailResp.Data.User.Avatar.AvatarOrigin)
+	if avatar == "" {
+		avatar = strings.TrimSpace(detailResp.Data.User.Avatar.Avatar72)
+	}
+	return email, avatar, nil
+}
+
 // SyncLarkUsersProfile handles POST /api/admin/lark-apps/sync-users
 // It backfills email/avatar for existing users who already bound lark_id.
 func SyncLarkUsersProfile(c *gin.Context) {
@@ -456,15 +494,31 @@ func SyncLarkUsersProfile(c *gin.Context) {
 				continue
 			}
 
-			// Try as open_id first.
-			email, avatar, detailErr = getLarkUserDetailByTenantToken(tenantToken, larkID)
+			if strings.HasPrefix(larkID, "ou_") {
+				// Normal case: lark_id stores open_id (ou_xxx)
+				email, avatar, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
+				if detailErr == nil && (email != "" || avatar != "") {
+					found = true
+					break
+				}
+				// Secondary fallback for tenants that disallow direct open_id lookup
+				email, avatar, detailErr = getLarkUserDetailByTenantToken(tenantToken, larkID)
+				if detailErr == nil && (email != "" || avatar != "") {
+					found = true
+					break
+				}
+				continue
+			}
+
+			// Legacy/non-standard case: may store user_id in lark_id.
+			email, avatar, detailErr = getLarkUserDetailByUserID(tenantToken, larkID)
 			if detailErr == nil && (email != "" || avatar != "") {
 				found = true
 				break
 			}
 
-			// Fallback: some legacy users may store user_id in lark_id.
-			email, avatar, detailErr = getLarkUserDetailByUserID(tenantToken, larkID)
+			// Fallback: try as open_id as last resort.
+			email, avatar, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
 			if detailErr == nil && (email != "" || avatar != "") {
 				found = true
 				break
