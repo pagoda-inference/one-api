@@ -206,8 +206,9 @@ type larkContactUserDetailResp struct {
 	Message string `json:"message"`
 	Data    struct {
 		User struct {
-			Email  string `json:"email"`
-			Avatar struct {
+			Email           string `json:"email"`
+			EnterpriseEmail string `json:"enterprise_email"`
+			Avatar          struct {
 				AvatarOrigin string `json:"avatar_origin"`
 				Avatar72     string `json:"avatar_72"`
 			} `json:"avatar"`
@@ -326,6 +327,9 @@ func getLarkUserDetailByTenantToken(tenantAccessToken, openID string) (string, s
 		return "", "", fmt.Errorf("contact detail failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
 	}
 	email := strings.TrimSpace(detailResp.Data.User.Email)
+	if email == "" {
+		email = strings.TrimSpace(detailResp.Data.User.EnterpriseEmail)
+	}
 	avatar := strings.TrimSpace(detailResp.Data.User.Avatar.AvatarOrigin)
 	if avatar == "" {
 		avatar = strings.TrimSpace(detailResp.Data.User.Avatar.Avatar72)
@@ -361,6 +365,9 @@ func getLarkUserDetailByUserID(tenantAccessToken, userID string) (string, string
 		return "", "", fmt.Errorf("contact detail by user_id failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
 	}
 	email := strings.TrimSpace(detailResp.Data.User.Email)
+	if email == "" {
+		email = strings.TrimSpace(detailResp.Data.User.EnterpriseEmail)
+	}
 	avatar := strings.TrimSpace(detailResp.Data.User.Avatar.AvatarOrigin)
 	if avatar == "" {
 		avatar = strings.TrimSpace(detailResp.Data.User.Avatar.Avatar72)
