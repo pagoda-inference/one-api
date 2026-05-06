@@ -495,14 +495,9 @@ func SyncLarkUsersProfile(c *gin.Context) {
 			}
 
 			if strings.HasPrefix(larkID, "ou_") {
-				// Normal case: lark_id stores open_id (ou_xxx)
+				// Normal case: lark_id stores open_id (ou_xxx).
+				// Do NOT fall back to convert endpoint here, otherwise the real open_id error gets masked.
 				email, avatar, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
-				if detailErr == nil && (email != "" || avatar != "") {
-					found = true
-					break
-				}
-				// Secondary fallback for tenants that disallow direct open_id lookup
-				email, avatar, detailErr = getLarkUserDetailByTenantToken(tenantToken, larkID)
 				if detailErr == nil && (email != "" || avatar != "") {
 					found = true
 					break
