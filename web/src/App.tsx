@@ -181,7 +181,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     key: 'experience',
     children: [
       { key: '/experience', icon: <ExperimentOutlined />, label: t('menu.text_chat') },
-      ...(isAdmin ? [{ key: '/ops/playground-config', icon: <SettingOutlined />, label: '文本对话配置' }] : [])
+      ...(isAdmin ? [{ key: '/ops/playground-config', icon: <SettingOutlined />, label: t('menu.playground_config') }] : [])
     ]
   }
 
@@ -253,7 +253,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout className="app-shell" style={{ minHeight: '100vh' }}>
       <Layout.Sider
         trigger={null}
         collapsible
@@ -267,7 +267,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           top: 0,
           bottom: 0,
           zIndex: 100,
-          overflow: 'auto'
+          overflow: 'auto',
+          borderRight: '1px solid var(--border-subtle)'
         }}
       >
         <div style={{
@@ -295,7 +296,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {!collapsed && (
           <div style={{ padding: '16px 12px' }}>
             <div style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #5e6ad2 0%, #7170ff 100%)',
               borderRadius: 10,
               padding: '12px 16px',
               marginBottom: 16
@@ -321,14 +322,15 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         />
       </Layout.Sider>
 
-      <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin-left 0.2s', background: 'var(--bg-secondary)' }}>
+      <Layout style={{ marginLeft: collapsed ? 80 : 220, transition: 'margin-left 0.2s', background: 'transparent' }}>
         <Layout.Header style={{
-          background: 'var(--bg-primary)',
+          background: themeMode === 'dark' ? 'rgba(15,16,17,0.82)' : 'rgba(255,255,255,0.72)',
+          backdropFilter: 'saturate(140%) blur(10px)',
           padding: '0 24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          boxShadow: '0 1px 4px var(--shadow)',
+          boxShadow: '0 1px 0 var(--border-subtle), var(--shadow-sm)',
           position: 'sticky',
           top: 0,
           zIndex: 99,
@@ -342,7 +344,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               onClick={() => setCollapsed(!collapsed)}
               style={{ fontSize: 16, color: 'var(--text-primary)' }}
             />
-            <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 510, letterSpacing: '-0.12px' }}>
               {getGreeting()}，{user.display_name || user.username}
             </span>
           </div>
@@ -382,7 +384,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Button
               type="link"
               onClick={() => window.open('https://baotaai.bedicloud.net/guide', '_blank')}
-              style={{ color: 'var(--text-primary)', fontSize: 14 }}
+              style={{ color: 'var(--text-secondary)', fontSize: 14, fontWeight: 510 }}
             >
               {t('common.docs')}
             </Button>
@@ -393,7 +395,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               trigger={['click']}
             >
               <Avatar
-                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', cursor: 'pointer' }}
+                style={{ background: 'linear-gradient(135deg, #5e6ad2 0%, #7170ff 100%)', cursor: 'pointer' }}
               >
                 {user.display_name?.[0] || user.username?.[0]?.toUpperCase()}
               </Avatar>
@@ -404,7 +406,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <Content style={{
           margin: 24,
           minHeight: 'calc(100vh - 64px - 48px)',
-          background: 'var(--bg-secondary)'
+          background: 'transparent'
         }}>
           {children}
         </Content>

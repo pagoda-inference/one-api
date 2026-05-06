@@ -100,7 +100,8 @@
     "api_docs": "API Docs",
     "model_management_admin": "Model Management",
     "provider_management": "Providers",
-    "system_notifications": "Notifications"
+    "system_notifications": "Notifications",
+    "playground_config": "Text Chat Config"
   },
   "login": {
     "title": "BEDI Baota",
@@ -168,7 +169,14 @@
     "usage_trend": "Usage Trend",
     "model_ranking": "Model Ranking",
     "call_ranking": "Call Ranking",
-    "yuan": "Yuan"
+    "yuan": "Yuan",
+    "weekday_sun": "Sun",
+    "weekday_mon": "Mon",
+    "weekday_tue": "Tue",
+    "weekday_wed": "Wed",
+    "weekday_thu": "Thu",
+    "weekday_fri": "Fri",
+    "weekday_sat": "Sat"
   },
   "channel": {
     "name": "Name",

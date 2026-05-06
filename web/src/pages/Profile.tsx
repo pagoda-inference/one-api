@@ -507,10 +507,10 @@ const Profile: React.FC = () => {
                     }}
                   >
                     {i18n.language === 'zh'
-                      ? '简体中文'
+                      ? t('common.chinese')
                       : i18n.language === 'en'
-                      ? 'English'
-                      : '简体中文'}
+                      ? t('common.english')
+                      : t('common.chinese')}
                   </div>
                 </div>
               </div>
@@ -521,8 +521,8 @@ const Profile: React.FC = () => {
                   width: 120,
                 }}
                 options={[
-                  { value: 'zh', label: '简体中文' },
-                  { value: 'en', label: 'English' },
+                  { value: 'zh', label: t('common.chinese') },
+                  { value: 'en', label: t('common.english') },
                 ]}
               />
             </div>

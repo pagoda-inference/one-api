@@ -341,11 +341,11 @@ const ModelManagement: React.FC = () => {
       >
         <Form form={form} layout="vertical" initialValues={{ status: 'active' }}>
           <Form.Item name="id" label={t('modelManagement.model_id')} rules={[{ required: true, message: t('modelManagement.enter_model_id') }]}>
-            <Input placeholder="如: Qwen2.5-72B-Instruct 或 deepseek-ai/DeepSeek-R1" />
+            <Input placeholder={t('modelManagement.like_qwen')} />
           </Form.Item>
 
           <Form.Item name="name" label={t('modelManagement.model_name')} rules={[{ required: true, message: t('modelManagement.enter_model_name') }]}>
-            <Input placeholder="如: Qwen2.5-72B-Instruct" />
+            <Input placeholder={t('modelManagement.like_qwen_name')} />
           </Form.Item>
 
           <Row gutter={16}>
@@ -370,7 +370,7 @@ const ModelManagement: React.FC = () => {
             <Form.Item name="context_len" label={form.getFieldValue('model_type') === 'embedding' ? t('modelManagement.vector_dimension') : t('modelManagement.context_length')} style={{ flex: 1 }}>
               <InputNumber
                 style={{ width: '100%' }}
-                placeholder={form.getFieldValue('model_type') === 'embedding' ? '如: 1536' : '如: 32768'}
+                placeholder={form.getFieldValue('model_type') === 'embedding' ? t('modelManagement.placeholder_dimensions') : t('modelManagement.placeholder_context')}
                 min={0}
               />
             </Form.Item>

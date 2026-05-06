@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;510;590&display=swap');
+
 /* Linear-Inspired Design System for One-API */
 
 * {
@@ -6,8 +8,6 @@
   box-sizing: border-box;
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;510;590&display=swap');
-
 :root {
   /* Brand */
   --color-primary: #5e6ad2;
@@ -15,19 +15,19 @@
   --color-accent-hover: #828fff;
 
   /* Background Surfaces - Light Mode */
-  --bg-primary: #f7f8f8;
-  --bg-secondary: #f3f4f5;
+  --bg-primary: #f5f7fb;
+  --bg-secondary: #eef1f6;
   --bg-card: #ffffff;
-  --bg-elevated: #ffffff;
+  --bg-elevated: #f9fbff;
 
   /* Text - Light Mode */
-  --text-primary: #1a1a1a;
-  --text-secondary: #6b7280;
+  --text-primary: #141a23;
+  --text-secondary: #5a6475;
   --text-muted: #9ca3af;
   --text-subtle: #6b7280;
 
   /* Borders - Light Mode */
-  --border-color: #e6e6e6;
+  --border-color: #dde3ed;
   --border-subtle: rgba(0, 0, 0, 0.06);
   --border-standard: rgba(0, 0, 0, 0.08);
 
@@ -35,9 +35,9 @@
   --header-bg: #101114;
 
   /* Shadows */
-  --shadow-sm: rgba(0, 0, 0, 0.04) 0px 1px 2px;
-  --shadow-md: rgba(0, 0, 0, 0.08) 0px 4px 12px;
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-sm: rgba(17, 24, 39, 0.04) 0px 1px 2px;
+  --shadow-md: rgba(17, 24, 39, 0.08) 0px 8px 24px;
+  --shadow-lg: rgba(17, 24, 39, 0.14) 0px 16px 40px;
 
   /* Status Colors */
   --color-success: #10b981;
@@ -82,7 +82,10 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-weight: 400;
   font-feature-settings: 'cv01', 'ss03';
-  background-color: var(--bg-primary);
+  background:
+    radial-gradient(1200px 600px at -10% -20%, rgba(94, 106, 210, 0.12), transparent 45%),
+    radial-gradient(900px 500px at 110% -10%, rgba(113, 112, 255, 0.08), transparent 40%),
+    var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -91,6 +94,13 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 500px at 80% -10%, rgba(113, 112, 255, 0.08), transparent 45%),
+    var(--bg-secondary);
 }
 
 /* ===== Layout ===== */

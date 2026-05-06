@@ -100,7 +100,8 @@
     "api_docs": "API 文档",
     "model_management_admin": "模型管理",
     "provider_management": "Provider 管理",
-    "system_notifications": "系统通知"
+    "system_notifications": "系统通知",
+    "playground_config": "文本对话配置"
   },
   "login": {
     "title": "BEDI 宝塔",
@@ -168,7 +169,14 @@
     "usage_trend": "用量趋势",
     "model_ranking": "模型排行",
     "call_ranking": "调用排行",
-    "yuan": "元"
+    "yuan": "元",
+    "weekday_sun": "日",
+    "weekday_mon": "一",
+    "weekday_tue": "二",
+    "weekday_wed": "三",
+    "weekday_thu": "四",
+    "weekday_fri": "五",
+    "weekday_sat": "六"
   },
   "channel": {
     "name": "名称",

@@ -311,7 +311,7 @@ const Dashboard: React.FC = () => {
               </Button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
-              {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => (
+              {[t('dashboard.weekday_sun'), t('dashboard.weekday_mon'), t('dashboard.weekday_tue'), t('dashboard.weekday_wed'), t('dashboard.weekday_thu'), t('dashboard.weekday_fri'), t('dashboard.weekday_sat')].map((d, i) => (
                 <div key={i} style={{ textAlign: 'center', color: appTheme.textSecondary, fontSize: 12, padding: 8 }}>{d}</div>
               ))}
               {(() => {

@@ -180,7 +180,6 @@ func getLarkUserInfoByCode(code string, appId string) (*LarkUser, string, error)
 	defer res.Body.Close()
 	var oAuthResponse LarkOAuthResponse
 	tokenBody, _ := io.ReadAll(res.Body)
-	logger.SysLogf("Lark token response: %s", string(tokenBody))
 	err = json.Unmarshal(tokenBody, &oAuthResponse)
 	if err != nil {
 		return nil, "", err
@@ -200,7 +199,6 @@ func getLarkUserInfoByCode(code string, appId string) (*LarkUser, string, error)
 	defer res2.Body.Close()
 	var larkUserResp LarkUserInfoResponse
 	body, _ := io.ReadAll(res2.Body)
-	logger.SysLogf("Lark user info response body: %s", string(body))
 	err = json.Unmarshal(body, &larkUserResp)
 	if err != nil {
 		logger.SysLogf("Lark user info unmarshal error: %v", err)
