@@ -901,6 +901,11 @@
   "profile": {
     "personal_center": "Personal Center",
     "basic_info": "Basic Info",
+    "preferences": "Preferences",
+    "theme": "Theme",
+    "dark_mode": "Dark Mode",
+    "light_mode": "Light Mode",
+    "language": "Language",
     "change_password": "Change Password",
     "account_info": "Account Info",
     "display_name": "Display Name",

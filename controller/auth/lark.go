@@ -24,16 +24,87 @@ type LarkOAuthResponse struct {
 }
 
 type LarkUser struct {
-	Name   string `json:"name"`
-	OpenID string `json:"open_id"`
-	UserID string `json:"user_id"`
-	Openid string `json:"openid"`
+	Name      string `json:"name"`
+	OpenID    string `json:"open_id"`
+	UserID    string `json:"user_id"`
+	Openid    string `json:"openid"`
+	Email     string `json:"email"`
+	AvatarUrl string `json:"avatar_url"`
 }
 
 // LarkUserInfoResponse wraps the user info in a "data" field
 type LarkUserInfoResponse struct {
 	Code int      `json:"code"`
 	Data LarkUser `json:"data"`
+}
+
+// getLarkUserDetail fetches email and avatar from Contact V3 API
+func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl string, err error) {
+	// First convert open_id to user_id
+	convertReq := map[string]interface{}{
+		"open_ids": []string{openId},
+	}
+	convertBody, err := json.Marshal(convertReq)
+	if err != nil {
+		return "", "", err
+	}
+	req, err := http.NewRequest("POST", "https://open.feishu.cn/open-apis/contact/v3/users/batch_get_id", bytes.NewBuffer(convertBody))
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var convertResp struct {
+		Data struct {
+			UserList []struct {
+				UserID string `json:"user_id"`
+				OpenID string `json:"open_id"`
+			} `json:"user_list"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &convertResp); err != nil || len(convertResp.Data.UserList) == 0 {
+		return "", "", errors.New("failed to convert open_id to user_id")
+	}
+	userId := convertResp.Data.UserList[0].UserID
+
+	// Then get user detail with email and avatar
+	req2, err := http.NewRequest("GET", fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/users/%s?user_id_type=user_id", userId), nil)
+	if err != nil {
+		return "", "", err
+	}
+	req2.Header.Set("Authorization", "Bearer "+accessToken)
+	resp2, err := client.Do(req2)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp2.Body.Close()
+	body2, _ := io.ReadAll(resp2.Body)
+	var detailResp struct {
+		Data struct {
+			User struct {
+				Email  string `json:"email"`
+				Avatar struct {
+					AvatarOrigin string `json:"avatar_origin"`
+					Avatar72     string `json:"avatar_72"`
+				} `json:"avatar"`
+			} `json:"user"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body2, &detailResp); err != nil {
+		return "", "", err
+	}
+	avatar := detailResp.Data.User.Avatar.AvatarOrigin
+	if avatar == "" {
+		avatar = detailResp.Data.User.Avatar.Avatar72
+	}
+	return detailResp.Data.User.Email, avatar, nil
 }
 
 // getLarkID returns the actual Lark/OpenID, checking multiple possible field names
@@ -50,9 +121,9 @@ func (u *LarkUser) getLarkID() string {
 	return ""
 }
 
-func getLarkUserInfoByCode(code string, appId string) (*LarkUser, error) {
+func getLarkUserInfoByCode(code string, appId string) (*LarkUser, string, error) {
 	if code == "" {
-		return nil, errors.New("无效的参数")
+		return nil, "", errors.New("无效的参数")
 	}
 
 	var clientId, clientSecret string
@@ -62,14 +133,14 @@ func getLarkUserInfoByCode(code string, appId string) (*LarkUser, error) {
 		// Multi-app mode: look up app from database
 		id, err := strconv.Atoi(appId)
 		if err != nil {
-			return nil, errors.New("无效的飞书应用ID")
+			return nil, "", errors.New("无效的飞书应用ID")
 		}
 		app, err := model.GetLarkOAuthAppById(id)
 		if err != nil {
-			return nil, errors.New("飞书应用不存在或已禁用")
+			return nil, "", errors.New("飞书应用不存在或已禁用")
 		}
 		if !app.Enabled {
-			return nil, errors.New("飞书应用已禁用")
+			return nil, "", errors.New("飞书应用已禁用")
 		}
 		clientId = app.ClientId
 		clientSecret = app.ClientSecret
@@ -90,11 +161,11 @@ func getLarkUserInfoByCode(code string, appId string) (*LarkUser, error) {
 	}
 	jsonData, err := json.Marshal(values)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	req, err := http.NewRequest("POST", "https://open.feishu.cn/open-apis/authen/v2/oauth/token", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -104,7 +175,7 @@ func getLarkUserInfoByCode(code string, appId string) (*LarkUser, error) {
 	res, err := client.Do(req)
 	if err != nil {
 		logger.SysLog(err.Error())
-		return nil, errors.New("无法连接至飞书服务器，请稍后重试！")
+		return nil, "", errors.New("无法连接至飞书服务器，请稍后重试！")
 	}
 	defer res.Body.Close()
 	var oAuthResponse LarkOAuthResponse
@@ -112,31 +183,32 @@ func getLarkUserInfoByCode(code string, appId string) (*LarkUser, error) {
 	logger.SysLogf("Lark token response: %s", string(tokenBody))
 	err = json.Unmarshal(tokenBody, &oAuthResponse)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if oAuthResponse.AccessToken == "" {
-		return nil, errors.New("飞书返回的 access_token 为空")
+		return nil, "", errors.New("飞书返回的 access_token 为空")
 	}
 	req, err = http.NewRequest("GET", fmt.Sprintf("https://open.feishu.cn/open-apis/authen/v1/user_info?access_token=%s", oAuthResponse.AccessToken), nil)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	res2, err := client.Do(req)
 	if err != nil {
 		logger.SysLog(err.Error())
-		return nil, errors.New("无法连接至飞书服务器，请稍后重试！")
+		return nil, "", errors.New("无法连接至飞书服务器，请稍后重试！")
 	}
+	defer res2.Body.Close()
 	var larkUserResp LarkUserInfoResponse
 	body, _ := io.ReadAll(res2.Body)
 	logger.SysLogf("Lark user info response body: %s", string(body))
 	err = json.Unmarshal(body, &larkUserResp)
 	if err != nil {
 		logger.SysLogf("Lark user info unmarshal error: %v", err)
-		return nil, err
+		return nil, "", err
 	}
 	larkUser := larkUserResp.Data
 	logger.SysLogf("Lark user info parsed: name=%s, openid=%s, user_id=%s, open_id=%s", larkUser.Name, larkUser.Openid, larkUser.UserID, larkUser.OpenID)
-	return &larkUser, nil
+	return &larkUser, oAuthResponse.AccessToken, nil
 }
 
 func LarkOAuth(c *gin.Context) {
@@ -157,7 +229,7 @@ func LarkOAuth(c *gin.Context) {
 	}
 	code := c.Query("code")
 	appId := c.Query("app_id") // Get app_id from query parameter
-	larkUser, err := getLarkUserInfoByCode(code, appId)
+	larkUser, accessToken, err := getLarkUserInfoByCode(code, appId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -165,6 +237,9 @@ func LarkOAuth(c *gin.Context) {
 		})
 		return
 	}
+	// Fetch email and avatar from Lark Contact API
+	larkEmail, larkAvatar, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
+
 	user := model.User{
 		LarkId: larkUser.getLarkID(),
 	}
@@ -177,6 +252,16 @@ func LarkOAuth(c *gin.Context) {
 			})
 			return
 		}
+		// Update email and avatar for existing users
+		if larkEmail != "" {
+			user.Email = larkEmail
+		}
+		if larkAvatar != "" {
+			user.AvatarUrl = larkAvatar
+		}
+		if err := user.Update(false); err != nil {
+			logger.SysLogf("LarkOAuth: failed to update user email/avatar, user_id=%d, err=%v", user.Id, err)
+		}
 	} else {
 		if config.RegisterEnabled {
 			user.Username = "lark_" + strconv.Itoa(model.GetMaxUserId()+1)
@@ -187,6 +272,8 @@ func LarkOAuth(c *gin.Context) {
 			}
 			user.Role = model.RoleCommonUser
 			user.Status = model.UserStatusEnabled
+			user.Email = larkEmail
+			user.AvatarUrl = larkAvatar
 
 			if err := user.Insert(ctx, 0); err != nil {
 				c.JSON(http.StatusOK, gin.H{
@@ -217,7 +304,7 @@ func LarkOAuth(c *gin.Context) {
 func LarkBind(c *gin.Context) {
 	code := c.Query("code")
 	appId := c.Query("app_id") // Get app_id from query parameter
-	larkUser, err := getLarkUserInfoByCode(code, appId)
+	larkUser, accessToken, err := getLarkUserInfoByCode(code, appId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -225,6 +312,9 @@ func LarkBind(c *gin.Context) {
 		})
 		return
 	}
+	// Fetch email and avatar from Lark Contact API
+	larkEmail, larkAvatar, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
+
 	user := model.User{
 		LarkId: larkUser.getLarkID(),
 	}
@@ -248,6 +338,12 @@ func LarkBind(c *gin.Context) {
 		return
 	}
 	user.LarkId = larkUser.getLarkID()
+	if larkEmail != "" {
+		user.Email = larkEmail
+	}
+	if larkAvatar != "" {
+		user.AvatarUrl = larkAvatar
+	}
 	err = user.Update(false)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

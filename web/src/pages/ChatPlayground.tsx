@@ -1864,7 +1864,7 @@ const ChatPlayground: React.FC = () => {
                     : t('chat.input_placeholder')
               }
               autoSize={{ minRows: 2, maxRows: 4 }}
-              style={{ border: 'none', boxShadow: 'none', resize: 'none', padding: 0, paddingTop: 32 }}
+              style={{ border: 'none', boxShadow: 'none', resize: 'none', padding: 0, paddingTop: 32, paddingLeft: 12, textAlign: 'left', verticalAlign: 'top' }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
               <div style={{ fontSize: 11, color: appTheme.textTertiary }}>
