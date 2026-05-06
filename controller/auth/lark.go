@@ -33,6 +33,7 @@ type LarkUser struct {
 	Openid    string `json:"openid"`
 	Email     string `json:"email"`
 	AvatarUrl string `json:"avatar_url"`
+	AvatarURL string `json:"avatar_url_72"`
 }
 
 // LarkUserInfoResponse wraps the user info in a "data" field
@@ -299,8 +300,17 @@ func LarkOAuth(c *gin.Context) {
 		})
 		return
 	}
-	// Fetch email and avatar from Lark Contact API
+	// Fetch email and avatar from Lark Contact API; fallback to authen fields when unavailable
 	larkEmail, larkAvatar, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
+	if larkEmail == "" {
+		larkEmail = larkUser.Email
+	}
+	if larkAvatar == "" {
+		larkAvatar = larkUser.AvatarUrl
+	}
+	if larkAvatar == "" {
+		larkAvatar = larkUser.AvatarURL
+	}
 
 	user := model.User{
 		LarkId: larkUser.getLarkID(),
@@ -374,8 +384,17 @@ func LarkBind(c *gin.Context) {
 		})
 		return
 	}
-	// Fetch email and avatar from Lark Contact API
+	// Fetch email and avatar from Lark Contact API; fallback to authen fields when unavailable
 	larkEmail, larkAvatar, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
+	if larkEmail == "" {
+		larkEmail = larkUser.Email
+	}
+	if larkAvatar == "" {
+		larkAvatar = larkUser.AvatarUrl
+	}
+	if larkAvatar == "" {
+		larkAvatar = larkUser.AvatarURL
+	}
 
 	user := model.User{
 		LarkId: larkUser.getLarkID(),

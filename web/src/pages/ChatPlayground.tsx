@@ -1515,16 +1515,6 @@ const ChatPlayground: React.FC = () => {
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
-        <div
-          style={{
-            padding: '16px 24px',
-            borderBottom: `1px solid ${appTheme.borderLight}`,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        />
-
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', minHeight: 0, background: appTheme.bgPage }}>
           <div
             ref={messageListRef}

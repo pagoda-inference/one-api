@@ -128,7 +128,7 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px' }}>
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px' }}>
       {/* Profile Header Card */}
       <Card
         style={{
@@ -213,7 +213,7 @@ const Profile: React.FC = () => {
                 marginBottom: 8,
               }}
             >
-              @{userInfo?.username}
+              {userInfo?.email || t('profile.email_placeholder')}
             </p>
             <div style={{ display: 'flex', gap: 12 }}>
               <span
@@ -248,24 +248,19 @@ const Profile: React.FC = () => {
               </span>
             </div>
           </div>
-
-          {/* User ID */}
-          <div
-            style={{
-              textAlign: 'right',
-              color: appTheme.textTertiary,
-              fontSize: 12,
-            }}
-          >
-            <div style={{ fontFamily: 'Berkeley Mono, monospace' }}>
-              #{userInfo?.id}
-            </div>
-          </div>
         </div>
       </Card>
 
       {/* Settings Cards */}
-      <div style={{ display: 'grid', gap: 16 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: 16,
+          alignItems: 'start',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
         {/* Basic Info Card */}
         <Card
           title={
@@ -391,35 +386,37 @@ const Profile: React.FC = () => {
             </Button>
           </Form>
         </Card>
+        </div>
 
-        {/* Preferences Card */}
-        <Card
-          title={
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 590,
-                color: appTheme.textPrimary,
-                letterSpacing: '-0.12px',
-              }}
-            >
-              {t('profile.preferences')}
-            </span>
-          }
-          style={{
-            background: themeMode === 'dark'
-              ? 'rgba(255,255,255,0.02)'
-              : 'rgba(255,255,255,0.80)',
-            border: `1px solid ${
-              themeMode === 'dark'
-                ? 'rgba(255,255,255,0.08)'
-                : 'rgba(0,0,0,0.08)'
-            }`,
-            borderRadius: 12,
-          }}
-          styles={{ body: { padding: '16px 24px' } }}
-        >
-          <div style={{ display: 'grid', gap: 0 }}>
+        <div style={{ minWidth: 0, display: 'grid', gap: 16 }}>
+          {/* Preferences Card */}
+          <Card
+            title={
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 590,
+                  color: appTheme.textPrimary,
+                  letterSpacing: '-0.12px',
+                }}
+              >
+                {t('profile.preferences')}
+              </span>
+            }
+            style={{
+              background: themeMode === 'dark'
+                ? 'rgba(255,255,255,0.02)'
+                : 'rgba(255,255,255,0.80)',
+              border: `1px solid ${
+                themeMode === 'dark'
+                  ? 'rgba(255,255,255,0.08)'
+                  : 'rgba(0,0,0,0.08)'
+              }`,
+              borderRadius: 12,
+            }}
+            styles={{ body: { padding: '16px 24px' } }}
+          >
+            <div style={{ display: 'grid', gap: 0 }}>
             {/* Theme Setting */}
             <div
               style={{
@@ -526,54 +523,37 @@ const Profile: React.FC = () => {
                 ]}
               />
             </div>
-          </div>
-        </Card>
+            </div>
+          </Card>
 
-        {/* Account Info Card */}
-        <Card
-          title={
-            <span
-              style={{
-                fontSize: 14,
-                fontWeight: 590,
-                color: appTheme.textPrimary,
-                letterSpacing: '-0.12px',
-              }}
-            >
-              {t('profile.account_info')}
-            </span>
-          }
-          style={{
-            background: themeMode === 'dark'
-              ? 'rgba(255,255,255,0.02)'
-              : 'rgba(255,255,255,0.80)',
-            border: `1px solid ${
-              themeMode === 'dark'
-                ? 'rgba(255,255,255,0.08)'
-                : 'rgba(0,0,0,0.08)'
-            }`,
-            borderRadius: 12,
-          }}
-          styles={{ body: { padding: '16px 24px' } }}
-        >
-          <div style={{ display: 'grid', gap: 12 }}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: 14,
-              }}
-            >
-              <span style={{ color: appTheme.textTertiary }}>{t('profile.user_id')}</span>
+          {/* Account Info Card */}
+          <Card
+            title={
               <span
                 style={{
-                  color: appTheme.textSecondary,
-                  fontFamily: 'Berkeley Mono, ui-monospace, monospace',
+                  fontSize: 14,
+                  fontWeight: 590,
+                  color: appTheme.textPrimary,
+                  letterSpacing: '-0.12px',
                 }}
               >
-                #{userInfo?.id}
+                {t('profile.account_info')}
               </span>
-            </div>
+            }
+            style={{
+              background: themeMode === 'dark'
+                ? 'rgba(255,255,255,0.02)'
+                : 'rgba(255,255,255,0.80)',
+              border: `1px solid ${
+                themeMode === 'dark'
+                  ? 'rgba(255,255,255,0.08)'
+                  : 'rgba(0,0,0,0.08)'
+              }`,
+              borderRadius: 12,
+            }}
+            styles={{ body: { padding: '16px 24px' } }}
+          >
+            <div style={{ display: 'grid', gap: 12 }}>
             <div
               style={{
                 display: 'flex',
@@ -604,8 +584,9 @@ const Profile: React.FC = () => {
                 {getStatusLabel(userInfo?.status || 1)}
               </span>
             </div>
-          </div>
-        </Card>
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   )
