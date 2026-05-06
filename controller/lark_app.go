@@ -409,6 +409,7 @@ func SyncLarkUsersProfile(c *gin.Context) {
 	failed := 0
 	skipped := 0
 	errorsList := make([]string, 0)
+	failedExamples := make([]string, 0)
 
 	tokenByAppID := make(map[int]string, len(apps))
 	for _, app := range apps {
@@ -426,11 +427,12 @@ func SyncLarkUsersProfile(c *gin.Context) {
 			"success": false,
 			"message": "No available lark tenant token",
 			"data": gin.H{
-				"total":   total,
-				"updated": 0,
-				"failed":  total,
-				"skipped": 0,
-				"errors":  errorsList,
+				"total":           total,
+				"updated":         0,
+				"failed":          total,
+				"skipped":         0,
+				"errors":          errorsList,
+				"failed_examples": failedExamples,
 			},
 		})
 		return
@@ -472,6 +474,9 @@ func SyncLarkUsersProfile(c *gin.Context) {
 		if !found {
 			failed++
 			logger.SysLogf("SyncLarkUsersProfile: user=%d lark_id=%s all apps failed, last_err=%v", u.Id, larkID, detailErr)
+			if len(failedExamples) < 20 {
+				failedExamples = append(failedExamples, fmt.Sprintf("user=%d lark_id=%s err=%v", u.Id, larkID, detailErr))
+			}
 			continue
 		}
 
@@ -503,11 +508,12 @@ func SyncLarkUsersProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"total":   total,
-			"updated": updated,
-			"failed":  failed,
-			"skipped": skipped,
-			"errors":  errorsList,
+			"total":           total,
+			"updated":         updated,
+			"failed":          failed,
+			"skipped":         skipped,
+			"errors":          errorsList,
+			"failed_examples": failedExamples,
 		},
 	})
 }
