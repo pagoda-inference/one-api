@@ -60,7 +60,7 @@ func GetByContext(c *gin.Context) *Meta {
 		meta.HideUpstreamModel = meta.Config.HideUpstreamModel
 	}
 	if meta.BaseURL == "" {
-		meta.BaseURL = channeltype.ChannelBaseURLs[meta.ChannelType]
+		meta.BaseURL = channeltype.BaseURLByType(meta.ChannelType)
 	}
 	meta.APIType = channeltype.ToAPIType(meta.ChannelType)
 	return &meta

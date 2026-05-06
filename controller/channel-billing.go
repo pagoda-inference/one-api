@@ -309,7 +309,7 @@ func updateChannelOpenRouterBalance(channel *model.Channel) (float64, error) {
 }
 
 func updateChannelBalance(channel *model.Channel) (float64, error) {
-	baseURL := channeltype.ChannelBaseURLs[channel.Type]
+	baseURL := channeltype.BaseURLByType(channel.Type)
 	if channel.GetBaseURL() == "" {
 		channel.BaseURL = &baseURL
 	}

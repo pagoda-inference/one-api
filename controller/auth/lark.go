@@ -20,6 +20,9 @@ import (
 )
 
 type LarkOAuthResponse struct {
+	Code        int    `json:"code"`
+	Message     string `json:"message"`
+	Msg         string `json:"msg"`
 	AccessToken string `json:"access_token"`
 }
 
@@ -34,12 +37,28 @@ type LarkUser struct {
 
 // LarkUserInfoResponse wraps the user info in a "data" field
 type LarkUserInfoResponse struct {
-	Code int      `json:"code"`
-	Data LarkUser `json:"data"`
+	Code    int      `json:"code"`
+	Message string   `json:"message"`
+	Msg     string   `json:"msg"`
+	Data    LarkUser `json:"data"`
+}
+
+func larkErrMsg(message, msg string) string {
+	if message != "" {
+		return message
+	}
+	if msg != "" {
+		return msg
+	}
+	return "unknown lark error"
 }
 
 // getLarkUserDetail fetches email and avatar from Contact V3 API
 func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl string, err error) {
+	if openId == "" {
+		return "", "", errors.New("lark open id is empty")
+	}
+
 	// First convert open_id to user_id
 	convertReq := map[string]interface{}{
 		"open_ids": []string{openId},
@@ -60,16 +79,31 @@ func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl stri
 		return "", "", err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("lark contact convert http status %d", resp.StatusCode)
+	}
 	var convertResp struct {
-		Data struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Msg     string `json:"msg"`
+		Data    struct {
 			UserList []struct {
 				UserID string `json:"user_id"`
 				OpenID string `json:"open_id"`
 			} `json:"user_list"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(body, &convertResp); err != nil || len(convertResp.Data.UserList) == 0 {
+	if err := json.Unmarshal(body, &convertResp); err != nil {
+		return "", "", err
+	}
+	if convertResp.Code != 0 {
+		return "", "", fmt.Errorf("lark contact convert failed: %s", larkErrMsg(convertResp.Message, convertResp.Msg))
+	}
+	if len(convertResp.Data.UserList) == 0 {
 		return "", "", errors.New("failed to convert open_id to user_id")
 	}
 	userId := convertResp.Data.UserList[0].UserID
@@ -85,9 +119,18 @@ func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl stri
 		return "", "", err
 	}
 	defer resp2.Body.Close()
-	body2, _ := io.ReadAll(resp2.Body)
+	body2, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		return "", "", err
+	}
+	if resp2.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("lark contact detail http status %d", resp2.StatusCode)
+	}
 	var detailResp struct {
-		Data struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Msg     string `json:"msg"`
+		Data    struct {
 			User struct {
 				Email  string `json:"email"`
 				Avatar struct {
@@ -99,6 +142,9 @@ func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl stri
 	}
 	if err := json.Unmarshal(body2, &detailResp); err != nil {
 		return "", "", err
+	}
+	if detailResp.Code != 0 {
+		return "", "", fmt.Errorf("lark contact detail failed: %s", larkErrMsg(detailResp.Message, detailResp.Msg))
 	}
 	avatar := detailResp.Data.User.Avatar.AvatarOrigin
 	if avatar == "" {
@@ -178,11 +224,20 @@ func getLarkUserInfoByCode(code string, appId string) (*LarkUser, string, error)
 		return nil, "", errors.New("无法连接至飞书服务器，请稍后重试！")
 	}
 	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("飞书 token 请求失败，HTTP %d", res.StatusCode)
+	}
 	var oAuthResponse LarkOAuthResponse
-	tokenBody, _ := io.ReadAll(res.Body)
+	tokenBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, "", err
+	}
 	err = json.Unmarshal(tokenBody, &oAuthResponse)
 	if err != nil {
 		return nil, "", err
+	}
+	if oAuthResponse.Code != 0 {
+		return nil, "", fmt.Errorf("飞书 token 请求失败: %s", larkErrMsg(oAuthResponse.Message, oAuthResponse.Msg))
 	}
 	if oAuthResponse.AccessToken == "" {
 		return nil, "", errors.New("飞书返回的 access_token 为空")
@@ -197,12 +252,21 @@ func getLarkUserInfoByCode(code string, appId string) (*LarkUser, string, error)
 		return nil, "", errors.New("无法连接至飞书服务器，请稍后重试！")
 	}
 	defer res2.Body.Close()
+	if res2.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("飞书用户信息请求失败，HTTP %d", res2.StatusCode)
+	}
 	var larkUserResp LarkUserInfoResponse
-	body, _ := io.ReadAll(res2.Body)
+	body, err := io.ReadAll(res2.Body)
+	if err != nil {
+		return nil, "", err
+	}
 	err = json.Unmarshal(body, &larkUserResp)
 	if err != nil {
 		logger.SysLogf("Lark user info unmarshal error: %v", err)
 		return nil, "", err
+	}
+	if larkUserResp.Code != 0 {
+		return nil, "", fmt.Errorf("飞书用户信息请求失败: %s", larkErrMsg(larkUserResp.Message, larkUserResp.Msg))
 	}
 	larkUser := larkUserResp.Data
 	logger.SysLogf("Lark user info parsed: name=%s, openid=%s, user_id=%s, open_id=%s", larkUser.Name, larkUser.Openid, larkUser.UserID, larkUser.OpenID)

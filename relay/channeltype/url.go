@@ -1,5 +1,7 @@
 package channeltype
 
+import "github.com/pagoda-inference/one-api/common/logger"
+
 var ChannelBaseURLs = []string{
 	"",                              // 0
 	"https://api.openai.com",        // 1
@@ -56,8 +58,18 @@ var ChannelBaseURLs = []string{
 	"https://generativelanguage.googleapis.com/v1beta/openai/", // 51
 }
 
+// BaseURLByType returns a safe base URL for a channel type.
+// It avoids out-of-range panics if enum/table drift happens.
+func BaseURLByType(channelType int) string {
+	if channelType < 0 || channelType >= len(ChannelBaseURLs) {
+		logger.SysLogf("invalid channel type for base URL: %d (len=%d)", channelType, len(ChannelBaseURLs))
+		return ""
+	}
+	return ChannelBaseURLs[channelType]
+}
+
 func init() {
 	if len(ChannelBaseURLs) != Dummy {
-		panic("channel base urls length not match")
+		logger.SysErrorf("channel base urls length mismatch: got=%d, expect=%d", len(ChannelBaseURLs), Dummy)
 	}
 }

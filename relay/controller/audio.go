@@ -126,7 +126,7 @@ func RelayAudioHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		audioModel = modelMapping[audioModel]
 	}
 
-	baseURL := channeltype.ChannelBaseURLs[channelType]
+	baseURL := channeltype.BaseURLByType(channelType)
 	requestURL := c.Request.URL.String()
 	if c.GetString(ctxkey.BaseURL) != "" {
 		baseURL = c.GetString(ctxkey.BaseURL)
