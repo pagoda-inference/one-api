@@ -214,6 +214,7 @@ func SetApiRouter(router *gin.Engine) {
 			// Lark OAuth app management routes
 			adminRoute.GET("/lark-apps", controller.GetLarkOAuthApps)
 			adminRoute.POST("/lark-apps", controller.CreateLarkOAuthApp)
+			adminRoute.POST("/lark-apps/sync-users", controller.SyncLarkUsersProfile)
 			adminRoute.PUT("/lark-apps/:id", controller.UpdateLarkOAuthApp)
 			adminRoute.DELETE("/lark-apps/:id", controller.DeleteLarkOAuthApp)
 		}

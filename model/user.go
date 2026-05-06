@@ -67,6 +67,13 @@ func GetUsersWithEmail() ([]*User, error) {
 	return users, err
 }
 
+// GetUsersWithLarkID returns users who already bound a Lark account.
+func GetUsersWithLarkID() ([]*User, error) {
+	var users []*User
+	err := DB.Where("lark_id IS NOT NULL AND lark_id != '' AND status != ?", UserStatusDeleted).Find(&users).Error
+	return users, err
+}
+
 // GetTotalUsersCount returns the total count of users (excluding deleted) with optional keyword filter
 func GetTotalUsersCount(keyword string) (int64, error) {
 	var count int64
