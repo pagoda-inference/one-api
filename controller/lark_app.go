@@ -287,7 +287,7 @@ func getLarkUserDetailByTenantToken(tenantAccessToken, openID string) (string, s
 		return "", "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("contact convert http status %d", resp.StatusCode)
+		return "", "", fmt.Errorf("contact convert http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var convertResp larkContactConvertResp
 	if err = json.Unmarshal(body, &convertResp); err != nil {
@@ -317,7 +317,7 @@ func getLarkUserDetailByTenantToken(tenantAccessToken, openID string) (string, s
 		return "", "", err
 	}
 	if resp2.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("contact detail http status %d", resp2.StatusCode)
+		return "", "", fmt.Errorf("contact detail http status %d body=%s", resp2.StatusCode, strings.TrimSpace(string(body2)))
 	}
 	var detailResp larkContactUserDetailResp
 	if err = json.Unmarshal(body2, &detailResp); err != nil {
@@ -355,7 +355,7 @@ func getLarkUserDetailByUserID(tenantAccessToken, userID string) (string, string
 		return "", "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("contact detail by user_id http status %d", resp.StatusCode)
+		return "", "", fmt.Errorf("contact detail by user_id http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var detailResp larkContactUserDetailResp
 	if err = json.Unmarshal(body, &detailResp); err != nil {
@@ -393,7 +393,7 @@ func getLarkUserDetailByOpenID(tenantAccessToken, openID string) (string, string
 		return "", "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("contact detail by open_id http status %d", resp.StatusCode)
+		return "", "", fmt.Errorf("contact detail by open_id http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var detailResp larkContactUserDetailResp
 	if err = json.Unmarshal(body, &detailResp); err != nil {
@@ -425,11 +425,13 @@ func SyncLarkUsersProfile(c *gin.Context) {
 		return
 	}
 
-	apps, err := model.GetLarkOAuthApps()
+	// Use all apps (including disabled) for historical user backfill,
+	// because lark open_id is app-scoped.
+	apps, err := model.GetAllLarkOAuthApps()
 	if err != nil || len(apps) == 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "No enabled Lark OAuth app found",
+			"message": "No Lark OAuth app found",
 		})
 		return
 	}
