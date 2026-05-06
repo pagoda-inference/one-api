@@ -333,6 +333,41 @@ func getLarkUserDetailByTenantToken(tenantAccessToken, openID string) (string, s
 	return email, avatar, nil
 }
 
+func getLarkUserDetailByUserID(tenantAccessToken, userID string) (string, string, error) {
+	client := &http.Client{Timeout: 8 * time.Second}
+	detailURL := fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/users/%s?user_id_type=user_id", userID)
+	req, err := http.NewRequest("GET", detailURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+tenantAccessToken)
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("contact detail by user_id http status %d", resp.StatusCode)
+	}
+	var detailResp larkContactUserDetailResp
+	if err = json.Unmarshal(body, &detailResp); err != nil {
+		return "", "", err
+	}
+	if detailResp.Code != 0 {
+		return "", "", fmt.Errorf("contact detail by user_id failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
+	}
+	email := strings.TrimSpace(detailResp.Data.User.Email)
+	avatar := strings.TrimSpace(detailResp.Data.User.Avatar.AvatarOrigin)
+	if avatar == "" {
+		avatar = strings.TrimSpace(detailResp.Data.User.Avatar.Avatar72)
+	}
+	return email, avatar, nil
+}
+
 // SyncLarkUsersProfile handles POST /api/admin/lark-apps/sync-users
 // It backfills email/avatar for existing users who already bound lark_id.
 func SyncLarkUsersProfile(c *gin.Context) {
@@ -368,6 +403,7 @@ func SyncLarkUsersProfile(c *gin.Context) {
 	skipped := 0
 	errorsList := make([]string, 0)
 
+	tokenByAppID := make(map[int]string, len(apps))
 	for _, app := range apps {
 		tenantToken, tokenErr := getLarkTenantAccessToken(app)
 		if tokenErr != nil {
@@ -375,45 +411,86 @@ func SyncLarkUsersProfile(c *gin.Context) {
 			errorsList = append(errorsList, fmt.Sprintf("app %s token error: %v", app.Name, tokenErr))
 			continue
 		}
+		tokenByAppID[app.Id] = tenantToken
+	}
 
-		for _, u := range users {
-			if strings.TrimSpace(u.LarkId) == "" {
-				skipped++
-				continue
-			}
-			email, avatar, detailErr := getLarkUserDetailByTenantToken(tenantToken, u.LarkId)
-			if detailErr != nil {
-				failed++
-				logger.SysLogf("SyncLarkUsersProfile: user=%d lark_id=%s err=%v", u.Id, u.LarkId, detailErr)
-				continue
-			}
+	if len(tokenByAppID) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "No available lark tenant token",
+			"data": gin.H{
+				"total":   total,
+				"updated": 0,
+				"failed":  total,
+				"skipped": 0,
+				"errors":  errorsList,
+			},
+		})
+		return
+	}
 
-			newEmail := strings.TrimSpace(email)
-			newAvatar := strings.TrimSpace(avatar)
-
-			needUpdate := false
-			if newEmail != "" && newEmail != u.Email {
-				u.Email = newEmail
-				needUpdate = true
-			}
-			if newAvatar != "" && newAvatar != u.AvatarUrl {
-				u.AvatarUrl = newAvatar
-				needUpdate = true
-			}
-
-			if !needUpdate {
-				skipped++
-				continue
-			}
-			if err = u.Update(false); err != nil {
-				failed++
-				logger.SysLogf("SyncLarkUsersProfile: update user=%d failed=%v", u.Id, err)
-				continue
-			}
-			updated++
+	for _, u := range users {
+		larkID := strings.TrimSpace(u.LarkId)
+		if larkID == "" {
+			skipped++
+			continue
 		}
-		// Use first working app to avoid duplicated scanning.
-		break
+
+		var email string
+		var avatar string
+		var detailErr error
+
+		found := false
+		for _, app := range apps {
+			tenantToken, ok := tokenByAppID[app.Id]
+			if !ok || tenantToken == "" {
+				continue
+			}
+
+			// Try as open_id first.
+			email, avatar, detailErr = getLarkUserDetailByTenantToken(tenantToken, larkID)
+			if detailErr == nil && (email != "" || avatar != "") {
+				found = true
+				break
+			}
+
+			// Fallback: some legacy users may store user_id in lark_id.
+			email, avatar, detailErr = getLarkUserDetailByUserID(tenantToken, larkID)
+			if detailErr == nil && (email != "" || avatar != "") {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			failed++
+			logger.SysLogf("SyncLarkUsersProfile: user=%d lark_id=%s all apps failed, last_err=%v", u.Id, larkID, detailErr)
+			continue
+		}
+
+		newEmail := strings.TrimSpace(email)
+		newAvatar := strings.TrimSpace(avatar)
+
+		needUpdate := false
+		if newEmail != "" && newEmail != u.Email {
+			u.Email = newEmail
+			needUpdate = true
+		}
+		if newAvatar != "" && newAvatar != u.AvatarUrl {
+			u.AvatarUrl = newAvatar
+			needUpdate = true
+		}
+
+		if !needUpdate {
+			skipped++
+			continue
+		}
+		if err = u.Update(false); err != nil {
+			failed++
+			logger.SysLogf("SyncLarkUsersProfile: update user=%d failed=%v", u.Id, err)
+			continue
+		}
+		updated++
 	}
 
 	c.JSON(http.StatusOK, gin.H{
