@@ -422,6 +422,10 @@ type AnthropicContent struct {
 	ToolUseId string `json:"tool_use_id,omitempty"`
 }
 
+func isAnthropicToolResultType(t string) bool {
+	return t == "tool_result" || strings.HasSuffix(t, "_tool_result")
+}
+
 // parseAnthropicContent handles both string and array content formats
 func parseAnthropicContent(content any) []AnthropicContent {
 	if content == nil {
@@ -444,7 +448,7 @@ func parseAnthropicContent(content any) []AnthropicContent {
 				}
 				// Anthropic tool_result uses `content`, not `text`.
 				// Preserve textual content for conversion into OpenAI tool message.
-				if strings.HasSuffix(c.Type, "_tool_result") && c.Text == "" {
+				if isAnthropicToolResultType(c.Type) && c.Text == "" {
 					switch v := m["content"].(type) {
 					case string:
 						c.Text = v
@@ -552,7 +556,7 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 				continue
 			}
 
-			if strings.HasSuffix(c.Type, "_tool_result") {
+			if isAnthropicToolResultType(c.Type) {
 				if c.ToolUseId == "" {
 					// Invalid tool_result block (missing tool_use_id) should not produce
 					// malformed OpenAI tool messages; keep as plain user text fallback.
@@ -620,18 +624,8 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 	if req.ToolChoice != nil {
 		openaiReq.ToolChoice = convertAnthropicToolChoice(req.ToolChoice)
 	} else if len(req.Tools) > 0 {
-		// Compatibility default for non-Anthropic upstreams:
-		// when tools are provided but no explicit tool_choice is set,
-		// prefer required tool call to avoid "thinking + plain text" fallback.
-		openaiReq.ToolChoice = "required"
-	}
-	// Some Anthropic clients explicitly send tool_choice=auto.
-	// For OpenAI-compatible upstreams in this gateway path, auto often degrades to text-only.
-	// If tools exist, force required to keep tool loop reliable.
-	if len(req.Tools) > 0 {
-		if choice, ok := openaiReq.ToolChoice.(string); ok && strings.TrimSpace(strings.ToLower(choice)) == "auto" {
-			openaiReq.ToolChoice = "required"
-		}
+		// Anthropic default is auto: tools are available but the model may answer normally.
+		openaiReq.ToolChoice = "auto"
 	}
 
 	// Preserve explicit thinking intent with higher priority than backend defaults.
@@ -658,13 +652,26 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 		}
 		openaiReq.ExtraFields["thinking"] = thinkingPayload
 	}
+	// Compatibility guard for OpenAI-compatible upstreams behind Anthropic gateway:
+	// many upstreams do not support Anthropic-style hidden thinking channel and may
+	// leak planning text or stall tool loop when thinking is enabled.
+	// This conversion function is only used on anthropic->openai path, so disable by default.
+	if openaiReq.ExtraFields == nil {
+		openaiReq.ExtraFields = make(map[string]any)
+	}
+	openaiReq.ReasoningEffort = nil
+	if openaiReq.ChatTemplateKwargs == nil {
+		openaiReq.ChatTemplateKwargs = make(map[string]any)
+	}
+	openaiReq.ChatTemplateKwargs["enable_thinking"] = false
+	openaiReq.ExtraFields["enable_thinking"] = false
+	openaiReq.ExtraFields["thinking"] = map[string]any{
+		"type": "disabled",
+	}
 	// Tool-use reliability guard:
 	// For some OpenAI-compatible upstreams, thinking mode can lead to "thought-only"
 	// responses without actual tool_calls. When tools are present, prioritize tool execution.
 	if len(req.Tools) > 0 {
-		if openaiReq.ExtraFields == nil {
-			openaiReq.ExtraFields = make(map[string]any)
-		}
 		openaiReq.ExtraFields["enable_thinking"] = false
 		openaiReq.ExtraFields["thinking"] = map[string]any{
 			"type": "disabled",
@@ -677,7 +684,24 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 			openaiReq.ExtraFields = make(map[string]any)
 		}
 		for k, v := range req.ExtraFields {
-			if k != "thinking_budget_tokens" { // Don't overwrite if already set
+			switch k {
+			case "thinking_budget_tokens":
+				// Keep converted value if present.
+				continue
+			case "enable_thinking", "thinking", "reasoning", "reasoning_effort",
+				"reasoning_content", "thinking_budget":
+				// Keep gateway compatibility guard for anthropic->openai path.
+				continue
+			case "chat_template_kwargs":
+				if extraKwargs, ok := v.(map[string]any); ok {
+					for kk, vv := range extraKwargs {
+						if kk == "enable_thinking" {
+							continue
+						}
+						openaiReq.ChatTemplateKwargs[kk] = vv
+					}
+				}
+			default:
 				openaiReq.ExtraFields[k] = v
 			}
 		}
@@ -907,6 +931,7 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 	toolTypeByKey := make(map[string]string)
 	toolNameByKey := make(map[string]string)
 	pendingToolArgsByKey := make(map[string]string)
+	toolKeyByIndex := make(map[int]string)
 	emittedToolUse := false
 	var collectedText strings.Builder
 	var collectedThinking strings.Builder
@@ -1185,8 +1210,13 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		for _, tc := range streamToolCalls {
 			appendMessageStart()
 			key := tc.ID
-			if key == "" {
+			if key != "" {
+				toolKeyByIndex[tc.Index] = key
+			} else if existingKey, ok := toolKeyByIndex[tc.Index]; ok {
+				key = existingKey
+			} else {
 				key = fmt.Sprintf("tool_%d", tc.Index)
+				toolKeyByIndex[tc.Index] = key
 			}
 			if _, ok := seenToolKeySet[key]; !ok {
 				seenToolKeySet[key] = struct{}{}
@@ -1230,7 +1260,8 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 		if name == "" {
 			continue
 		}
-		parsedInput, ok := parseToolInputJSON(pendingToolArgsByKey[key])
+		argsJSON := strings.TrimSpace(pendingToolArgsByKey[key])
+		_, ok := parseToolInputJSON(argsJSON)
 		if !ok {
 			continue
 		}
@@ -1251,11 +1282,21 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 				"type":  toolType,
 				"id":    toolID,
 				"name":  name,
-				"input": parsedInput,
+				"input": map[string]any{},
 			},
 		}
 		toolBlockData, _ := json.Marshal(toolBlockStart)
 		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(toolBlockData)))
+		toolInputDelta := map[string]any{
+			"type":  "content_block_delta",
+			"index": idx,
+			"delta": map[string]string{
+				"type":         "input_json_delta",
+				"partial_json": argsJSON,
+			},
+		}
+		toolInputDeltaData, _ := json.Marshal(toolInputDelta)
+		anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(toolInputDeltaData)))
 		emittedToolUse = true
 		toolBlockStop := map[string]any{"type": "content_block_stop", "index": idx}
 		toolStopData, _ := json.Marshal(toolBlockStop)
@@ -1265,6 +1306,10 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 	// instead of structured tool_calls in stream. Recover a synthetic tool_use block.
 	if !emittedToolUse {
 		if toolName, toolInput, ok := tryExtractToolUseFromText(collectedThinking.String() + "\n" + collectedText.String()); ok {
+			argsBytes, err := json.Marshal(toolInput)
+			if err != nil {
+				argsBytes = []byte("{}")
+			}
 			idx := nextIndex
 			nextIndex++
 			toolBlockStart := map[string]any{
@@ -1274,11 +1319,21 @@ func convertOpenAIStreamToAnthropic(respBody []byte, originModel string, hideUps
 					"type":  "tool_use",
 					"id":    fmt.Sprintf("toolu_fallback_%d", idx),
 					"name":  toolName,
-					"input": toolInput,
+					"input": map[string]any{},
 				},
 			}
 			toolBlockData, _ := json.Marshal(toolBlockStart)
 			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_start\ndata: %s", string(toolBlockData)))
+			toolInputDelta := map[string]any{
+				"type":  "content_block_delta",
+				"index": idx,
+				"delta": map[string]string{
+					"type":         "input_json_delta",
+					"partial_json": string(argsBytes),
+				},
+			}
+			toolInputDeltaData, _ := json.Marshal(toolInputDelta)
+			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_delta\ndata: %s", string(toolInputDeltaData)))
 			toolBlockStop := map[string]any{"type": "content_block_stop", "index": idx}
 			toolStopData, _ := json.Marshal(toolBlockStop)
 			anthropicLines = append(anthropicLines, fmt.Sprintf("event: content_block_stop\ndata: %s", string(toolStopData)))
