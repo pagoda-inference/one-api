@@ -395,6 +395,7 @@
     "invoice_record": "发票记录",
     "invoice_list": "发票列表",
     "invoice_id": "发票号",
+    "create_time": "创建时间",
     "related_orders": "关联订单",
     "apply_invoice": "申请发票",
     "invoice_title": "发票抬头",

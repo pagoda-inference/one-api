@@ -363,7 +363,7 @@ const Dashboard: React.FC = () => {
           <Card style={{ borderRadius: 12, border: appTheme.border }}>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{t('dashboard.recent_7day_usage_trend')}</div>
             {usageData.length > 0 ? (
-              <ReactECharts option={getUsageChartOption()} style={{ height: 300 }} />
+              <ReactECharts option={getUsageChartOption()} style={{ height: 300 }} notMerge={true} />
             ) : (
               <Empty description={t('dashboard.no_usage_data')} style={{ padding: 60 }} />
             )}
@@ -374,7 +374,7 @@ const Dashboard: React.FC = () => {
           <Card style={{ borderRadius: 12, border: appTheme.border }}>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 16 }}>{t('dashboard.model_usage_ranking')}</div>
             {modelUsage.length > 0 ? (
-              <ReactECharts option={getModelChartOption()} style={{ height: 300 }} />
+              <ReactECharts option={getModelChartOption()} style={{ height: 300 }} notMerge={true} />
             ) : (
               <Empty description={t('dashboard.no_model_usage')} style={{ padding: 60 }} />
             )}

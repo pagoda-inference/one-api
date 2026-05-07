@@ -394,6 +394,7 @@
     "invoice_record": "Invoice Record",
     "invoice_list": "Invoice List",
     "invoice_id": "Invoice Number",
+    "create_time": "Create Time",
     "related_orders": "Related Orders",
     "apply_invoice": "Apply for Invoice",
     "invoice_title": "Invoice Title",
