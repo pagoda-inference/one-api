@@ -210,7 +210,7 @@ const Dashboard: React.FC = () => {
         nameTextStyle: { color: appTheme.textSecondary, fontSize: 12 },
         axisLine: { show: false },
         splitLine: { lineStyle: { color: appTheme.borderLight } },
-        axisLabel: { color: appTheme.textSecondary }
+        axisLabel: { color: appTheme.textSecondary, formatter: formatAxisNumber }
       },
       series: [{
         data: values.map(v => ({ value: v, itemStyle: { color: appTheme.primary } })),
