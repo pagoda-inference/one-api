@@ -184,7 +184,7 @@ func isModelVisibleToUser(visibleToTeams string, tenantIds []int) bool {
 }
 
 func RetrieveModel(c *gin.Context) {
-	modelId := c.Param("model")
+	modelId := strings.TrimPrefix(c.Param("model"), "/")
 	userId := c.GetInt(ctxkey.Id)
 	tenantIds, _ := model.GetUserTenantIds(userId)
 

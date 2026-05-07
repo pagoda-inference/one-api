@@ -15,13 +15,13 @@ func SetRelayRouter(router *gin.Engine) {
 	modelsRouter.Use(middleware.TokenAuth())
 	{
 		modelsRouter.GET("", controller.ListModels)
-		modelsRouter.GET("/:model", controller.RetrieveModel)
+		modelsRouter.GET("/*model", controller.RetrieveModel)
 	}
 	anthropicModelsRouter := router.Group("/anthropic/v1/models")
 	anthropicModelsRouter.Use(middleware.TokenAuth())
 	{
 		anthropicModelsRouter.GET("", controller.ListModels)
-		anthropicModelsRouter.GET("/:model", controller.RetrieveModel)
+		anthropicModelsRouter.GET("/*model", controller.RetrieveModel)
 	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RelayPanicRecover(), middleware.QueueMiddleware(), middleware.TokenAuth(), middleware.TokenRateLimitMiddleware(), middleware.TenantRateLimitMiddleware(), middleware.ModelRateLimitMiddleware(), middleware.Distribute())
