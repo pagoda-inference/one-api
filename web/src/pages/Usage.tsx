@@ -57,8 +57,9 @@ const Usage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true)
-      const end = dayjs()
-      const start = dayjs().subtract(7, 'day')
+      const now = dayjs()
+      const defaultStart = now.subtract(30, 'day').unix().toString()
+      const defaultEnd = now.unix().toString()
 
       // Check role from localStorage directly
       const userInfoStr = localStorage.getItem('user_info')
@@ -74,11 +75,11 @@ const Usage: React.FC = () => {
       }
 
       if (isAdminUser) {
-        // Admin: load all users usage
+        // Admin: load all users usage (all time by default)
         const [summaryRes, usersRes, modelsRes] = await Promise.all([
-          getAdminUsageSummary({ start: start.unix().toString(), end: end.unix().toString() }),
-          getAdminUsageByUsers({ start: start.unix().toString(), end: end.unix().toString() }),
-          getAdminUsageByModels({ start: start.unix().toString(), end: end.unix().toString() })
+          getAdminUsageSummary({}),
+          getAdminUsageByUsers({}),
+          getAdminUsageByModels({})
         ])
 
         setSummary(summaryRes.data?.data || null)
@@ -86,12 +87,13 @@ const Usage: React.FC = () => {
         setModelUsage(modelsRes.data?.data?.models || [])
         setModels(modelsRes.data?.data?.models || [])
       } else {
-        // User: load own usage
+        // User: load own usage (all time by default)
         const [summaryRes, modelRes, modelsRes, detailRes] = await Promise.all([
           getUsageSummary(),
           getUsageByModel(),
           getMarketModels({ limit: 100 }),
-          getUsageDetail({ start: start.unix().toString(), end: end.unix().toString() })
+          // Keep summary/model stats all-time, but make daily detail readable by default.
+          getUsageDetail({ start: defaultStart, end: defaultEnd })
         ])
 
         setSummary(summaryRes.data?.data || null)
@@ -110,6 +112,9 @@ const Usage: React.FC = () => {
   const handleSearch = async () => {
     try {
       setLoading(true)
+      const now = dayjs()
+      const defaultStart = now.subtract(30, 'day').unix().toString()
+      const defaultEnd = now.unix().toString()
       const params: any = {}
 
       if (dateRange) {
@@ -137,7 +142,12 @@ const Usage: React.FC = () => {
         setUserUsage(usersRes.data?.data?.users || [])
         setModelUsage(modelsRes.data?.data?.models || [])
       } else {
-        const detailRes = await getUsageDetail({ ...params, model: selectedModel || undefined })
+        const detailRes = await getUsageDetail({
+          ...params,
+          // When date is not selected, keep daily panel useful with a bounded window.
+          ...(dateRange ? {} : { start: defaultStart, end: defaultEnd }),
+          model: selectedModel || undefined
+        })
         const data = detailRes.data?.data || {}
         setModelUsage(data.by_model || [])
         setDailyUsage(data.by_day || [])
@@ -308,85 +318,52 @@ const Usage: React.FC = () => {
     }
   ]
 
+  const tablePagination = {
+    pageSize: 10,
+    showSizeChanger: false
+  }
+
   if (loading && !summary) {
     return <Spin size="large" style={{ display: 'flex', justifyContent: 'center', marginTop: 100 }} />
   }
 
+  const statCards = isAdmin
+    ? [
+        { title: t('usage.total_consumed_quota'), value: (summary as any)?.total_quota ?? 0 },
+        { title: t('usage.total_token'), value: (summary as any)?.total_tokens ?? 0 },
+        { title: t('usage.total_input_token'), value: (summary as any)?.total_prompt_tokens ?? 0 },
+        { title: t('usage.total_output_token'), value: (summary as any)?.total_completion_tokens ?? 0 }
+      ]
+    : [
+        { title: t('usage.total_requests'), value: summary?.total_requests ?? 0 },
+        { title: t('usage.total_token'), value: (summary as any)?.total_tokens ?? 0 },
+        { title: t('usage.consumed_quota'), value: summary?.total_quota ?? 0 },
+        { title: t('usage.total_input_token'), value: summary?.total_prompt_tokens ?? 0 },
+        { title: t('usage.total_output_token'), value: summary?.total_completion_tokens ?? 0 }
+      ]
+
   return (
     <div>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={isAdmin ? 6 : 6}>
-          <Card>
+      <div
+        style={{
+          display: 'grid',
+          gap: 16,
+          gridTemplateColumns: isAdmin
+            ? 'repeat(auto-fit, minmax(220px, 1fr))'
+            : 'repeat(auto-fit, minmax(200px, 1fr))'
+        }}
+      >
+        {statCards.map((item) => (
+          <Card key={item.title}>
             <Statistic
-              title={isAdmin ? t('usage.total_consumed_quota') : t('usage.total_requests')}
-              value={isAdmin ? (summary as any)?.total_quota ?? 0 : summary?.total_requests ?? 0}
+              title={item.title}
+              value={item.value}
               prefix={<ApiOutlined />}
               formatter={(v) => formatQuota(Number(v) || 0)}
             />
           </Card>
-        </Col>
-        {isAdmin ? (
-          <>
-            <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic
-                  title={t('usage.total_token')}
-                  value={(summary as any)?.total_tokens ?? 0}
-                  formatter={(v) => formatQuota(Number(v) || 0)}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic
-                  title={t('usage.total_input_token')}
-                  value={(summary as any)?.total_prompt_tokens ?? 0}
-                  formatter={(v) => formatQuota(Number(v) || 0)}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic
-                  title={t('usage.total_output_token')}
-                  value={(summary as any)?.total_completion_tokens ?? 0}
-                  formatter={(v) => formatQuota(Number(v) || 0)}
-                />
-              </Card>
-            </Col>
-          </>
-        ) : (
-          <>
-            <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic
-                  title={t('usage.consumed_quota')}
-                  value={summary?.total_quota ?? 0}
-                  formatter={(v) => formatQuota(Number(v) || 0)}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic
-                  title={t('usage.total_input_token')}
-                  value={summary?.total_prompt_tokens ?? 0}
-                  formatter={(v) => formatQuota(Number(v) || 0)}
-                />
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              <Card>
-                <Statistic
-                  title={t('usage.total_output_token')}
-                  value={summary?.total_completion_tokens ?? 0}
-                  formatter={(v) => formatQuota(Number(v) || 0)}
-                />
-              </Card>
-            </Col>
-          </>
-        )}
-      </Row>
+        ))}
+      </div>
 
       <Card style={{ marginTop: 16 }}>
         <Row gutter={[16, 16]} align="middle">
@@ -420,25 +397,25 @@ const Usage: React.FC = () => {
       {isAdmin ? (
         // Admin view: show user and model tables
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col xs={24} lg={12}>
-            <Card title={t('usage.usage_by_user')}>
+          <Col xs={24} lg={12} style={{ display: 'flex' }}>
+            <Card title={t('usage.usage_by_user')} style={{ width: '100%' }}>
               <Table
                 dataSource={userUsage}
                 columns={userColumns}
                 rowKey="user_id"
                 size="small"
-                pagination={{ pageSize: 10 }}
+                pagination={tablePagination}
               />
             </Card>
           </Col>
-          <Col xs={24} lg={12}>
-            <Card title={t('usage.usage_by_model')}>
+          <Col xs={24} lg={12} style={{ display: 'flex' }}>
+            <Card title={t('usage.usage_by_model')} style={{ width: '100%' }}>
               <Table
                 dataSource={modelUsage}
                 columns={modelColumns}
                 rowKey="model_name"
                 size="small"
-                pagination={{ pageSize: 10 }}
+                pagination={tablePagination}
               />
             </Card>
           </Col>
@@ -446,25 +423,25 @@ const Usage: React.FC = () => {
       ) : (
         // User view: show model and daily tables
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col xs={24} lg={12}>
-            <Card title={t('usage.usage_by_model')}>
+          <Col xs={24} lg={12} style={{ display: 'flex' }}>
+            <Card title={t('usage.usage_by_model')} style={{ width: '100%' }}>
               <Table
                 dataSource={modelUsage}
                 columns={modelColumns}
                 rowKey="model_name"
                 size="small"
-                pagination={{ pageSize: 10 }}
+                pagination={tablePagination}
               />
             </Card>
           </Col>
-          <Col xs={24} lg={12}>
-            <Card title={t('usage.daily_detail')}>
+          <Col xs={24} lg={12} style={{ display: 'flex' }}>
+            <Card title={t('usage.daily_detail')} style={{ width: '100%' }}>
               <Table
                 dataSource={dailyUsage}
                 columns={dailyColumns}
                 rowKey={(record) => `${record.day}-${record.model_name}`}
                 size="small"
-                pagination={{ pageSize: 10 }}
+                pagination={tablePagination}
               />
             </Card>
           </Col>

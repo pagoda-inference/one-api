@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
 import { Row, Col, Card, Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, message, Popconfirm, Tabs, Statistic } from 'antd'
-import { TeamOutlined, UserOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, AuditOutlined } from '@ant-design/icons'
+import { TeamOutlined, UserOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, AuditOutlined, CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons'
 import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, getOpsUsers, Tenant, TenantUser, AuditLog, getAllCompanies, getDepartments, createCompany, createDepartment, deleteTenant, Company, Department } from '../services/api'
 import { useTranslation } from 'react-i18next'
 
@@ -32,6 +32,7 @@ const Teams: React.FC = () => {
   // Company/Department hierarchy
   const [companies, setCompanies] = useState<Company[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [collapsedDepartmentIds, setCollapsedDepartmentIds] = useState<Set<number>>(new Set())
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
   const [isRoot, setIsRoot] = useState(false)
 
@@ -65,11 +66,34 @@ const Teams: React.FC = () => {
     try {
       const res = await getDepartments(companyId)
       if (res.data.success) {
-        setDepartments(res.data.data || [])
+        const nextDepartments = res.data.data || []
+        setDepartments(nextDepartments)
+        // Keep previous collapse preferences for departments that still exist.
+        setCollapsedDepartmentIds((prev) => {
+          const next = new Set<number>()
+          for (const dept of nextDepartments) {
+            if (prev.has(dept.id)) {
+              next.add(dept.id)
+            }
+          }
+          return next
+        })
       }
     } catch (error) {
       console.error('Failed to load departments:', error)
     }
+  }
+
+  const toggleDepartmentCollapsed = (departmentId: number) => {
+    setCollapsedDepartmentIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(departmentId)) {
+        next.delete(departmentId)
+      } else {
+        next.add(departmentId)
+      }
+      return next
+    })
   }
 
   const handleCompanyChange = (companyId: number) => {
@@ -377,10 +401,19 @@ const Teams: React.FC = () => {
                   departments.map(d => (
                     <div key={d.id}>
                       <div style={{ fontWeight: 600, color: appTheme.textSecondary, padding: '4px 0', fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>{d.name}</span>
+                        <Space size={6}>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={collapsedDepartmentIds.has(d.id) ? <CaretRightOutlined /> : <CaretDownOutlined />}
+                            onClick={() => toggleDepartmentCollapsed(d.id)}
+                            style={{ padding: 0, width: 20, minWidth: 20, height: 20, color: appTheme.textSecondary }}
+                          />
+                          <span>{d.name}</span>
+                        </Space>
                         <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)} />
                       </div>
-                      {tenants.filter(tenant => tenant.department_id === d.id).map(tenant => (
+                      {!collapsedDepartmentIds.has(d.id) && tenants.filter(tenant => tenant.department_id === d.id).map(tenant => (
                         <Card key={tenant.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === tenant.id ? appTheme.bgElevated : appTheme.bgContainer }}
                           onClick={() => selectTenant(tenant.id)}>
                           <Space>

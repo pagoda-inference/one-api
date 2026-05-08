@@ -66,7 +66,11 @@
 "remark": "备注",
     "role": "角色",
     "update_success": "更新成功",
-    "create_success": "创建成功"
+    "create_success": "创建成功",
+    "no_limit": "无限制",
+    "belong_department": "所属部门",
+    "select_department": "选择部门",
+    "user": "用户"
   },
   "greeting": {
     "dawn": "凌晨好",
