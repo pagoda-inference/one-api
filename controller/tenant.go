@@ -5,24 +5,51 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
 	"github.com/pagoda-inference/one-api/model"
 )
 
 // TenantConstants
 const (
-	ActionCreateUser   = "create_user"
-	ActionDeleteUser   = "delete_user"
-	ActionUpdateUser   = "update_user"
-	ActionAllocQuota   = "allocate_quota"
+	ActionCreateUser    = "create_user"
+	ActionDeleteUser    = "delete_user"
+	ActionUpdateUser    = "update_user"
+	ActionAllocQuota    = "allocate_quota"
 	ActionCreateChannel = "create_channel"
 	ActionDeleteChannel = "delete_channel"
 	ActionUpdateChannel = "update_channel"
-	ActionCreateToken  = "create_token"
-	ActionDeleteToken  = "delete_token"
-	ActionLogin        = "login"
-	ActionLogout       = "logout"
+	ActionCreateToken   = "create_token"
+	ActionDeleteToken   = "delete_token"
+	ActionLogin         = "login"
+	ActionLogout        = "logout"
 )
+
+func getTenantScopePermission(userId int, tenantId int) (isDepartmentAdmin bool, isTeamAdmin bool, err error) {
+	tenant, err := model.GetTenantById(tenantId)
+	if err != nil {
+		return false, false, err
+	}
+	if tenant.DepartmentId > 0 {
+		deptMembership, deptErr := model.GetUserOrgMembershipByDepartment(userId, tenant.DepartmentId)
+		if deptErr == nil && deptMembership != nil && deptMembership.Role == model.OrgRoleDepartmentAdmin {
+			return true, false, nil
+		}
+	}
+	teamMembership, teamErr := model.GetUserOrgMembershipByTenant(userId, tenantId)
+	if teamErr == nil && teamMembership != nil && teamMembership.Role == model.OrgRoleTeamAdmin {
+		return false, true, nil
+	}
+	return false, false, nil
+}
+
+func canManageTenantInV2(userId int, tenantId int) bool {
+	isDeptAdmin, isTeamAdmin, err := getTenantScopePermission(userId, tenantId)
+	if err != nil {
+		return false
+	}
+	return isDeptAdmin || isTeamAdmin
+}
 
 // CreateTenant handles POST /api/tenant
 func CreateTenant(c *gin.Context) {
@@ -76,10 +103,10 @@ func GetMyTenants(c *gin.Context) {
 
 	type TenantInfo struct {
 		model.Tenant
-		Role        int   `json:"role"`
-		QuotaAlloc  int64 `json:"quota_alloc"`
-		UsedQuota   int64 `json:"used_quota"`
-		UserCount   int64 `json:"user_count"`
+		Role       int   `json:"role"`
+		QuotaAlloc int64 `json:"quota_alloc"`
+		UsedQuota  int64 `json:"used_quota"`
+		UserCount  int64 `json:"user_count"`
 	}
 
 	var tenants []*TenantInfo
@@ -94,8 +121,8 @@ func GetMyTenants(c *gin.Context) {
 		for _, tenant := range allTenants {
 			count, _ := model.CountTenantUsers(tenant.Id)
 			tenants = append(tenants, &TenantInfo{
-				Tenant:   *tenant,
-				Role:     0, // root has owner-level access
+				Tenant:    *tenant,
+				Role:      0, // root has owner-level access
 				UserCount: count,
 			})
 		}
@@ -236,13 +263,13 @@ func UpdateTenant(c *gin.Context) {
 	}
 
 	var req struct {
-		Name       string `json:"name"`
-		Settings   string `json:"settings"`
-		MaxUsers   int    `json:"max_users"`
-		MaxChannels int   `json:"max_channels"`
-		RateLimitRpm        int `json:"rate_limit_rpm"`
-		RateLimitTpm        int `json:"rate_limit_tpm"`
-		RateLimitConcurrent int `json:"rate_limit_concurrent"`
+		Name                string `json:"name"`
+		Settings            string `json:"settings"`
+		MaxUsers            int    `json:"max_users"`
+		MaxChannels         int    `json:"max_channels"`
+		RateLimitRpm        int    `json:"rate_limit_rpm"`
+		RateLimitTpm        int    `json:"rate_limit_tpm"`
+		RateLimitConcurrent int    `json:"rate_limit_concurrent"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -295,19 +322,28 @@ func InviteUser(c *gin.Context) {
 	userId := c.GetInt(ctxkey.UserId)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin or owner, or root)
+	// Check permission (admin/owner in legacy mode, or department_admin/team_admin in org-v2 mode, or root)
 	if userRole != model.RoleRootUser {
-		role, err := model.GetUserRoleInTenant(userId, tenantId)
-		if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
+		allowed := false
+		if config.OrgMembershipV2Enabled {
+			allowed = canManageTenantInV2(userId, tenantId)
+		}
+		if !allowed {
+			role, err := model.GetUserRoleInTenant(userId, tenantId)
+			if err == nil && (role.Role == model.RoleOwner || role.Role == model.RoleAdmin) {
+				allowed = true
+			}
+		}
+		if !allowed {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
 			return
 		}
 	}
 
 	var req struct {
-		UserId   int    `json:"user_id" binding:"required"`
-		Role     int    `json:"role" binding:"required"`
-		Quota    int64  `json:"quota"`
+		UserId int   `json:"user_id" binding:"required"`
+		Role   int   `json:"role" binding:"required"`
+		Quota  int64 `json:"quota"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -358,12 +394,21 @@ func RemoveUser(c *gin.Context) {
 	userId := c.GetInt(ctxkey.UserId)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin or owner, or root)
+	// Check permission (admin/owner in legacy mode, or department_admin/team_admin in org-v2 mode, or root)
 	var role *model.UserTenantRole
 	var err error
 	if userRole != model.RoleRootUser {
-		role, err = model.GetUserRoleInTenant(userId, tenantId)
-		if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
+		allowed := false
+		if config.OrgMembershipV2Enabled {
+			allowed = canManageTenantInV2(userId, tenantId)
+		}
+		if !allowed {
+			role, err = model.GetUserRoleInTenant(userId, tenantId)
+			if err == nil && (role.Role == model.RoleOwner || role.Role == model.RoleAdmin) {
+				allowed = true
+			}
+		}
+		if !allowed {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
 			return
 		}
@@ -403,11 +448,23 @@ func UpdateUserRole(c *gin.Context) {
 	userId := c.GetInt(ctxkey.UserId)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (owner only, or root)
+	// Check permission:
+	// legacy mode: owner only
+	// org-v2 mode: owner or department_admin
 	if userRole != model.RoleRootUser {
+		allowed := false
 		role, err := model.GetUserRoleInTenant(userId, tenantId)
-		if err != nil || role.Role != model.RoleOwner {
-			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only owner can update roles"})
+		if err == nil && role.Role == model.RoleOwner {
+			allowed = true
+		}
+		if config.OrgMembershipV2Enabled && !allowed {
+			isDeptAdmin, _, depErr := getTenantScopePermission(userId, tenantId)
+			if depErr == nil && isDeptAdmin {
+				allowed = true
+			}
+		}
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only owner or department admin can update roles"})
 			return
 		}
 	}
@@ -449,10 +506,19 @@ func AllocateUserQuotaAPI(c *gin.Context) {
 	userId := c.GetInt(ctxkey.UserId)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin or owner, or root)
+	// Check permission (admin/owner in legacy mode, or department_admin/team_admin in org-v2 mode, or root)
 	if userRole != model.RoleRootUser {
-		role, err := model.GetUserRoleInTenant(userId, tenantId)
-		if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
+		allowed := false
+		if config.OrgMembershipV2Enabled {
+			allowed = canManageTenantInV2(userId, tenantId)
+		}
+		if !allowed {
+			role, err := model.GetUserRoleInTenant(userId, tenantId)
+			if err == nil && (role.Role == model.RoleOwner || role.Role == model.RoleAdmin) {
+				allowed = true
+			}
+		}
+		if !allowed {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
 			return
 		}
@@ -507,9 +573,20 @@ func GetAuditLogsAPI(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt(ctxkey.UserId)
 
-	// Check permission (admin or owner)
-	role, err := model.GetUserRoleInTenant(userId, tenantId)
-	if err != nil || (role.Role != model.RoleOwner && role.Role != model.RoleAdmin) {
+	// Check permission (admin/owner in legacy mode, or department_admin/team_admin in org-v2 mode)
+	var err error
+	allowed := false
+	if config.OrgMembershipV2Enabled {
+		allowed = canManageTenantInV2(userId, tenantId)
+	}
+	if !allowed {
+		role, roleErr := model.GetUserRoleInTenant(userId, tenantId)
+		err = roleErr
+		if err == nil && (role.Role == model.RoleOwner || role.Role == model.RoleAdmin) {
+			allowed = true
+		}
+	}
+	if !allowed {
 		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
 		return
 	}
@@ -550,8 +627,17 @@ func GetTenantUsersAPI(c *gin.Context) {
 
 	// Root user can access any tenant
 	if userRole != model.RoleRootUser {
+		allowed := false
 		role, err = model.GetUserRoleInTenant(userId, tenantId)
-		if err != nil {
+		if err == nil {
+			allowed = true
+		}
+		if config.OrgMembershipV2Enabled && !allowed {
+			if canManageTenantInV2(userId, tenantId) {
+				allowed = true
+			}
+		}
+		if !allowed {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Access denied"})
 			return
 		}
@@ -565,7 +651,7 @@ func GetTenantUsersAPI(c *gin.Context) {
 
 	type UserWithRole struct {
 		model.User
-		Role      int   `json:"role"`
+		Role       int   `json:"role"`
 		QuotaAlloc int64 `json:"quota_alloc"`
 		UsedQuota  int64 `json:"used_quota"`
 	}
@@ -606,8 +692,8 @@ func GetTenantUsersAPI(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"users":      result,
-			"user_role":  role,
+			"users":     result,
+			"user_role": role,
 		},
 	})
 }

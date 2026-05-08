@@ -210,3 +210,27 @@ func EnsureOrgPoolsOnStartup() error {
 	_, err := EnsureDefaultOrgPools()
 	return err
 }
+
+func GetActiveUserOrgMemberships(userId int) ([]*UserOrgMembership, error) {
+	var items []*UserOrgMembership
+	err := DB.Where("user_id = ? AND status = ?", userId, OrgMembershipStatusActive).Find(&items).Error
+	return items, err
+}
+
+func GetUserOrgMembershipByTenant(userId int, tenantId int) (*UserOrgMembership, error) {
+	var item UserOrgMembership
+	err := DB.Where("user_id = ? AND tenant_id = ? AND status = ?", userId, tenantId, OrgMembershipStatusActive).First(&item).Error
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func GetUserOrgMembershipByDepartment(userId int, departmentId int) (*UserOrgMembership, error) {
+	var item UserOrgMembership
+	err := DB.Where("user_id = ? AND department_id = ? AND status = ?", userId, departmentId, OrgMembershipStatusActive).First(&item).Error
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
