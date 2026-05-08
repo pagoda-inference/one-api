@@ -158,6 +158,17 @@ var InitialRootToken = os.Getenv("INITIAL_ROOT_TOKEN")
 
 var InitialRootAccessToken = os.Getenv("INITIAL_ROOT_ACCESS_TOKEN")
 
+// Root bootstrap settings
+var InitialRootPassword = os.Getenv("INITIAL_ROOT_PASSWORD")
+var AllowRandomRootPassword = env.Bool("ALLOW_RANDOM_ROOT_PASSWORD", false)
+
+// Anthropic/OpenAI compatibility policy
+// strict_compat(default): disable thinking on anthropic->openai conversion path
+// pass_thinking: allow thinking passthrough for all models
+// whitelist: allow thinking only for ANTHROPIC_THINKING_WHITELIST models
+var AnthropicThinkingPolicy = env.String("ANTHROPIC_THINKING_POLICY", "strict_compat")
+var AnthropicThinkingWhitelist = env.String("ANTHROPIC_THINKING_WHITELIST", "")
+
 var GeminiVersion = env.String("GEMINI_VERSION", "v1")
 
 var OnlyOneLogFile = env.Bool("ONLY_ONE_LOG_FILE", false)
@@ -209,7 +220,7 @@ var EnableLeastConnectionLB = env.Bool("ENABLE_LEAST_CONNECTION_LB", false)
 // Payment Settings
 var PaymentEnabled = env.Bool("PAYMENT_ENABLED", true)
 var PaymentExchangeRate = env.Float64("PAYMENT_EXCHANGE_RATE", 7200) // 1元 = 7200 quota (≈ 1 USD)
-var PaymentOrderExpiry = env.Int("PAYMENT_ORDER_EXPIRY", 30) // minutes
+var PaymentOrderExpiry = env.Int("PAYMENT_ORDER_EXPIRY", 30)         // minutes
 
 // Alipay Settings
 var AlipayEnabled = env.Bool("ALIPAY_ENABLED", false)

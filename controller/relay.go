@@ -632,8 +632,7 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 		openaiReq.ToolChoice = "auto"
 	}
 
-	// Preserve explicit thinking intent with higher priority than backend defaults.
-	// This allows client-side toggles (e.g. VS Code) to override model default settings.
+	// Preserve explicit thinking intent before compatibility policy is applied.
 	if req.Thinking != nil {
 		if openaiReq.ExtraFields == nil {
 			openaiReq.ExtraFields = make(map[string]any)
@@ -656,31 +655,6 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 		}
 		openaiReq.ExtraFields["thinking"] = thinkingPayload
 	}
-	// Compatibility guard for OpenAI-compatible upstreams behind Anthropic gateway:
-	// many upstreams do not support Anthropic-style hidden thinking channel and may
-	// leak planning text or stall tool loop when thinking is enabled.
-	// This conversion function is only used on anthropic->openai path, so disable by default.
-	if openaiReq.ExtraFields == nil {
-		openaiReq.ExtraFields = make(map[string]any)
-	}
-	openaiReq.ReasoningEffort = nil
-	if openaiReq.ChatTemplateKwargs == nil {
-		openaiReq.ChatTemplateKwargs = make(map[string]any)
-	}
-	openaiReq.ChatTemplateKwargs["enable_thinking"] = false
-	openaiReq.ExtraFields["enable_thinking"] = false
-	openaiReq.ExtraFields["thinking"] = map[string]any{
-		"type": "disabled",
-	}
-	// Tool-use reliability guard:
-	// For some OpenAI-compatible upstreams, thinking mode can lead to "thought-only"
-	// responses without actual tool_calls. When tools are present, prioritize tool execution.
-	if len(req.Tools) > 0 {
-		openaiReq.ExtraFields["enable_thinking"] = false
-		openaiReq.ExtraFields["thinking"] = map[string]any{
-			"type": "disabled",
-		}
-	}
 
 	// Preserve any extra fields from original request
 	if len(req.ExtraFields) > 0 {
@@ -692,16 +666,11 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 			case "thinking_budget_tokens":
 				// Keep converted value if present.
 				continue
-			case "enable_thinking", "thinking", "reasoning", "reasoning_effort",
-				"reasoning_content", "thinking_budget":
-				// Keep gateway compatibility guard for anthropic->openai path.
+			case "reasoning", "reasoning_effort", "reasoning_content", "thinking_budget":
 				continue
 			case "chat_template_kwargs":
 				if extraKwargs, ok := v.(map[string]any); ok {
 					for kk, vv := range extraKwargs {
-						if kk == "enable_thinking" {
-							continue
-						}
 						openaiReq.ChatTemplateKwargs[kk] = vv
 					}
 				}
@@ -711,7 +680,57 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 		}
 	}
 
+	applyAnthropicThinkingPolicy(openaiReq, req)
+
 	return openaiReq
+}
+
+func allowAnthropicThinking(modelName string) bool {
+	policy := strings.ToLower(strings.TrimSpace(config.AnthropicThinkingPolicy))
+	switch policy {
+	case "pass_thinking":
+		return true
+	case "whitelist":
+		if modelName == "" {
+			return false
+		}
+		target := strings.ToLower(strings.TrimSpace(modelName))
+		for _, raw := range strings.Split(config.AnthropicThinkingWhitelist, ",") {
+			item := strings.ToLower(strings.TrimSpace(raw))
+			if item == "" {
+				continue
+			}
+			if target == item {
+				return true
+			}
+		}
+		return false
+	default:
+		// strict_compat by default
+		return false
+	}
+}
+
+func applyAnthropicThinkingPolicy(openaiReq *model.GeneralOpenAIRequest, req *AnthropicRequest) {
+	if openaiReq.ExtraFields == nil {
+		openaiReq.ExtraFields = make(map[string]any)
+	}
+	if openaiReq.ChatTemplateKwargs == nil {
+		openaiReq.ChatTemplateKwargs = make(map[string]any)
+	}
+
+	if allowAnthropicThinking(req.Model) {
+		return
+	}
+
+	// strict compatibility guard:
+	// many OpenAI-compatible upstreams may leak thought text or stall tool loop when thinking is on.
+	openaiReq.ReasoningEffort = nil
+	openaiReq.ChatTemplateKwargs["enable_thinking"] = false
+	openaiReq.ExtraFields["enable_thinking"] = false
+	openaiReq.ExtraFields["thinking"] = map[string]any{
+		"type": "disabled",
+	}
 }
 
 func convertAnthropicTools(anthropicTools []AnthropicTool) []model.Tool {

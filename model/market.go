@@ -252,6 +252,39 @@ func SearchModels(keyword string, modelType string, limit int, offset int) ([]*M
 	return models, err
 }
 
+// GetVisibleModelsForTenants retrieves active models visible to given tenant IDs with accurate pagination.
+func GetVisibleModelsForTenants(tenantIds []int, keyword string, modelType string, limit int, offset int) ([]*ModelInfo, int64, error) {
+	var (
+		models []*ModelInfo
+		total  int64
+	)
+	query := DB.Model(&ModelInfo{}).Where("status = ?", ModelStatusActive)
+	if keyword != "" {
+		query = query.Where("name LIKE ? OR provider LIKE ? OR id LIKE ?",
+			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	if modelType != "" {
+		query = query.Where("model_type = ?", modelType)
+	}
+
+	// Visibility filter: public model OR model visible to one of user's tenant IDs.
+	visibleQuery := query.Where("visible_to_teams = '' OR visible_to_teams IS NULL")
+	for _, tid := range tenantIds {
+		visibleQuery = visibleQuery.Or("visible_to_teams LIKE ?", fmt.Sprintf("%%,%d,%%", tid))
+	}
+
+	if err := visibleQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	if err := visibleQuery.Order("sort_order ASC, id ASC").Limit(limit).Offset(offset).Find(&models).Error; err != nil {
+		return nil, 0, err
+	}
+	return models, total, nil
+}
+
 // GetModelsByProvider retrieves models by provider (case-insensitive)
 func GetModelsByProvider(provider string) ([]*ModelInfo, error) {
 	var models []*ModelInfo

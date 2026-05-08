@@ -25,8 +25,21 @@ func CreateRootAccountIfNeed() error {
 	var user User
 	//if user.Status != util.UserStatusEnabled {
 	if err := DB.First(&user).Error; err != nil {
-		logger.SysLog("no user exists, creating a root user for you: username is root, password is 123456")
-		hashedPassword, err := common.Password2Hash("123456")
+		rootPassword := strings.TrimSpace(config.InitialRootPassword)
+		if rootPassword == "" {
+			if !config.IsMasterNode {
+				return fmt.Errorf("INITIAL_ROOT_PASSWORD is required on first bootstrap")
+			}
+			if !config.AllowRandomRootPassword {
+				return fmt.Errorf("INITIAL_ROOT_PASSWORD is required on first bootstrap (set ALLOW_RANDOM_ROOT_PASSWORD=true to auto-generate once)")
+			}
+			rootPassword = random.GetRandomString(24)
+			logger.SysLog(fmt.Sprintf("no user exists, generated one-time root password: %s", rootPassword))
+		} else {
+			logger.SysLog("no user exists, creating root user with INITIAL_ROOT_PASSWORD")
+		}
+
+		hashedPassword, err := common.Password2Hash(rootPassword)
 		if err != nil {
 			return err
 		}
