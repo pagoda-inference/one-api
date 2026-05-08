@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common"
@@ -20,7 +21,10 @@ import (
 	"github.com/pagoda-inference/one-api/middleware"
 	dbmodel "github.com/pagoda-inference/one-api/model"
 	"github.com/pagoda-inference/one-api/monitor"
+	relaybilling "github.com/pagoda-inference/one-api/relay/billing"
+	billingratio "github.com/pagoda-inference/one-api/relay/billing/ratio"
 	"github.com/pagoda-inference/one-api/relay/controller"
+	relaymeta "github.com/pagoda-inference/one-api/relay/meta"
 	"github.com/pagoda-inference/one-api/relay/model"
 	"github.com/pagoda-inference/one-api/relay/relaymode"
 )
@@ -1523,7 +1527,19 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	channelName := c.GetString(ctxkey.ChannelName)
 	baseURL := c.GetString(ctxkey.BaseURL)
 
-	// Read request body
+	// Get user and token info from context (set by TokenAuth middleware)
+	userId := c.GetInt(ctxkey.Id)
+	tokenId := c.GetInt(ctxkey.TokenId)
+	userGroup := c.GetString(ctxkey.Group)
+	tokenName := c.GetString(ctxkey.TokenName)
+	startTime := c.GetTime(ctxkey.StartTime)
+	if startTime.IsZero() {
+		startTime = time.Now()
+	}
+
+	// Pre-consume quota check (same logic as RelayTextHelper)
+	// Parse request to get model name and estimate prompt tokens
+	var anthropicReq AnthropicRequest
 	requestBody, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		logger.Errorf(ctx, "failed to read request body: %s", err.Error())
@@ -1534,6 +1550,79 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 			},
 		})
 		return
+	}
+	if err := json.Unmarshal(requestBody, &anthropicReq); err != nil {
+		logger.Errorf(ctx, "failed to parse anthropic request: %s", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request",
+				"message": "Failed to parse request body",
+			},
+		})
+		return
+	}
+	// Restore request body for later use
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
+
+	// Convert Anthropic request to OpenAI format for token counting / quota logic
+	openaiReq := ConvertAnthropicToOpenAI(&anthropicReq)
+
+	// Apply model mapping before pricing/quota to keep behavior aligned with RelayTextHelper
+	if modelMapping := c.GetStringMapString(ctxkey.ModelMapping); modelMapping != nil {
+		if mappedModel, ok := modelMapping[openaiReq.Model]; ok && mappedModel != "" {
+			logger.Debugf(ctx, "model mapping (ctx): %s -> %s", openaiReq.Model, mappedModel)
+			openaiReq.Model = mappedModel
+		}
+	}
+
+	relayMode := relaymode.GetByPath(c.Request.URL.Path)
+	promptTokens := controller.GetPromptTokens(openaiReq, relayMode)
+
+	// Get model info for price calculation
+	modelInfo, _ := dbmodel.GetModelById(openaiReq.Model)
+	inputPrice := 0.0
+	outputPrice := 0.0
+	if modelInfo != nil {
+		inputPrice = modelInfo.InputPrice
+		outputPrice = modelInfo.OutputPrice
+	}
+	groupRatio := billingratio.GetGroupRatio(userGroup)
+
+	// Build meta for quota pre-consumption
+	meta := &relaymeta.Meta{
+		UserId:          userId,
+		TokenId:         tokenId,
+		Group:           userGroup,
+		ChannelId:       channelId,
+		TokenName:       tokenName,
+		OriginModelName: anthropicReq.Model,
+		ActualModelName: openaiReq.Model,
+		StartTime:       startTime,
+		IsStream:        anthropicReq.Stream,
+	}
+
+	// Pre-consume quota using exact calculation
+	preConsumedQuota, bizErr := controller.PreConsumeQuota(ctx, openaiReq, promptTokens, inputPrice, groupRatio, meta)
+	if bizErr != nil {
+		logger.Warnf(ctx, "preConsumeQuota failed: %+v", *bizErr)
+		c.JSON(bizErr.StatusCode, gin.H{
+			"error": gin.H{
+				"type":    bizErr.Error.Type,
+				"message": bizErr.Error.Message,
+			},
+		})
+		return
+	}
+
+	// Store preConsumedQuota for observability/debug
+	c.Set(ctxkey.PreConsumedQuota, preConsumedQuota)
+	quotaSettled := false
+	rollbackPreConsume := func() {
+		if quotaSettled {
+			return
+		}
+		relaybilling.ReturnPreConsumedQuota(ctx, preConsumedQuota, tokenId)
+		quotaSettled = true
 	}
 
 	if config.DebugEnabled {
@@ -1583,18 +1672,6 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 		}
 		isStream = anthropicReq.Stream
 
-		// Convert to OpenAI format
-		openaiReq := ConvertAnthropicToOpenAI(&anthropicReq)
-
-		// Apply model name mapping using context mapping (same source as RelayTextHelper)
-		modelMapping := c.GetStringMapString(ctxkey.ModelMapping)
-		if modelMapping != nil {
-			if mappedModel, ok := modelMapping[openaiReq.Model]; ok && mappedModel != "" {
-				logger.Debugf(ctx, "model mapping (ctx): %s -> %s", openaiReq.Model, mappedModel)
-				openaiReq.Model = mappedModel
-			}
-		}
-
 		requestBody, err = json.Marshal(openaiReq)
 		if err != nil {
 			logger.Errorf(ctx, "failed to marshal openai request: %s", err.Error())
@@ -1616,6 +1693,7 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	// Get API key
 	apiToken := strings.TrimSpace(c.Request.Header.Get("Authorization"))
 	if apiToken == "" {
+		rollbackPreConsume()
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": gin.H{
 				"type":    "authentication_error",
@@ -1629,6 +1707,7 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	// Create request to backend
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(requestBody))
 	if err != nil {
+		rollbackPreConsume()
 		logger.Errorf(ctx, "failed to create request: %s", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": gin.H{
@@ -1664,6 +1743,7 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	// Send request
 	resp, err := client.HTTPClient.Do(req)
 	if err != nil {
+		rollbackPreConsume()
 		logger.Errorf(ctx, "failed to send request to backend: %s", err.Error())
 		monitor.RecordChannelFailure(channelId, channelName, err.Error())
 		c.JSON(http.StatusBadGateway, gin.H{
@@ -1692,6 +1772,7 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	// Copy response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		rollbackPreConsume()
 		logger.Errorf(ctx, "failed to read response body: %s", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": gin.H{
@@ -1707,6 +1788,23 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	}
 	if resp.StatusCode == http.StatusUnauthorized && len(respBody) == 0 {
 		logger.Errorf(ctx, "anthropic passthrough got upstream 401 with empty body (target=%s, anthropic_upstream=%v)", targetURL, isAnthropicUpstream)
+	}
+	if resp.StatusCode != http.StatusOK {
+		rollbackPreConsume()
+	}
+	if resp.StatusCode == http.StatusOK {
+		usage := extractUsageFromPassthroughResponse(respBody, isStream)
+		if usage == nil {
+			// Stream mode may miss final usage on some upstreams. Fall back to prompt-only settlement.
+			logger.Warnf(ctx, "anthropic passthrough missing usage, fallback settlement with prompt tokens only: stream=%v upstream_anthropic=%v", isStream, isAnthropicUpstream)
+			usage = &model.Usage{
+				PromptTokens:     promptTokens,
+				CompletionTokens: 0,
+				TotalTokens:      promptTokens,
+			}
+		}
+		quotaSettled = true
+		go controller.PostConsumeQuota(ctx, usage, meta, openaiReq, inputPrice, outputPrice, groupRatio, preConsumedQuota, false)
 	}
 
 	// If upstream was OpenAI-compatible, convert response back to Anthropic format
@@ -1739,6 +1837,39 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	c.Writer.Header().Del("Connection")
 	c.Writer.Header().Set("Content-Type", responseContentType)
 	c.Data(resp.StatusCode, responseContentType, respBody)
+}
+
+func extractUsageFromPassthroughResponse(respBody []byte, isStream bool) *model.Usage {
+	if isStream || len(respBody) == 0 {
+		return nil
+	}
+
+	// OpenAI-compatible response usage
+	var openaiResp struct {
+		Usage *model.Usage `json:"usage"`
+	}
+	if err := json.Unmarshal(respBody, &openaiResp); err == nil && openaiResp.Usage != nil {
+		return openaiResp.Usage
+	}
+
+	// Anthropic-native response usage
+	var anthropicResp struct {
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(respBody, &anthropicResp); err != nil {
+		return nil
+	}
+	if anthropicResp.Usage.InputTokens == 0 && anthropicResp.Usage.OutputTokens == 0 {
+		return nil
+	}
+	return &model.Usage{
+		PromptTokens:     anthropicResp.Usage.InputTokens,
+		CompletionTokens: anthropicResp.Usage.OutputTokens,
+		TotalTokens:      anthropicResp.Usage.InputTokens + anthropicResp.Usage.OutputTokens,
+	}
 }
 
 // CountTokensAnthropic handles Anthropic /v1/messages/count_tokens requests

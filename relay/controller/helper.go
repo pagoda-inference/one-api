@@ -48,7 +48,7 @@ func getAndValidateTextRequest(c *gin.Context, relayMode int) (*relaymodel.Gener
 	return textRequest, nil
 }
 
-func getPromptTokens(textRequest *relaymodel.GeneralOpenAIRequest, relayMode int) int {
+func GetPromptTokens(textRequest *relaymodel.GeneralOpenAIRequest, relayMode int) int {
 	switch relayMode {
 	case relaymode.ChatCompletions:
 		return openai.CountTokenMessages(textRequest.Messages, textRequest.Model)
@@ -69,7 +69,7 @@ func getPreConsumedQuota(textRequest *relaymodel.GeneralOpenAIRequest, promptTok
 	return int64(math.Ceil(float64(preConsumedTokens) * inputPrice / 1000 * groupRatio))
 }
 
-func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, inputPrice float64, groupRatio float64, meta *meta.Meta) (int64, *relaymodel.ErrorWithStatusCode) {
+func PreConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIRequest, promptTokens int, inputPrice float64, groupRatio float64, meta *meta.Meta) (int64, *relaymodel.ErrorWithStatusCode) {
 	preConsumedQuota := getPreConsumedQuota(textRequest, promptTokens, inputPrice, groupRatio)
 
 	userQuota, err := model.CacheGetUserQuota(ctx, meta.UserId)
@@ -104,7 +104,7 @@ func preConsumeQuota(ctx context.Context, textRequest *relaymodel.GeneralOpenAIR
 	return preConsumedQuota, nil
 }
 
-func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.Meta, textRequest *relaymodel.GeneralOpenAIRequest, inputPrice float64, outputPrice float64, groupRatio float64, preConsumedQuota int64, systemPromptReset bool) {
+func PostConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.Meta, textRequest *relaymodel.GeneralOpenAIRequest, inputPrice float64, outputPrice float64, groupRatio float64, preConsumedQuota int64, systemPromptReset bool) {
 	if usage == nil {
 		logger.Error(ctx, "usage is nil, which is unexpected")
 		return

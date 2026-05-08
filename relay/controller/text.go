@@ -64,9 +64,9 @@ func RelayTextHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	}
 	groupRatio := billingratio.GetGroupRatio(meta.Group)
 	// pre-consume quota
-	promptTokens := getPromptTokens(textRequest, meta.Mode)
+	promptTokens := GetPromptTokens(textRequest, meta.Mode)
 	meta.PromptTokens = promptTokens
-	preConsumedQuota, bizErr := preConsumeQuota(ctx, textRequest, promptTokens, inputPrice, groupRatio, meta)
+	preConsumedQuota, bizErr := PreConsumeQuota(ctx, textRequest, promptTokens, inputPrice, groupRatio, meta)
 	if bizErr != nil {
 		logger.Warnf(ctx, "preConsumeQuota failed: %+v", *bizErr)
 		return bizErr
@@ -104,7 +104,7 @@ func RelayTextHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 		return respErr
 	}
 	// post-consume quota
-	go postConsumeQuota(ctx, usage, meta, textRequest, inputPrice, outputPrice, groupRatio, preConsumedQuota, systemPromptReset)
+	go PostConsumeQuota(ctx, usage, meta, textRequest, inputPrice, outputPrice, groupRatio, preConsumedQuota, systemPromptReset)
 	return nil
 }
 
