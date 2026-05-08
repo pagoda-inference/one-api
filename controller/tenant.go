@@ -266,7 +266,6 @@ func UpdateTenant(c *gin.Context) {
 		Name                string `json:"name"`
 		Settings            string `json:"settings"`
 		MaxUsers            int    `json:"max_users"`
-		MaxChannels         int    `json:"max_channels"`
 		RateLimitRpm        int    `json:"rate_limit_rpm"`
 		RateLimitTpm        int    `json:"rate_limit_tpm"`
 		RateLimitConcurrent int    `json:"rate_limit_concurrent"`
@@ -291,9 +290,6 @@ func UpdateTenant(c *gin.Context) {
 	}
 	if req.MaxUsers > 0 {
 		tenant.MaxUsers = req.MaxUsers
-	}
-	if req.MaxChannels > 0 {
-		tenant.MaxChannels = req.MaxChannels
 	}
 	if req.RateLimitRpm >= 0 {
 		tenant.RateLimitRpm = req.RateLimitRpm

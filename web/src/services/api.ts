@@ -497,7 +497,7 @@ export const getMyTenants = () =>
 export const getTenant = (id: number) =>
   api.get(`/tenant/${id}`)
 
-export const updateTenant = (id: number, data: { name?: string; settings?: string; max_users?: number; max_channels?: number }) =>
+export const updateTenant = (id: number, data: { name?: string; settings?: string; max_users?: number }) =>
   api.put(`/tenant/${id}`, data)
 
 export const getTenantUsers = (id: number) =>

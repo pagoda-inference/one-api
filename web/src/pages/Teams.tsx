@@ -347,7 +347,7 @@ const Teams: React.FC = () => {
     { title: t('common.action'), dataIndex: 'action', key: 'action', render: (v: string) => {
       const actionMap: Record<string, string> = {
         create_user: t('teams.action_create_user'), delete_user: t('teams.action_delete_user'), update_user: t('teams.action_update_user'),
-        allocate_quota: t('teams.action_allocate_quota'), create_channel: t('teams.action_create_channel'), delete_channel: t('teams.action_delete_channel'),
+        allocate_quota: t('teams.action_allocate_quota'),
         view_users: t('teams.action_view_users'), leave_tenant: t('teams.action_leave_tenant')
       }
       return actionMap[v] || v
@@ -485,9 +485,6 @@ const Teams: React.FC = () => {
                       <Input />
                     </Form.Item>
                     <Form.Item name="max_users" label={t('teams.max_members')}>
-                      <Input type="number" />
-                    </Form.Item>
-                    <Form.Item name="max_channels" label={t('teams.max_channels')}>
                       <Input type="number" />
                     </Form.Item>
                     <Row gutter={16}>
