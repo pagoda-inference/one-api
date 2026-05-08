@@ -217,6 +217,10 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.POST("/lark-apps/sync-users", controller.SyncLarkUsersProfile)
 			adminRoute.PUT("/lark-apps/:id", controller.UpdateLarkOAuthApp)
 			adminRoute.DELETE("/lark-apps/:id", controller.DeleteLarkOAuthApp)
+
+			// Org migration (root only check in controller)
+			adminRoute.GET("/org/config", controller.GetOrgMigrationConfig)
+			adminRoute.POST("/org/migrate-users", controller.MigrateOrgUsers)
 		}
 
 		optionRoute := apiRouter.Group("/option")

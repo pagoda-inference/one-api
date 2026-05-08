@@ -169,6 +169,10 @@ var AllowRandomRootPassword = env.Bool("ALLOW_RANDOM_ROOT_PASSWORD", false)
 var AnthropicThinkingPolicy = env.String("ANTHROPIC_THINKING_POLICY", "strict_compat")
 var AnthropicThinkingWhitelist = env.String("ANTHROPIC_THINKING_WHITELIST", "")
 
+// Org migration and v2 membership controls
+var OrgMembershipV2Enabled = env.Bool("ORG_MEMBERSHIP_V2_ENABLED", false)
+var OrgAutoBootstrapEnabled = env.Bool("ORG_AUTO_BOOTSTRAP_ENABLED", false)
+
 var GeminiVersion = env.String("GEMINI_VERSION", "v1")
 
 var OnlyOneLogFile = env.Bool("ONLY_ONE_LOG_FILE", false)

@@ -52,6 +52,9 @@ type User struct {
 	Group            string `json:"group" gorm:"type:varchar(32);default:'default'"`
 	AffCode          string `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	InviterId        int    `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	CompanyId        int    `json:"company_id" gorm:"type:int;default:0;index"`
+	DepartmentId     int    `json:"department_id" gorm:"type:int;default:0;index"`
+	OrgSource        string `json:"org_source" gorm:"type:varchar(32);default:''"`
 }
 
 func GetMaxUserId() int {

@@ -145,6 +145,12 @@ func InitDB() {
 		return
 	}
 	logger.SysLog("database migrated")
+
+	if config.OrgAutoBootstrapEnabled {
+		if err = EnsureOrgPoolsOnStartup(); err != nil {
+			logger.SysError("failed to ensure default org pools: " + err.Error())
+		}
+	}
 }
 
 func migrateDB() error {
@@ -229,6 +235,10 @@ func migrateDB() error {
 	}
 	// Notification table
 	if err = DB.AutoMigrate(&Notification{}); err != nil {
+		return err
+	}
+	// Org membership v2
+	if err = DB.AutoMigrate(&UserOrgMembership{}); err != nil {
 		return err
 	}
 	return nil
