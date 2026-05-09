@@ -170,7 +170,7 @@ var AnthropicThinkingPolicy = env.String("ANTHROPIC_THINKING_POLICY", "strict_co
 var AnthropicThinkingWhitelist = env.String("ANTHROPIC_THINKING_WHITELIST", "")
 
 // Org migration and v2 membership controls
-var OrgMembershipV2Enabled = env.Bool("ORG_MEMBERSHIP_V2_ENABLED", false)
+var OrgMembershipV2Enabled = env.Bool("ORG_MEMBERSHIP_V2_ENABLED", true)
 var OrgAutoBootstrapEnabled = env.Bool("ORG_AUTO_BOOTSTRAP_ENABLED", false)
 
 var GeminiVersion = env.String("GEMINI_VERSION", "v1")
