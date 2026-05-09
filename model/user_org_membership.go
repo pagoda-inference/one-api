@@ -144,6 +144,14 @@ func MigrateUsersToDefaultOrgPools(apply bool, limit int) (*OrgMigrationReport, 
 			targetCompanyID = pools.FormalCompanyId
 			targetDepartmentID = pools.FormalDepartmentId
 		}
+		// Preserve explicit user assignment if it already exists.
+		if u.CompanyId > 0 && u.DepartmentId > 0 {
+			targetCompanyID = u.CompanyId
+			targetDepartmentID = u.DepartmentId
+			if strings.TrimSpace(u.OrgSource) != "" {
+				source = u.OrgSource
+			}
+		}
 
 		if u.CompanyId == targetCompanyID && u.DepartmentId == targetDepartmentID {
 			report.Skipped++

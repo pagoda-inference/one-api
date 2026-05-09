@@ -18,13 +18,16 @@ const Login: React.FC = () => {
   const { t } = useTranslation()
   const { language, toggleLanguage } = useLanguage()
   const { themeMode, toggleTheme } = useTheme()
-  const [loginType, setLoginType] = useState<'feishu' | 'password'>('feishu')
+  const [loginType, setLoginType] = useState<'feishu' | 'password' | 'register'>('feishu')
   const [loading, setLoading] = useState(false)
+  const [sendingCode, setSendingCode] = useState(false)
+  const [statusInfo, setStatusInfo] = useState<{ email_verification?: boolean } | null>(null)
   const [larkApps, setLarkApps] = useState<LarkApp[]>([])
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null)
 
   useEffect(() => {
     fetchLarkApps()
+    fetchStatus()
   }, [])
 
   const fetchLarkApps = async () => {
@@ -40,6 +43,18 @@ const Login: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to fetch Lark apps:', err)
+    }
+  }
+
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch('/api/status')
+      const data = await res.json()
+      if (data.success) {
+        setStatusInfo(data.data || {})
+      }
+    } catch (err) {
+      console.error('Failed to fetch status:', err)
     }
   }
 
@@ -97,6 +112,55 @@ const Login: React.FC = () => {
       window.location.href = larkAuthUrl
     } catch (err) {
       message.error(t('login.login_retry'))
+    }
+  }
+
+  const handleRegister = async (values: { username: string; password: string; email?: string; verification_code?: string }) => {
+    setLoading(true)
+    try {
+      const payload: Record<string, string> = {
+        username: values.username,
+        password: values.password,
+      }
+      if (values.email) payload.email = values.email
+      if (values.verification_code) payload.verification_code = values.verification_code
+      const res = await fetch('/api/user/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (data.success) {
+        message.success(t('login.register_success'))
+        setLoginType('password')
+      } else {
+        message.error(data.message || t('login.register_failed'))
+      }
+    } catch {
+      message.error(t('login.register_failed'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSendCode = async (email: string) => {
+    if (!email) {
+      message.warning(t('login.enter_email_first'))
+      return
+    }
+    setSendingCode(true)
+    try {
+      const res = await fetch(`/api/verification?email=${encodeURIComponent(email)}`)
+      const data = await res.json()
+      if (data.success) {
+        message.success(t('login.code_sent'))
+      } else {
+        message.error(data.message || t('login.code_send_failed'))
+      }
+    } catch {
+      message.error(t('login.code_send_failed'))
+    } finally {
+      setSendingCode(false)
     }
   }
 
@@ -264,7 +328,11 @@ const Login: React.FC = () => {
             margin: '0 0 24px',
             fontSize: 14
           }}>
-            {loginType === 'feishu' ? t('login.feishu_login_desc') : t('login.password_login_desc')}
+            {loginType === 'feishu'
+              ? t('login.feishu_login_desc')
+              : loginType === 'password'
+                ? t('login.password_login_desc')
+                : t('login.register_desc')}
           </p>
 
           {loginType === 'feishu' ? (
@@ -321,7 +389,7 @@ const Login: React.FC = () => {
                 </a>
               </div>
             </>
-          ) : (
+          ) : loginType === 'password' ? (
             <>
               <Form
                 layout="vertical"
@@ -349,6 +417,63 @@ const Login: React.FC = () => {
               </Form>
 
               <div style={{ textAlign: 'center', margin: '16px 0' }}>
+                <a onClick={() => setLoginType('feishu')} style={{ color: '#667eea', cursor: 'pointer' }}>
+                  {t('login.use_feishu')}
+                </a>
+                <span style={{ margin: '0 8px', color: isDark ? '#666' : '#999' }}>|</span>
+                <a onClick={() => setLoginType('register')} style={{ color: '#667eea', cursor: 'pointer' }}>
+                  {t('login.use_register')}
+                </a>
+              </div>
+            </>
+          ) : (
+            <>
+              <Form form={registerForm} layout="vertical" onFinish={handleRegister} size="large">
+                <Form.Item name="username" rules={[{ required: true, message: t('login.enter_username') }]}>
+                  <Input placeholder={t('common.username')} />
+                </Form.Item>
+                <Form.Item name="email" rules={[{ required: true, message: t('login.enter_email') }]}>
+                  <Input
+                    placeholder={t('common.email')}
+                    addonAfter={
+                      statusInfo?.email_verification ? (
+                        <a onClick={(e) => {
+                          e.preventDefault()
+                          const email = registerForm.getFieldValue('email') || ''
+                          handleSendCode(email)
+                        }}>
+                          {sendingCode ? t('login.sending_code') : t('login.send_code')}
+                        </a>
+                      ) : undefined
+                    }
+                  />
+                </Form.Item>
+                {statusInfo?.email_verification && (
+                  <Form.Item name="verification_code" rules={[{ required: true, message: t('login.enter_code') }]}>
+                    <Input placeholder={t('login.verification_code')} />
+                  </Form.Item>
+                )}
+                <Form.Item name="password" rules={[{ required: true, message: t('login.enter_password') }]}>
+                  <Input.Password placeholder={t('common.password')} />
+                </Form.Item>
+                <Form.Item>
+                  <Button type="primary" htmlType="submit" block loading={loading} style={{
+                    height: 48,
+                    borderRadius: 10,
+                    fontSize: 16,
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none'
+                  }}>
+                    {t('login.register')}
+                  </Button>
+                </Form.Item>
+              </Form>
+              <div style={{ textAlign: 'center', margin: '16px 0' }}>
+                <a onClick={() => setLoginType('password')} style={{ color: '#667eea', cursor: 'pointer' }}>
+                  {t('login.use_password')}
+                </a>
+                <span style={{ margin: '0 8px', color: isDark ? '#666' : '#999' }}>|</span>
                 <a onClick={() => setLoginType('feishu')} style={{ color: '#667eea', cursor: 'pointer' }}>
                   {t('login.use_feishu')}
                 </a>
@@ -380,3 +505,4 @@ const Login: React.FC = () => {
 }
 
 export default Login
+  const [registerForm] = Form.useForm()

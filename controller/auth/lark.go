@@ -54,10 +54,10 @@ func larkErrMsg(message, msg string) string {
 	return "unknown lark error"
 }
 
-// getLarkUserDetail fetches email and avatar from Contact V3 API
-func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl string, err error) {
+// getLarkUserDetail fetches email/avatar/department from Contact V3 API
+func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl, departmentName string, err error) {
 	if openId == "" {
-		return "", "", errors.New("lark open id is empty")
+		return "", "", "", errors.New("lark open id is empty")
 	}
 
 	// First convert open_id to user_id
@@ -66,26 +66,26 @@ func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl stri
 	}
 	convertBody, err := json.Marshal(convertReq)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	req, err := http.NewRequest("POST", "https://open.feishu.cn/open-apis/contact/v3/users/batch_get_id", bytes.NewBuffer(convertBody))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	client := http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("lark contact convert http status %d", resp.StatusCode)
+		return "", "", "", fmt.Errorf("lark contact convert http status %d", resp.StatusCode)
 	}
 	var convertResp struct {
 		Code    int    `json:"code"`
@@ -99,33 +99,33 @@ func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl stri
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &convertResp); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if convertResp.Code != 0 {
-		return "", "", fmt.Errorf("lark contact convert failed: %s", larkErrMsg(convertResp.Message, convertResp.Msg))
+		return "", "", "", fmt.Errorf("lark contact convert failed: %s", larkErrMsg(convertResp.Message, convertResp.Msg))
 	}
 	if len(convertResp.Data.UserList) == 0 {
-		return "", "", errors.New("failed to convert open_id to user_id")
+		return "", "", "", errors.New("failed to convert open_id to user_id")
 	}
 	userId := convertResp.Data.UserList[0].UserID
 
-	// Then get user detail with email and avatar
+	// Then get user detail with email/avatar/department ids
 	req2, err := http.NewRequest("GET", fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/users/%s?user_id_type=user_id", userId), nil)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	req2.Header.Set("Authorization", "Bearer "+accessToken)
 	resp2, err := client.Do(req2)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer resp2.Body.Close()
 	body2, err := io.ReadAll(resp2.Body)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if resp2.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("lark contact detail http status %d", resp2.StatusCode)
+		return "", "", "", fmt.Errorf("lark contact detail http status %d", resp2.StatusCode)
 	}
 	var detailResp struct {
 		Code    int    `json:"code"`
@@ -138,20 +138,57 @@ func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl stri
 					AvatarOrigin string `json:"avatar_origin"`
 					Avatar72     string `json:"avatar_72"`
 				} `json:"avatar"`
+				DepartmentIDs []string `json:"department_ids"`
 			} `json:"user"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body2, &detailResp); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if detailResp.Code != 0 {
-		return "", "", fmt.Errorf("lark contact detail failed: %s", larkErrMsg(detailResp.Message, detailResp.Msg))
+		return "", "", "", fmt.Errorf("lark contact detail failed: %s", larkErrMsg(detailResp.Message, detailResp.Msg))
+	}
+
+	departmentName = ""
+	if len(detailResp.Data.User.DepartmentIDs) > 0 {
+		deptID := detailResp.Data.User.DepartmentIDs[0]
+		req3, reqErr := http.NewRequest("GET", fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/departments/%s?department_id_type=department_id", deptID), nil)
+		if reqErr == nil {
+			req3.Header.Set("Authorization", "Bearer "+accessToken)
+			if resp3, doErr := client.Do(req3); doErr == nil {
+				body3, _ := io.ReadAll(resp3.Body)
+				_ = resp3.Body.Close()
+				if resp3.StatusCode == http.StatusOK {
+					var deptResp struct {
+						Code int `json:"code"`
+						Data struct {
+							Department struct {
+								Name string `json:"name"`
+								I18N struct {
+									ZhCN string `json:"zh_cn"`
+									EnUS string `json:"en_us"`
+								} `json:"i18n_name"`
+							} `json:"department"`
+						} `json:"data"`
+					}
+					if json.Unmarshal(body3, &deptResp) == nil && deptResp.Code == 0 {
+						if deptResp.Data.Department.I18N.ZhCN != "" {
+							departmentName = deptResp.Data.Department.I18N.ZhCN
+						} else if deptResp.Data.Department.Name != "" {
+							departmentName = deptResp.Data.Department.Name
+						} else {
+							departmentName = deptResp.Data.Department.I18N.EnUS
+						}
+					}
+				}
+			}
+		}
 	}
 	avatar := detailResp.Data.User.Avatar.AvatarOrigin
 	if avatar == "" {
 		avatar = detailResp.Data.User.Avatar.Avatar72
 	}
-	return detailResp.Data.User.Email, avatar, nil
+	return detailResp.Data.User.Email, avatar, departmentName, nil
 }
 
 // getLarkID returns the actual Lark/OpenID, checking multiple possible field names
@@ -301,7 +338,7 @@ func LarkOAuth(c *gin.Context) {
 		return
 	}
 	// Fetch email and avatar from Lark Contact API; fallback to authen fields when unavailable
-	larkEmail, larkAvatar, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
+	larkEmail, larkAvatar, larkDepartmentName, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
 	if larkEmail == "" {
 		larkEmail = larkUser.Email
 	}
@@ -336,6 +373,7 @@ func LarkOAuth(c *gin.Context) {
 		}
 		if config.OrgMembershipV2Enabled {
 			_ = model.ResolveAndUpsertUserOrg(&user, "lark")
+			_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, "lark")
 		}
 	} else {
 		if config.RegisterEnabled {
@@ -359,6 +397,7 @@ func LarkOAuth(c *gin.Context) {
 			}
 			if config.OrgMembershipV2Enabled {
 				_ = model.ResolveAndUpsertUserOrg(&user, "lark")
+				_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, "lark")
 			}
 		} else {
 			c.JSON(http.StatusOK, gin.H{
@@ -391,7 +430,7 @@ func LarkBind(c *gin.Context) {
 		return
 	}
 	// Fetch email and avatar from Lark Contact API; fallback to authen fields when unavailable
-	larkEmail, larkAvatar, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
+	larkEmail, larkAvatar, larkDepartmentName, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
 	if larkEmail == "" {
 		larkEmail = larkUser.Email
 	}
@@ -441,6 +480,7 @@ func LarkBind(c *gin.Context) {
 	}
 	if config.OrgMembershipV2Enabled {
 		_ = model.ResolveAndUpsertUserOrg(&user, "lark")
+		_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, "lark")
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

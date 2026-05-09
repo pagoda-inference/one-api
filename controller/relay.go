@@ -1551,10 +1551,7 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	tokenId := c.GetInt(ctxkey.TokenId)
 	userGroup := c.GetString(ctxkey.Group)
 	tokenName := c.GetString(ctxkey.TokenName)
-	startTime := c.GetTime(ctxkey.StartTime)
-	if startTime.IsZero() {
-		startTime = time.Now()
-	}
+	startTime := time.Now()
 
 	// Pre-consume quota check (same logic as RelayTextHelper)
 	// Parse request to get model name and estimate prompt tokens
@@ -1634,7 +1631,7 @@ func RelayAnthropicPassthrough(c *gin.Context) {
 	}
 
 	// Store preConsumedQuota for observability/debug
-	c.Set(ctxkey.PreConsumedQuota, preConsumedQuota)
+	c.Set("pre_consumed_quota", preConsumedQuota)
 	quotaSettled := false
 	rollbackPreConsume := func() {
 		if quotaSettled {

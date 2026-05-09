@@ -1,6 +1,9 @@
 package model
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/pagoda-inference/one-api/common/helper"
 	"gorm.io/gorm"
 )
@@ -72,6 +75,85 @@ func ResolveAndUpsertUserOrg(user *User, source string) error {
 				return err
 			}
 		}
+		return nil
+	})
+}
+
+func ensureDepartmentUnderCompany(tx *gorm.DB, companyID int, departmentName string) (int, error) {
+	departmentName = strings.TrimSpace(departmentName)
+	if companyID <= 0 || departmentName == "" {
+		return 0, fmt.Errorf("invalid company or department name")
+	}
+	var dept Department
+	if err := tx.Where("company_id = ? AND name = ? AND status = ?", companyID, departmentName, DepartmentStatusActive).First(&dept).Error; err != nil {
+		if err != gorm.ErrRecordNotFound {
+			return 0, err
+		}
+		dept = Department{
+			CompanyId: companyID,
+			Name:      departmentName,
+			Code:      fmt.Sprintf("lark_dept_%d", helper.GetTimestamp()),
+			Status:    DepartmentStatusActive,
+		}
+		if err = tx.Create(&dept).Error; err != nil {
+			return 0, err
+		}
+	}
+	return dept.Id, nil
+}
+
+// ResolveAndUpsertUserDepartmentByName updates user's department under current company and keeps membership in sync.
+func ResolveAndUpsertUserDepartmentByName(user *User, departmentName string, source string) error {
+	if user == nil || user.Id == 0 || user.CompanyId <= 0 {
+		return nil
+	}
+	departmentName = strings.TrimSpace(departmentName)
+	if departmentName == "" {
+		return nil
+	}
+
+	now := helper.GetTimestamp()
+	return DB.Transaction(func(tx *gorm.DB) error {
+		departmentID, err := ensureDepartmentUnderCompany(tx, user.CompanyId, departmentName)
+		if err != nil {
+			return err
+		}
+		if err = tx.Model(&User{}).Where("id = ?", user.Id).Updates(map[string]interface{}{
+			"department_id": departmentID,
+			"org_source":    source,
+		}).Error; err != nil {
+			return err
+		}
+
+		mem := &UserOrgMembership{}
+		if err = tx.Where("user_id = ? AND company_id = ?", user.Id, user.CompanyId).First(mem).Error; err != nil {
+			if err != gorm.ErrRecordNotFound {
+				return err
+			}
+			mem = &UserOrgMembership{
+				UserId:       user.Id,
+				CompanyId:    user.CompanyId,
+				DepartmentId: departmentID,
+				Role:         OrgRoleMember,
+				Source:       source,
+				Status:       OrgMembershipStatusActive,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}
+			if err = tx.Create(mem).Error; err != nil {
+				return err
+			}
+		} else {
+			if err = tx.Model(mem).Updates(map[string]interface{}{
+				"department_id": departmentID,
+				"source":        source,
+				"status":        OrgMembershipStatusActive,
+				"updated_at":    now,
+			}).Error; err != nil {
+				return err
+			}
+		}
+		user.DepartmentId = departmentID
 		return nil
 	})
 }

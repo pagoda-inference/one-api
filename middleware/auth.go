@@ -263,6 +263,11 @@ func AdminTokenAuth() func(c *gin.Context) {
 			abortWithMessage(c, http.StatusForbidden, "无权进行此操作，需要管理员权限")
 			return
 		}
+		user, err := model.GetUserById(token.UserId, false)
+		if err != nil || user == nil {
+			abortWithMessage(c, http.StatusUnauthorized, "用户不存在")
+			return
+		}
 
 		userEnabled, err := model.CacheIsUserEnabled(token.UserId)
 		if err != nil || !userEnabled {
@@ -271,8 +276,8 @@ func AdminTokenAuth() func(c *gin.Context) {
 		}
 
 		c.Set(ctxkey.Id, token.UserId)
-		c.Set(ctxkey.Role, model.RoleAdminUser)
-		c.Set("username", "token_user")
+		c.Set(ctxkey.Role, user.Role)
+		c.Set("username", user.Username)
 
 		c.Next()
 	}
