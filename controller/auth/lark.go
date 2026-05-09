@@ -334,6 +334,9 @@ func LarkOAuth(c *gin.Context) {
 		if err := user.Update(false); err != nil {
 			logger.SysLogf("LarkOAuth: failed to update user email/avatar, user_id=%d, err=%v", user.Id, err)
 		}
+		if config.OrgMembershipV2Enabled {
+			_ = model.ResolveAndUpsertUserOrg(&user, "lark")
+		}
 	} else {
 		if config.RegisterEnabled {
 			user.Username = "lark_" + strconv.Itoa(model.GetMaxUserId()+1)
@@ -353,6 +356,9 @@ func LarkOAuth(c *gin.Context) {
 					"message": err.Error(),
 				})
 				return
+			}
+			if config.OrgMembershipV2Enabled {
+				_ = model.ResolveAndUpsertUserOrg(&user, "lark")
 			}
 		} else {
 			c.JSON(http.StatusOK, gin.H{
@@ -432,6 +438,9 @@ func LarkBind(c *gin.Context) {
 			"message": err.Error(),
 		})
 		return
+	}
+	if config.OrgMembershipV2Enabled {
+		_ = model.ResolveAndUpsertUserOrg(&user, "lark")
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

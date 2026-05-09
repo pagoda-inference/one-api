@@ -61,6 +61,9 @@ func Login(c *gin.Context) {
 		})
 		return
 	}
+	if config.OrgMembershipV2Enabled {
+		_ = model.ResolveAndUpsertUserOrg(&user, "password")
+	}
 	SetupLogin(&user, c)
 }
 
@@ -80,11 +83,13 @@ func SetupLogin(user *model.User, c *gin.Context) {
 		return
 	}
 	cleanUser := model.User{
-		Id:          user.Id,
-		Username:    user.Username,
-		DisplayName: user.DisplayName,
-		Role:        user.Role,
-		Status:      user.Status,
+		Id:           user.Id,
+		Username:     user.Username,
+		DisplayName:  user.DisplayName,
+		Role:         user.Role,
+		Status:       user.Status,
+		CompanyId:    user.CompanyId,
+		DepartmentId: user.DepartmentId,
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
@@ -175,6 +180,9 @@ func Register(c *gin.Context) {
 			"message": err.Error(),
 		})
 		return
+	}
+	if config.OrgMembershipV2Enabled {
+		_ = model.ResolveAndUpsertUserOrg(&cleanUser, "password")
 	}
 
 	c.JSON(http.StatusOK, gin.H{

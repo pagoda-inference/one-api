@@ -51,6 +51,29 @@ func canManageTenantInV2(userId int, tenantId int) bool {
 	return isDeptAdmin || isTeamAdmin
 }
 
+func canManageTargetUserInV2(userId int, tenantId int, targetUserId int) bool {
+	isDeptAdmin, isTeamAdmin, err := getTenantScopePermission(userId, tenantId)
+	if err != nil {
+		return false
+	}
+	if !isDeptAdmin && !isTeamAdmin {
+		return false
+	}
+	tenant, err := model.GetTenantById(tenantId)
+	if err != nil {
+		return false
+	}
+	targetUser, err := model.GetUserById(targetUserId, false)
+	if err != nil || targetUser == nil {
+		return false
+	}
+	if tenant.DepartmentId <= 0 {
+		return false
+	}
+	// Scope rule: department_admin/team_admin can only operate users in same department.
+	return targetUser.DepartmentId == tenant.DepartmentId
+}
+
 // CreateTenant handles POST /api/tenant
 func CreateTenant(c *gin.Context) {
 	var req struct {
@@ -346,6 +369,12 @@ func InviteUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request"})
 		return
 	}
+	if config.OrgMembershipV2Enabled && userRole != model.RoleRootUser {
+		if !canManageTargetUserInV2(userId, tenantId, req.UserId) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Target user is out of department scope"})
+			return
+		}
+	}
 
 	// Validate role
 	if req.Role < model.RoleAdmin || req.Role > model.RoleViewer {
@@ -422,6 +451,12 @@ func RemoveUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Cannot remove yourself"})
 		return
 	}
+	if config.OrgMembershipV2Enabled && userRole != model.RoleRootUser {
+		if !canManageTargetUserInV2(userId, tenantId, targetUserId) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Target user is out of department scope"})
+			return
+		}
+	}
 
 	if err := model.RemoveUserFromTenant(targetUserId, tenantId); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to remove user"})
@@ -472,6 +507,12 @@ func UpdateUserRole(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request"})
 		return
+	}
+	if config.OrgMembershipV2Enabled && userRole != model.RoleRootUser {
+		if !canManageTargetUserInV2(userId, tenantId, targetUserId) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Target user is out of department scope"})
+			return
+		}
 	}
 
 	// Cannot change owner role
@@ -528,6 +569,12 @@ func AllocateUserQuotaAPI(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request"})
 		return
+	}
+	if config.OrgMembershipV2Enabled && userRole != model.RoleRootUser {
+		if !canManageTargetUserInV2(userId, tenantId, req.TargetUserId) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Target user is out of department scope"})
+			return
+		}
 	}
 
 	// Verify target user is in this tenant
