@@ -18,6 +18,7 @@ const Login: React.FC = () => {
   const { t } = useTranslation()
   const { language, toggleLanguage } = useLanguage()
   const { themeMode, toggleTheme } = useTheme()
+  const [registerForm] = Form.useForm()
   const [loginType, setLoginType] = useState<'feishu' | 'password' | 'register'>('feishu')
   const [loading, setLoading] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
@@ -505,4 +506,3 @@ const Login: React.FC = () => {
 }
 
 export default Login
-  const [registerForm] = Form.useForm()
