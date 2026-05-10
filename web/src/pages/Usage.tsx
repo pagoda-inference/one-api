@@ -165,9 +165,20 @@ const Usage: React.FC = () => {
       if (safeDailyUsage.length === 0) {
         return {}
       }
-      const dates = safeDailyUsage.map((d: any) => d.day || '')
-      const promptTokens = safeDailyUsage.map((d: any) => d.prompt_tokens || 0)
-      const completionTokens = safeDailyUsage.map((d: any) => d.completion_tokens || 0)
+      // by_day rows are grouped by (day, model); chart must aggregate by day
+      const dayMap = new Map<string, { prompt: number; completion: number }>()
+      for (const row of safeDailyUsage) {
+        const day = row?.day || ''
+        if (!day) continue
+        const current = dayMap.get(day) || { prompt: 0, completion: 0 }
+        current.prompt += Number(row?.prompt_tokens || 0)
+        current.completion += Number(row?.completion_tokens || 0)
+        dayMap.set(day, current)
+      }
+      const sortedDays = Array.from(dayMap.keys()).sort((a, b) => dayjs(a).unix() - dayjs(b).unix())
+      const dates = sortedDays
+      const promptTokens = sortedDays.map((d) => dayMap.get(d)?.prompt || 0)
+      const completionTokens = sortedDays.map((d) => dayMap.get(d)?.completion || 0)
 
       return {
         title: { text: t('usage.daily_usage_trend'), left: 'center' },
@@ -286,8 +297,8 @@ const Usage: React.FC = () => {
     { title: t('usage.date'), dataIndex: 'day', key: 'day', defaultSortOrder: 'descend' as const, sorter: (a: any, b: any) => {
       if (!a.day) return 1
       if (!b.day) return -1
-      return a.day.localeCompare(b.day)
-    }},
+	      return b.day.localeCompare(a.day)
+	    }},
     {
       title: t('dashboard.model'),
       dataIndex: 'model_name',
@@ -437,7 +448,7 @@ const Usage: React.FC = () => {
           <Col xs={24} lg={12} style={{ display: 'flex' }}>
             <Card title={t('usage.daily_detail')} style={{ width: '100%' }}>
               <Table
-                dataSource={dailyUsage}
+                dataSource={[...(dailyUsage || [])].sort((a: any, b: any) => (b?.day || '').localeCompare(a?.day || ''))}
                 columns={dailyColumns}
                 rowKey={(record) => `${record.day}-${record.model_name}`}
                 size="small"

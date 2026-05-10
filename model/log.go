@@ -328,7 +328,7 @@ func SearchLogsByDayAndModel(userId, start, end int) (LogStatistics []*LogStatis
 		AND user_id= ?
 		AND created_at BETWEEN ? AND ?
 		GROUP BY day, model_name
-		ORDER BY day, model_name
+		ORDER BY day DESC, model_name ASC
 	`, userId, start, end).Scan(&LogStatistics).Error
 
 	return LogStatistics, err
@@ -357,7 +357,7 @@ func SearchAllLogsByDay(start, end int) (LogStatistics []*LogStatistic, err erro
 		WHERE type=2
 		AND created_at BETWEEN ? AND ?
 		GROUP BY day, model_name
-		ORDER BY day, model_name
+		ORDER BY day DESC, model_name ASC
 	`, start, end).Scan(&LogStatistics).Error
 
 	return LogStatistics, err

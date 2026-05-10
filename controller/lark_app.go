@@ -284,38 +284,48 @@ func getLarkDepartmentNameByID(client *http.Client, tenantAccessToken string, de
 	if strings.TrimSpace(departmentID) == "" {
 		return "", nil
 	}
-	detailURL := fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/departments/%s?department_id_type=department_id", departmentID)
-	req, err := http.NewRequest("GET", detailURL, nil)
-	if err != nil {
-		return "", err
+
+	tryFetch := func(idType string) (string, error) {
+		detailURL := fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/departments/%s?department_id_type=%s", departmentID, idType)
+		req, err := http.NewRequest("GET", detailURL, nil)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Authorization", "Bearer "+tenantAccessToken)
+		resp, err := client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("department detail(%s) http status %d body=%s", idType, resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		var deptResp larkDepartmentDetailResp
+		if err = json.Unmarshal(body, &deptResp); err != nil {
+			return "", err
+		}
+		if deptResp.Code != 0 {
+			return "", fmt.Errorf("department detail(%s) failed: %s", idType, larkRespMsg(deptResp.Msg, deptResp.Message))
+		}
+		if deptResp.Data.Department.I18N.ZhCN != "" {
+			return strings.TrimSpace(deptResp.Data.Department.I18N.ZhCN), nil
+		}
+		if deptResp.Data.Department.Name != "" {
+			return strings.TrimSpace(deptResp.Data.Department.Name), nil
+		}
+		return strings.TrimSpace(deptResp.Data.Department.I18N.EnUS), nil
 	}
-	req.Header.Set("Authorization", "Bearer "+tenantAccessToken)
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
+
+	// 1) normal department_id
+	if name, err := tryFetch("department_id"); err == nil && name != "" {
+		return name, nil
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("department detail http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var deptResp larkDepartmentDetailResp
-	if err = json.Unmarshal(body, &deptResp); err != nil {
-		return "", err
-	}
-	if deptResp.Code != 0 {
-		return "", fmt.Errorf("department detail failed: %s", larkRespMsg(deptResp.Msg, deptResp.Message))
-	}
-	if deptResp.Data.Department.I18N.ZhCN != "" {
-		return strings.TrimSpace(deptResp.Data.Department.I18N.ZhCN), nil
-	}
-	if deptResp.Data.Department.Name != "" {
-		return strings.TrimSpace(deptResp.Data.Department.Name), nil
-	}
-	return strings.TrimSpace(deptResp.Data.Department.I18N.EnUS), nil
+	// 2) fallback open_department_id
+	return tryFetch("open_department_id")
 }
 
 func extractLarkContactUser(detailResp *larkContactUserDetailResp, client *http.Client, tenantAccessToken string) (string, string, string, error) {
