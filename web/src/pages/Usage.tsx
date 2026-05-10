@@ -297,8 +297,8 @@ const Usage: React.FC = () => {
     { title: t('usage.date'), dataIndex: 'day', key: 'day', defaultSortOrder: 'descend' as const, sorter: (a: any, b: any) => {
       if (!a.day) return 1
       if (!b.day) return -1
-	      return b.day.localeCompare(a.day)
-	    }},
+      return dayjs(a.day).unix() - dayjs(b.day).unix()
+    }},
     {
       title: t('dashboard.model'),
       dataIndex: 'model_name',
@@ -448,7 +448,7 @@ const Usage: React.FC = () => {
           <Col xs={24} lg={12} style={{ display: 'flex' }}>
             <Card title={t('usage.daily_detail')} style={{ width: '100%' }}>
               <Table
-                dataSource={[...(dailyUsage || [])].sort((a: any, b: any) => (b?.day || '').localeCompare(a?.day || ''))}
+                dataSource={[...(dailyUsage || [])].sort((a: any, b: any) => dayjs(b?.day || '').unix() - dayjs(a?.day || '').unix())}
                 columns={dailyColumns}
                 rowKey={(record) => `${record.day}-${record.model_name}`}
                 size="small"
