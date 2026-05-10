@@ -207,10 +207,11 @@ type larkContactUserDetailResp struct {
 	Message string `json:"message"`
 	Data    struct {
 		User struct {
-			Email           string   `json:"email"`
-			EnterpriseEmail string   `json:"enterprise_email"`
-			DepartmentIDs   []string `json:"department_ids"`
-			Avatar          struct {
+			Email             string   `json:"email"`
+			EnterpriseEmail   string   `json:"enterprise_email"`
+			DepartmentIDs     []string `json:"department_ids"`
+			OpenDepartmentIDs []string `json:"open_department_ids"`
+			Avatar            struct {
 				AvatarOrigin string `json:"avatar_origin"`
 				Avatar72     string `json:"avatar_72"`
 			} `json:"avatar"`
@@ -328,7 +329,7 @@ func getLarkDepartmentNameByID(client *http.Client, tenantAccessToken string, de
 	return tryFetch("open_department_id")
 }
 
-func extractLarkContactUser(detailResp *larkContactUserDetailResp, client *http.Client, tenantAccessToken string) (string, string, string, error) {
+func extractLarkContactUser(detailResp *larkContactUserDetailResp, client *http.Client, tenantAccessToken string) (string, string, string, string, error) {
 	email := strings.TrimSpace(detailResp.Data.User.Email)
 	if email == "" {
 		email = strings.TrimSpace(detailResp.Data.User.EnterpriseEmail)
@@ -338,137 +339,146 @@ func extractLarkContactUser(detailResp *larkContactUserDetailResp, client *http.
 		avatar = strings.TrimSpace(detailResp.Data.User.Avatar.Avatar72)
 	}
 	departmentName := ""
+	departmentID := ""
+	departmentSource := "none"
 	if len(detailResp.Data.User.DepartmentIDs) > 0 {
-		deptName, err := getLarkDepartmentNameByID(client, tenantAccessToken, detailResp.Data.User.DepartmentIDs[0])
+		departmentID = detailResp.Data.User.DepartmentIDs[0]
+		departmentSource = "department_ids"
+	} else if len(detailResp.Data.User.OpenDepartmentIDs) > 0 {
+		departmentID = detailResp.Data.User.OpenDepartmentIDs[0]
+		departmentSource = "open_department_ids"
+	}
+	if departmentID != "" {
+		deptName, err := getLarkDepartmentNameByID(client, tenantAccessToken, departmentID)
 		if err == nil {
 			departmentName = deptName
 		}
 	}
-	return email, avatar, departmentName, nil
+	return email, avatar, departmentName, departmentSource, nil
 }
 
-func getLarkUserDetailByTenantToken(tenantAccessToken, openID string) (string, string, string, error) {
+func getLarkUserDetailByTenantToken(tenantAccessToken, openID string) (string, string, string, string, error) {
 	convertReq, err := json.Marshal(map[string]any{
 		"open_ids": []string{openID},
 	})
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	client := &http.Client{Timeout: 8 * time.Second}
 	req, err := http.NewRequest("POST", "https://open.feishu.cn/open-apis/contact/v3/users/batch_get_id", bytes.NewBuffer(convertReq))
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+tenantAccessToken)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", "", fmt.Errorf("contact convert http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return "", "", "", "none", fmt.Errorf("contact convert http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var convertResp larkContactConvertResp
 	if err = json.Unmarshal(body, &convertResp); err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	if convertResp.Code != 0 {
-		return "", "", "", fmt.Errorf("contact convert failed: %s", larkRespMsg(convertResp.Msg, convertResp.Message))
+		return "", "", "", "none", fmt.Errorf("contact convert failed: %s", larkRespMsg(convertResp.Msg, convertResp.Message))
 	}
 	if len(convertResp.Data.UserList) == 0 || convertResp.Data.UserList[0].UserID == "" {
-		return "", "", "", fmt.Errorf("contact convert empty user_id")
+		return "", "", "", "none", fmt.Errorf("contact convert empty user_id")
 	}
 	userID := convertResp.Data.UserList[0].UserID
 
 	detailURL := fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/users/%s?user_id_type=user_id", userID)
 	req2, err := http.NewRequest("GET", detailURL, nil)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	req2.Header.Set("Authorization", "Bearer "+tenantAccessToken)
 	resp2, err := client.Do(req2)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	defer resp2.Body.Close()
 	body2, err := io.ReadAll(resp2.Body)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	if resp2.StatusCode != http.StatusOK {
-		return "", "", "", fmt.Errorf("contact detail http status %d body=%s", resp2.StatusCode, strings.TrimSpace(string(body2)))
+		return "", "", "", "none", fmt.Errorf("contact detail http status %d body=%s", resp2.StatusCode, strings.TrimSpace(string(body2)))
 	}
 	var detailResp larkContactUserDetailResp
 	if err = json.Unmarshal(body2, &detailResp); err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	if detailResp.Code != 0 {
-		return "", "", "", fmt.Errorf("contact detail failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
+		return "", "", "", "none", fmt.Errorf("contact detail failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
 	}
 	return extractLarkContactUser(&detailResp, client, tenantAccessToken)
 }
 
-func getLarkUserDetailByUserID(tenantAccessToken, userID string) (string, string, string, error) {
+func getLarkUserDetailByUserID(tenantAccessToken, userID string) (string, string, string, string, error) {
 	client := &http.Client{Timeout: 8 * time.Second}
 	detailURL := fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/users/%s?user_id_type=user_id", userID)
 	req, err := http.NewRequest("GET", detailURL, nil)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	req.Header.Set("Authorization", "Bearer "+tenantAccessToken)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", "", fmt.Errorf("contact detail by user_id http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return "", "", "", "none", fmt.Errorf("contact detail by user_id http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var detailResp larkContactUserDetailResp
 	if err = json.Unmarshal(body, &detailResp); err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	if detailResp.Code != 0 {
-		return "", "", "", fmt.Errorf("contact detail by user_id failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
+		return "", "", "", "none", fmt.Errorf("contact detail by user_id failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
 	}
 	return extractLarkContactUser(&detailResp, client, tenantAccessToken)
 }
 
-func getLarkUserDetailByOpenID(tenantAccessToken, openID string) (string, string, string, error) {
+func getLarkUserDetailByOpenID(tenantAccessToken, openID string) (string, string, string, string, error) {
 	client := &http.Client{Timeout: 8 * time.Second}
 	detailURL := fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/users/%s?user_id_type=open_id", openID)
 	req, err := http.NewRequest("GET", detailURL, nil)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	req.Header.Set("Authorization", "Bearer "+tenantAccessToken)
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", "", fmt.Errorf("contact detail by open_id http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return "", "", "", "none", fmt.Errorf("contact detail by open_id http status %d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var detailResp larkContactUserDetailResp
 	if err = json.Unmarshal(body, &detailResp); err != nil {
-		return "", "", "", err
+		return "", "", "", "none", err
 	}
 	if detailResp.Code != 0 {
-		return "", "", "", fmt.Errorf("contact detail by open_id failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
+		return "", "", "", "none", fmt.Errorf("contact detail by open_id failed: %s", larkRespMsg(detailResp.Msg, detailResp.Message))
 	}
 	return extractLarkContactUser(&detailResp, client, tenantAccessToken)
 }
@@ -507,6 +517,9 @@ func SyncLarkUsersProfile(c *gin.Context) {
 	total := len(users)
 	updated := 0
 	orgUpdated := 0
+	departmentResolved := 0
+	departmentSourceCounters := map[string]int{"department_ids": 0, "open_department_ids": 0, "none": 0}
+	departmentDebugExamples := make([]string, 0, 20)
 	failed := 0
 	skipped := 0
 	errorsList := make([]string, 0)
@@ -549,6 +562,7 @@ func SyncLarkUsersProfile(c *gin.Context) {
 		var email string
 		var avatar string
 		var departmentName string
+		var departmentSource string
 		var detailErr error
 
 		found := false
@@ -561,7 +575,7 @@ func SyncLarkUsersProfile(c *gin.Context) {
 			if strings.HasPrefix(larkID, "ou_") {
 				// Normal case: lark_id stores open_id (ou_xxx).
 				// Do NOT fall back to convert endpoint here, otherwise the real open_id error gets masked.
-				email, avatar, departmentName, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
+				email, avatar, departmentName, departmentSource, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
 				if detailErr == nil && (email != "" || avatar != "") {
 					found = true
 					break
@@ -570,14 +584,14 @@ func SyncLarkUsersProfile(c *gin.Context) {
 			}
 
 			// Legacy/non-standard case: may store user_id in lark_id.
-			email, avatar, departmentName, detailErr = getLarkUserDetailByUserID(tenantToken, larkID)
+			email, avatar, departmentName, departmentSource, detailErr = getLarkUserDetailByUserID(tenantToken, larkID)
 			if detailErr == nil && (email != "" || avatar != "") {
 				found = true
 				break
 			}
 
 			// Fallback: try as open_id as last resort.
-			email, avatar, departmentName, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
+			email, avatar, departmentName, departmentSource, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
 			if detailErr == nil && (email != "" || avatar != "") {
 				found = true
 				break
@@ -591,6 +605,14 @@ func SyncLarkUsersProfile(c *gin.Context) {
 				failedExamples = append(failedExamples, fmt.Sprintf("user=%d lark_id=%s err=%v", u.Id, larkID, detailErr))
 			}
 			continue
+		}
+
+		if _, ok := departmentSourceCounters[departmentSource]; !ok {
+			departmentSource = "none"
+		}
+		departmentSourceCounters[departmentSource]++
+		if len(departmentDebugExamples) < 20 {
+			departmentDebugExamples = append(departmentDebugExamples, fmt.Sprintf("user=%d source=%s dept=%s", u.Id, departmentSource, strings.TrimSpace(departmentName)))
 		}
 
 		newEmail := strings.TrimSpace(email)
@@ -620,6 +642,9 @@ func SyncLarkUsersProfile(c *gin.Context) {
 			u.CompanyId = 0
 			u.DepartmentId = 0
 			if err = model.ResolveAndUpsertUserOrg(u, "lark"); err == nil {
+				if strings.TrimSpace(departmentName) != "" {
+					departmentResolved++
+				}
 				_ = model.ResolveAndUpsertUserDepartmentByName(u, departmentName, "lark")
 				orgUpdated++
 			}
@@ -632,13 +657,16 @@ func SyncLarkUsersProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"total":           total,
-			"updated":         updated,
-			"org_updated":     orgUpdated,
-			"failed":          failed,
-			"skipped":         skipped,
-			"errors":          errorsList,
-			"failed_examples": failedExamples,
+			"total":                    total,
+			"updated":                  updated,
+			"org_updated":              orgUpdated,
+			"department_resolved":      departmentResolved,
+			"department_source_counts": departmentSourceCounters,
+			"department_examples":      departmentDebugExamples,
+			"failed":                   failed,
+			"skipped":                  skipped,
+			"errors":                   errorsList,
+			"failed_examples":          failedExamples,
 		},
 	})
 }
