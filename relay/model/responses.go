@@ -341,11 +341,20 @@ func ConvertChatResponseToResponses(chatResp *ChatCompletionsResponse, requestID
 			item.Type = "function_call"
 			// Take the first tool call
 			tc := choice.Message.ToolCalls[0]
+			args := ""
+			switch v := tc.Function.Arguments.(type) {
+			case string:
+				args = v
+			default:
+				if v != nil {
+					args = fmt.Sprintf("%v", v)
+				}
+			}
 			item.FunctionCall = &FunctionCall{
-				ID:        tc.ID,
+				ID:        tc.Id,
 				Type:      "function_call",
 				Name:      tc.Function.Name,
-				Arguments: tc.Function.Arguments,
+				Arguments: args,
 			}
 			item.Message = &ResponseMessage{
 				Role:    "assistant",
