@@ -1537,8 +1537,7 @@ func RelayNotFound(c *gin.Context) {
 
 // RelayResponses handles OpenAI Responses API /v1/responses requests
 // POST /v1/responses - create a response (streaming or non-streaming)
-// GET /v1/responses/:id - retrieve a response (P1, currently returns not_supported)
-// DELETE /v1/responses/:id - delete a response (P1, currently returns not_supported)
+// GET/DELETE /v1/responses/:id - routed to RelayNotImplemented
 func RelayResponses(c *gin.Context) {
 	if !config.ResponsesAPIEnabled {
 		err := model.Error{

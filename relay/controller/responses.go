@@ -18,6 +18,7 @@ import (
 	relaymeta "github.com/pagoda-inference/one-api/relay/meta"
 	relaymodel "github.com/pagoda-inference/one-api/relay/model"
 	"github.com/pagoda-inference/one-api/relay/relaymode"
+	"github.com/pagoda-inference/one-api/common/helper"
 	billing "github.com/pagoda-inference/one-api/relay/billing"
 	billingratio "github.com/pagoda-inference/one-api/relay/billing/ratio"
 	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
@@ -227,7 +228,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 	var status string
 	var responseCreatedSent bool
 	var responseID string
-	requestID := c.GetString("request_id")
+	requestID := c.GetString(helper.RequestIdKey)
 
 	// Create context for cancellation
 	streamCtx, cancel := context.WithCancel(ctx)
@@ -246,69 +247,62 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 		default:
 		}
 
-		// Read a line (SSE format: "data: {...}\n")
-		line, err := br.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				// Stream ended normally
-				break
-			}
-			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-			logResponse(ctx, meta, preConsumedQuota, nil, "interrupted", startTime, "read_error")
-			return openai.ErrorWrapper(fmt.Errorf("failed to read stream: %w", err), "stream_read_error", http.StatusInternalServerError)
-		}
+		// SSE event accumulator
+		var eventData string
 
-		// Trim newline characters
-		line = strings.TrimRight(line, "\r\n")
-
-		// SSE standard: empty line marks end of an event
-		if line == "" {
-			continue
-		}
-
-		// Comment line, skip
-		if strings.HasPrefix(line, ":") {
-			continue
-		}
-
-		// Parse SSE data: prefix
-		if !strings.HasPrefix(line, "data:") {
-			continue
-		}
-		dataStr := strings.TrimPrefix(line, "data:")
-		dataStr = strings.TrimSpace(dataStr)
-		if dataStr == "" || dataStr == "[DONE]" {
-			continue
-		}
-
-		// Accumulate multi-line data (SSE allows multiple data: lines per event, separated by newlines)
-		// Peek ahead to see if next line is also a data: line
-		eventData := dataStr
+		// Read lines until empty line (end of SSE event) or EOF
 		for {
-			// Peek at next line
-			nextLine, err := br.ReadString('\n')
+			line, err := br.ReadString('\n')
 			if err != nil {
-				break
-			}
-			nextLine = strings.TrimRight(nextLine, "\r\n")
-
-			// If next line starts with "data:", it's a continuation
-			if strings.HasPrefix(nextLine, "data:") {
-				contData := strings.TrimPrefix(nextLine, "data:")
-				contData = strings.TrimSpace(contData)
-				if contData != "" {
-					eventData += "\n" + contData
+				if err == io.EOF {
+					// Stream ended
+					break
 				}
-			} else {
-				// Not a data: line, put it back or handle as separate event
-				// Since we already consumed it, we need to handle it in next iteration
-				// But ReadString already consumed it, so we can't easily "unread"
-				// For simplicity, just process what we have
+				billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+				logResponse(ctx, meta, preConsumedQuota, nil, "interrupted", startTime, "read_error")
+				return openai.ErrorWrapper(fmt.Errorf("failed to read stream: %w", err), "stream_read_error", http.StatusInternalServerError)
+			}
+
+			line = strings.TrimRight(line, "\r\n")
+
+			// Empty line marks end of SSE event
+			if line == "" {
 				break
 			}
+
+			// Comment line, skip
+			if strings.HasPrefix(line, ":") {
+				continue
+			}
+
+			// Non-data: lines (like event: type), skip
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+
+			// Extract data content
+			dataStr := strings.TrimPrefix(line, "data:")
+			dataStr = strings.TrimSpace(dataStr)
+			if dataStr == "" {
+				continue
+			}
+			if dataStr == "[DONE]" {
+				break
+			}
+
+			// Accumulate multi-line data (SSE concatenates with newlines)
+			if eventData != "" {
+				eventData += "\n"
+			}
+			eventData += dataStr
 		}
 
-		// Parse JSON
+		// Skip empty events
+		if eventData == "" {
+			continue
+		}
+
+		// Parse the accumulated event data as JSON
 		var chatResp relaymodel.ChatCompletionsStreamResponse
 		if err := json.Unmarshal([]byte(eventData), &chatResp); err != nil {
 			logger.Warnf(ctx, "failed to unmarshal SSE data: %v, data: %s", err, eventData)
