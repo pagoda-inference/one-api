@@ -73,12 +73,13 @@ func InitOptionMap() {
 	config.OptionMap["TopUpLink"] = config.TopUpLink
 	config.OptionMap["ChatLink"] = config.ChatLink
 	config.OptionMap["QuotaPerUnit"] = strconv.FormatFloat(config.QuotaPerUnit, 'f', -1, 64)
-		config.OptionMap["RetryTimes"] = strconv.Itoa(config.RetryTimes)
+	config.OptionMap["RetryTimes"] = strconv.Itoa(config.RetryTimes)
 	config.OptionMap["Theme"] = config.Theme
 	config.OptionMap["ApiDocs"] = ""
 	config.OptionMap["ResponsesAPIEnabled"] = strconv.FormatBool(config.ResponsesAPIEnabled)
 	config.OptionMap["ResponsesStreamEnabled"] = strconv.FormatBool(config.ResponsesStreamEnabled)
 	config.OptionMap["ResponsesStrictCompat"] = strconv.FormatBool(config.ResponsesStrictCompat)
+	config.OptionMap["ResponsesPassReasoning"] = strconv.FormatBool(config.ResponsesPassReasoning)
 	config.OptionMap["ResponsesUsageFallbackMultiplier"] = strconv.FormatFloat(config.ResponsesUsageFallbackMultiplier, 'f', -1, 64)
 	config.OptionMapRWMutex.Unlock()
 	loadOptionsFromDatabase()
@@ -167,6 +168,10 @@ func updateOptionMap(key string, value string) (err error) {
 		}
 	}
 	switch key {
+	case "ResponsesStrictCompat":
+		config.ResponsesStrictCompat = value == "true"
+	case "ResponsesPassReasoning":
+		config.ResponsesPassReasoning = value == "true"
 	case "EmailDomainWhitelist":
 		config.EmailDomainWhitelist = strings.Split(value, ",")
 	case "SMTPServer":

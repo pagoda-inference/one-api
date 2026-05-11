@@ -2,39 +2,42 @@ package model
 
 import (
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/pagoda-inference/one-api/common/config"
 )
 
 // OpenAI Responses API Request structures
 
 // ResponsesRequest represents an incoming OpenAI Responses API request
 type ResponsesRequest struct {
-	Model               string                  `json:"model"`
-	Input               any                     `json:"input"` // string or []InputContent
-	Instructions        string                  `json:"instructions,omitempty"`
-	Tools               []ResponsesTool         `json:"tools,omitempty"`
-	ToolChoice          any                     `json:"tool_choice,omitempty"`
-	Temperature         *float64                `json:"temperature,omitempty"`
-	TopP                *float64                `json:"top_p,omitempty"`
-	MaxOutputTokens     *int                    `json:"max_output_tokens,omitempty"`
-	Stream              bool                    `json:"stream,omitempty"`
-	StreamOptions       *ResponsesStreamOptions `json:"stream_options,omitempty"`
-	Metadata            map[string]any          `json:"metadata,omitempty"`
-	PreviousResponseID  string                  `json:"previous_response_id,omitempty"`
-	Reasoning           *ReasoningConfig        `json:"reasoning,omitempty"`
-	ResponseFormat      any                     `json:"response_format,omitempty"`
-	Seed                *int                    `json:"seed,omitempty"`
-	ServiceTier         string                  `json:"service_tier,omitempty"`
+	Model              string                  `json:"model"`
+	Input              any                     `json:"input"` // string or []InputContent
+	Instructions       string                  `json:"instructions,omitempty"`
+	Tools              []ResponsesTool         `json:"tools,omitempty"`
+	ToolChoice         any                     `json:"tool_choice,omitempty"`
+	Temperature        *float64                `json:"temperature,omitempty"`
+	TopP               *float64                `json:"top_p,omitempty"`
+	MaxOutputTokens    *int                    `json:"max_output_tokens,omitempty"`
+	Stream             bool                    `json:"stream,omitempty"`
+	StreamOptions      *ResponsesStreamOptions `json:"stream_options,omitempty"`
+	Metadata           map[string]any          `json:"metadata,omitempty"`
+	PreviousResponseID string                  `json:"previous_response_id,omitempty"`
+	Reasoning          *ReasoningConfig        `json:"reasoning,omitempty"`
+	ResponseFormat     any                     `json:"response_format,omitempty"`
+	Seed               *int                    `json:"seed,omitempty"`
+	ServiceTier        string                  `json:"service_tier,omitempty"`
 }
 
 // InputContent represents a item in the input array
 type InputContent struct {
-	Type      string `json:"type"`
-	Text      string `json:"text,omitempty"`
-	Role      string `json:"role,omitempty"`
-	Content   string `json:"content,omitempty"`
-	ImageURL  string `json:"image_url,omitempty"`
-	Name      string `json:"name,omitempty"`
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	Role     string `json:"role,omitempty"`
+	Content  string `json:"content,omitempty"`
+	ImageURL string `json:"image_url,omitempty"`
+	Name     string `json:"name,omitempty"`
 }
 
 // ResponsesStreamOptions controls streaming behavior
@@ -67,24 +70,24 @@ type ResponsesStreamEvent struct {
 
 // ResponsesResponse represents the non-streaming response
 type ResponsesResponse struct {
-	ID        string        `json:"id"`
-	Object    string        `json:"object"`
-	CreatedAt int64         `json:"created_at"`
-	Status    string        `json:"status"`
-	Error     *Error        `json:"error,omitempty"`
-	Output    []OutputItem  `json:"output,omitempty"`
-	Usage     *Usage        `json:"usage,omitempty"`
+	ID        string         `json:"id"`
+	Object    string         `json:"object"`
+	CreatedAt int64          `json:"created_at"`
+	Status    string         `json:"status"`
+	Error     *Error         `json:"error,omitempty"`
+	Output    []OutputItem   `json:"output,omitempty"`
+	Usage     *Usage         `json:"usage,omitempty"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // OutputItem represents a single output item in the response
 type OutputItem struct {
-	ID           string            `json:"id"`
-	Type         string            `json:"type"` // "message" | "function_call" | "reasoning" | "refusal"
-	Message      *ResponseMessage  `json:"message,omitempty"`
-	FunctionCall *FunctionCall     `json:"function_call,omitempty"`
-	Reasoning    *Reasoning        `json:"reasoning,omitempty"`
-	Refusal      string            `json:"refusal,omitempty"`
+	ID           string           `json:"id"`
+	Type         string           `json:"type"` // "message" | "function_call" | "reasoning" | "refusal"
+	Message      *ResponseMessage `json:"message,omitempty"`
+	FunctionCall *FunctionCall    `json:"function_call,omitempty"`
+	Reasoning    *Reasoning       `json:"reasoning,omitempty"`
+	Refusal      string           `json:"refusal,omitempty"`
 }
 
 // ResponseMessage represents a message output item in Responses format
@@ -108,9 +111,9 @@ type Reasoning struct {
 
 // ReasoningSummary represents a summary of reasoning
 type ReasoningSummary struct {
-	Type        string `json:"type"`
-	Text        string `json:"text"`
-	Sensitive   bool   `json:"sensitive,omitempty"`
+	Type      string `json:"type"`
+	Text      string `json:"text"`
+	Sensitive bool   `json:"sensitive,omitempty"`
 }
 
 // Stream event data structures
@@ -118,42 +121,42 @@ type ReasoningSummary struct {
 // ResponseCreatedEvent is sent when the response starts
 type ResponseCreatedEvent struct {
 	Response struct {
-		ID        string `json:"id"`
-		Object    string `json:"object"`
-		Status    string `json:"status"`
+		ID     string `json:"id"`
+		Object string `json:"object"`
+		Status string `json:"status"`
 	} `json:"response"`
 }
 
 // OutputItemCreatedEvent is sent when an output item is created
 type OutputItemCreatedEvent struct {
 	Item struct {
-		ID        string `json:"id"`
-		Type      string `json:"type"`
+		ID           string        `json:"id"`
+		Type         string        `json:"type"`
 		FunctionCall *FunctionCall `json:"function_call,omitempty"`
 	} `json:"item"`
 }
 
 // OutputTextDeltaEvent is sent for text content deltas
 type OutputTextDeltaEvent struct {
-	ItemID      string `json:"item_id"`
-	OutputIndex int    `json:"output_index"`
-	ContentIndex int   `json:"content_index"`
-	Delta       string `json:"delta"`
+	ItemID       string `json:"item_id"`
+	OutputIndex  int    `json:"output_index"`
+	ContentIndex int    `json:"content_index"`
+	Delta        string `json:"delta"`
 }
 
 // OutputTextDoneEvent is sent when text output is complete
 type OutputTextDoneEvent struct {
 	Item struct {
-		ID        string `json:"id"`
-		Type      string `json:"type"`
-		Text      string `json:"text"`
+		ID   string `json:"id"`
+		Type string `json:"type"`
+		Text string `json:"text"`
 	} `json:"item"`
 }
 
 // FunctionCallArgumentsDeltaEvent is sent for function call argument deltas
 type FunctionCallArgumentsDeltaEvent struct {
-	ItemID      string `json:"item_id"`
-	Delta       string `json:"delta"`
+	ItemID string `json:"item_id"`
+	Delta  string `json:"delta"`
 }
 
 // FunctionCallArgumentsDoneEvent is sent when function call is complete
@@ -164,22 +167,22 @@ type FunctionCallArgumentsDoneEvent struct {
 // ResponseDoneEvent is sent when the response is complete
 type ResponseDoneEvent struct {
 	Response struct {
-		ID        string `json:"id"`
-		Object    string `json:"object"`
-		Status    string `json:"status"`
-		Usage     *Usage `json:"usage,omitempty"`
+		ID     string `json:"id"`
+		Object string `json:"object"`
+		Status string `json:"status"`
+		Usage  *Usage `json:"usage,omitempty"`
 	} `json:"response"`
 }
 
 // ChatCompletionsResponse is a minimal chat-completions response shape used by responses conversion.
 type ChatCompletionsResponse struct {
-	Id      string                         `json:"id"`
-	Object  string                         `json:"object,omitempty"`
-	Created int64                          `json:"created,omitempty"`
-	Model   string                         `json:"model,omitempty"`
+	Id      string                          `json:"id"`
+	Object  string                          `json:"object,omitempty"`
+	Created int64                           `json:"created,omitempty"`
+	Model   string                          `json:"model,omitempty"`
 	Choices []ChatCompletionsResponseChoice `json:"choices"`
-	Usage   *Usage                         `json:"usage,omitempty"`
-	Error   *Error                         `json:"error,omitempty"`
+	Usage   *Usage                          `json:"usage,omitempty"`
+	Error   *Error                          `json:"error,omitempty"`
 }
 
 type ChatCompletionsResponseChoice struct {
@@ -190,18 +193,18 @@ type ChatCompletionsResponseChoice struct {
 
 // ChatCompletionsStreamResponse is a minimal stream chunk shape used by responses conversion.
 type ChatCompletionsStreamResponse struct {
-	Id      string                               `json:"id"`
-	Object  string                               `json:"object,omitempty"`
-	Created int64                                `json:"created,omitempty"`
-	Model   string                               `json:"model,omitempty"`
+	Id      string                                `json:"id"`
+	Object  string                                `json:"object,omitempty"`
+	Created int64                                 `json:"created,omitempty"`
+	Model   string                                `json:"model,omitempty"`
 	Choices []ChatCompletionsStreamResponseChoice `json:"choices"`
-	Usage   *Usage                               `json:"usage,omitempty"`
+	Usage   *Usage                                `json:"usage,omitempty"`
 }
 
 type ChatCompletionsStreamResponseChoice struct {
-	Index        int      `json:"index"`
-	Delta        Message  `json:"delta"`
-	FinishReason *string  `json:"finish_reason,omitempty"`
+	Index        int     `json:"index"`
+	Delta        Message `json:"delta"`
+	FinishReason *string `json:"finish_reason,omitempty"`
 }
 
 // ConvertResponsesToChatRequest converts an OpenAI Responses request to a unified Chat request
@@ -303,6 +306,16 @@ func ConvertResponsesToChatRequest(req *ResponsesRequest) *GeneralOpenAIRequest 
 	if req.Stream {
 		chatReq.StreamOptions = &StreamOptions{
 			IncludeUsage: true,
+		}
+	}
+
+	// Handle reasoning config based on ResponsesPassReasoning setting.
+	// Only pass non-empty supported effort values to avoid upstream validation errors.
+	if req.Reasoning != nil && config.ResponsesPassReasoning {
+		effort := strings.TrimSpace(strings.ToLower(req.Reasoning.Effort))
+		switch effort {
+		case "low", "medium", "high":
+			chatReq.ReasoningEffort = &effort
 		}
 	}
 

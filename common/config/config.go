@@ -152,6 +152,7 @@ var EnableMetric = env.Bool("ENABLE_METRIC", false)
 var ResponsesAPIEnabled = true
 var ResponsesStreamEnabled = true
 var ResponsesStrictCompat = true
+var ResponsesPassReasoning = false
 var ResponsesUsageFallbackMultiplier = 1.0
 var MetricQueueSize = env.Int("METRIC_QUEUE_SIZE", 10)
 var MetricSuccessRateThreshold = env.Float64("METRIC_SUCCESS_RATE_THRESHOLD", 0.8)
