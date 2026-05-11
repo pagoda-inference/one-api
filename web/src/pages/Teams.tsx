@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
-import { Row, Col, Card, Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, message, Popconfirm, Tabs, Statistic } from 'antd'
+import { Row, Col, Card, Table, Button, Modal, Form, Input, InputNumber, Select, Tag, Space, message, Popconfirm, Tabs, Statistic, Switch } from 'antd'
 import { TeamOutlined, UserOutlined, PlusOutlined, DeleteOutlined, SettingOutlined, AuditOutlined, CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons'
-import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, getOpsUsers, Tenant, TenantUser, AuditLog, getAllCompanies, getDepartments, createCompany, createDepartment, deleteTenant, Company, Department } from '../services/api'
+import { createTenant, getMyTenants, getTenant, updateTenant, getTenantUsers, inviteUser, removeUser, updateUserRole, allocateQuota, getAuditLogs, leaveTenant, getOpsUsers, Tenant, TenantUser, AuditLog, getAllCompanies, getDepartments, createCompany, createDepartment, deleteTenant, Company, Department, getDepartmentMembers, updateDepartmentMemberRole, DepartmentMember } from '../services/api'
 import { useTranslation } from 'react-i18next'
 
 const { Option } = Select
@@ -22,6 +22,7 @@ const Teams: React.FC = () => {
   const [inviteModalVisible, setInviteModalVisible] = useState(false)
   const [quotaModalVisible, setQuotaModalVisible] = useState(false)
   const [currentRole, setCurrentRole] = useState<number>(2)
+  const [tenantPermissions, setTenantPermissions] = useState<any>({})
   const [createForm] = Form.useForm()
   const [createCompanyForm] = Form.useForm()
   const [createDeptForm] = Form.useForm()
@@ -35,10 +36,22 @@ const Teams: React.FC = () => {
   const [collapsedDepartmentIds, setCollapsedDepartmentIds] = useState<Set<number>>(new Set())
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
   const [isRoot, setIsRoot] = useState(false)
+  const [departmentMembers, setDepartmentMembers] = useState<Record<number, DepartmentMember[]>>({})
+  const [departmentLoading, setDepartmentLoading] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
     loadTenants()
-    loadCompanies()
+    const userInfoStr = localStorage.getItem('user_info')
+    if (userInfoStr) {
+      try {
+        const userInfo = JSON.parse(userInfoStr)
+        if ((userInfo?.role ?? 0) >= 100) {
+          loadCompanies()
+        }
+      } catch (error) {
+        // ignore parse errors
+      }
+    }
   }, [])
 
   const loadCompanies = async () => {
@@ -68,16 +81,8 @@ const Teams: React.FC = () => {
       if (res.data.success) {
         const nextDepartments = res.data.data || []
         setDepartments(nextDepartments)
-        // Keep previous collapse preferences for departments that still exist.
-        setCollapsedDepartmentIds((prev) => {
-          const next = new Set<number>()
-          for (const dept of nextDepartments) {
-            if (prev.has(dept.id)) {
-              next.add(dept.id)
-            }
-          }
-          return next
-        })
+        // Default collapsed for root view.
+        setCollapsedDepartmentIds(new Set(nextDepartments.map((d) => d.id)))
       }
     } catch (error) {
       console.error('Failed to load departments:', error)
@@ -88,8 +93,13 @@ const Teams: React.FC = () => {
     setCollapsedDepartmentIds((prev) => {
       const next = new Set(prev)
       if (next.has(departmentId)) {
+        // expanding
         next.delete(departmentId)
+        if (!departmentMembers[departmentId]) {
+          loadDepartmentMembers(departmentId)
+        }
       } else {
+        // collapsing
         next.add(departmentId)
       }
       return next
@@ -99,6 +109,34 @@ const Teams: React.FC = () => {
   const handleCompanyChange = (companyId: number) => {
     setSelectedCompanyId(companyId)
     loadDepartments(companyId)
+  }
+
+  const loadDepartmentMembers = async (departmentId: number) => {
+    try {
+      setDepartmentLoading((prev) => ({ ...prev, [departmentId]: true }))
+      const res = await getDepartmentMembers(departmentId)
+      if (res.data.success) {
+        setDepartmentMembers((prev) => ({ ...prev, [departmentId]: res.data.data.members || [] }))
+      }
+    } catch (error) {
+      console.error('Failed to load department members:', error)
+    } finally {
+      setDepartmentLoading((prev) => ({ ...prev, [departmentId]: false }))
+    }
+  }
+
+  const handleToggleDepartmentAdmin = async (departmentId: number, userId: number, checked: boolean) => {
+    try {
+      const res = await updateDepartmentMemberRole(departmentId, userId, { is_department_admin: checked })
+      if (res.data.success) {
+        message.success(checked ? t('teams.department_admin_granted') : t('teams.department_admin_revoked'))
+        loadDepartmentMembers(departmentId)
+      } else {
+        message.error(res.data.message || t('common.update_failed'))
+      }
+    } catch (error: any) {
+      message.error(error.response?.data?.message || t('common.update_failed'))
+    }
   }
 
   const loadTenants = async () => {
@@ -121,6 +159,7 @@ const Teams: React.FC = () => {
       const res = await getTenant(id)
       setCurrentTenant(res.data.data.tenant)
       setCurrentRole(res.data.data.user_role?.role || 2)
+      setTenantPermissions(res.data.data.permissions || {})
       loadTenantUsers(id)
     } catch (error) {
       console.error('Failed to load tenant:', error)
@@ -215,7 +254,7 @@ const Teams: React.FC = () => {
   const searchUsers = async (keyword: string) => {
     try {
       setUserSearchLoading(true)
-      const res = await getOpsUsers({ limit: 1000, offset: 0, keyword })
+      const res = await getOpsUsers({ limit: 1000, offset: 0, keyword, tenant_id: currentTenant?.id })
       if (res.data.success) {
         setAllUsers(res.data.data.users || [])
       }
@@ -322,20 +361,26 @@ const Teams: React.FC = () => {
     { title: t('teams.quota_used'), dataIndex: 'used_quota', key: 'used_quota', render: (v: number) => formatQuota(v) },
     { title: t('common.action'), key: 'action', render: (_: any, r: TenantUser) => (
       <Space>
-        {(currentRole <= 1 || isRoot) && r.role > 0 && (
+        {(tenantPermissions?.can_remove_member || tenantPermissions?.can_set_quota || tenantPermissions?.can_set_member_role || isRoot) && r.role > 0 && (
           <>
-            <Button size="small" onClick={() => {
-              quotaForm.setFieldsValue({ target_user_id: r.id })
-              setQuotaModalVisible(true)
-            }}>{t('teams.alloc_quota')}</Button>
-            <Select size="small" value={r.role} style={{ width: 80 }} onChange={(v) => handleUpdateRole(r.id, v)}>
-              <Option value={1}>{t('teams.admin')}</Option>
-              <Option value={2}>{t('teams.member')}</Option>
-              <Option value={3}>{t('teams.observer')}</Option>
-            </Select>
-            <Popconfirm title={t('teams.confirm_remove_user')} onConfirm={() => handleRemoveUser(r.id)}>
-              <Button size="small" danger icon={<DeleteOutlined />}>{t('teams.remove')}</Button>
-            </Popconfirm>
+            {(tenantPermissions?.can_set_quota || isRoot) && (
+              <Button size="small" onClick={() => {
+                quotaForm.setFieldsValue({ target_user_id: r.id })
+                setQuotaModalVisible(true)
+              }}>{t('teams.alloc_quota')}</Button>
+            )}
+            {(tenantPermissions?.can_set_member_role || isRoot) && (
+              <Select size="small" value={r.role} style={{ width: 80 }} onChange={(v) => handleUpdateRole(r.id, v)}>
+                {(tenantPermissions?.can_grant_team_admin || isRoot) && <Option value={1}>{t('teams.admin')}</Option>}
+                <Option value={2}>{t('teams.member')}</Option>
+                <Option value={3}>{t('teams.observer')}</Option>
+              </Select>
+            )}
+            {(tenantPermissions?.can_remove_member || isRoot) && (
+              <Popconfirm title={t('teams.confirm_remove_user')} onConfirm={() => handleRemoveUser(r.id)}>
+                <Button size="small" danger icon={<DeleteOutlined />}>{t('teams.remove')}</Button>
+              </Popconfirm>
+            )}
           </>
         )}
       </Space>
@@ -413,31 +458,67 @@ const Teams: React.FC = () => {
                         </Space>
                         <Button type="text" size="small" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)} />
                       </div>
-                      {!collapsedDepartmentIds.has(d.id) && tenants.filter(tenant => tenant.department_id === d.id).map(tenant => (
-                        <Card key={tenant.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === tenant.id ? appTheme.bgElevated : appTheme.bgContainer }}
-                          onClick={() => selectTenant(tenant.id)}>
-                          <Space>
-                            <TeamOutlined />
-                            <span style={{ fontWeight: currentTenant?.id === tenant.id ? 'bold' : 'normal' }}>{tenant.name}</span>
-                            <Tag>{tenant.code}</Tag>
-                            <Popconfirm title={t('teams.confirm_delete_team')} onConfirm={(e) => { e?.stopPropagation(); handleDeleteTenant(tenant.id) }} onCancel={(e) => e?.stopPropagation()}>
-                              <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
-                            </Popconfirm>
-                          </Space>
-                        </Card>
-                      ))}
+                      {!collapsedDepartmentIds.has(d.id) && (
+                        <>
+                          <div style={{ margin: '4px 0 8px 24px' }}>
+                            <div style={{ fontSize: 12, color: appTheme.textSecondary, marginBottom: 6 }}>{t('teams.department_members')}</div>
+                            <Table
+                              size="small"
+                              rowKey="id"
+                              loading={!!departmentLoading[d.id]}
+                              dataSource={departmentMembers[d.id] || []}
+                              pagination={{ pageSize: 5, showSizeChanger: false }}
+                              columns={[
+                                {
+                                  title: t('teams.member_label'),
+                                  key: 'member',
+                                  render: (_: any, r: DepartmentMember) => `${r.display_name || r.username}${r.email ? ` (${r.email})` : ''}`
+                                },
+                                {
+                                  title: t('teams.department_admin'),
+                                  key: 'is_department_admin',
+                                  width: 120,
+                                  render: (_: any, r: DepartmentMember) => (
+                                    <Switch checked={r.is_department_admin} onChange={(checked) => handleToggleDepartmentAdmin(d.id, r.id, checked)} />
+                                  )
+                                }
+                              ]}
+                            />
+                          </div>
+                          {tenants.filter(tenant => tenant.department_id === d.id).map(tenant => (
+                            <Card key={tenant.id} size="small" style={{ marginBottom: 4, cursor: 'pointer', background: currentTenant?.id === tenant.id ? appTheme.bgElevated : appTheme.bgContainer }}
+                              onClick={() => selectTenant(tenant.id)}>
+                              <Space>
+                                <TeamOutlined />
+                                <span style={{ fontWeight: currentTenant?.id === tenant.id ? 'bold' : 'normal' }}>{tenant.name}</span>
+                                <Tag>{tenant.code}</Tag>
+                                {(isRoot || tenantPermissions?.can_delete_team) && (
+                                  <Popconfirm title={t('teams.confirm_delete_team')} onConfirm={(e) => { e?.stopPropagation(); handleDeleteTenant(tenant.id) }} onCancel={(e) => e?.stopPropagation()}>
+                                    <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+                                  </Popconfirm>
+                                )}
+                              </Space>
+                            </Card>
+                          ))}
+                        </>
+                      )}
                     </div>
                   ))
                 )}
               </>
             )}
-            {!isRoot && tenants.map(t => (
-              <Card key={t.id} size="small" style={{ marginBottom: 8, cursor: 'pointer', background: currentTenant?.id === t.id ? appTheme.borderLight : appTheme.bgElevated }}
-                onClick={() => selectTenant(t.id)}>
+            {!isRoot && tenants.map((tenant) => (
+              <Card key={tenant.id} size="small" style={{ marginBottom: 8, cursor: 'pointer', background: currentTenant?.id === tenant.id ? appTheme.borderLight : appTheme.bgElevated }}
+                onClick={() => selectTenant(tenant.id)}>
                 <Space>
                   <TeamOutlined />
-                  <span style={{ fontWeight: currentTenant?.id === t.id ? 'bold' : 'normal' }}>{t.name}</span>
-                  <Tag>{t.code}</Tag>
+                  <span style={{ fontWeight: currentTenant?.id === tenant.id ? 'bold' : 'normal' }}>{tenant.name}</span>
+                  <Tag>{tenant.code}</Tag>
+                  {(isRoot || tenantPermissions?.can_delete_team) && (
+                    <Popconfirm title={t('teams.confirm_delete_team')} onConfirm={(e) => { e?.stopPropagation(); handleDeleteTenant(tenant.id) }} onCancel={(e) => e?.stopPropagation()}>
+                      <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()} />
+                    </Popconfirm>
+                  )}
                 </Space>
               </Card>
             ))}
@@ -454,7 +535,7 @@ const Teams: React.FC = () => {
             <Tabs defaultActiveKey="1" onChange={(k) => k === '3' && loadAuditLogs(currentTenant.id)}>
               <TabPane tab={<span><UserOutlined /> {t('teams.member_management')}</span>} key="1">
                 <Card title={`${currentTenant.name} - ${t('teams.member_management')}`} extra={
-                  (currentRole <= 1 || isRoot) && (
+                  (tenantPermissions?.can_invite_member || isRoot) && (
                     <Button type="primary" icon={<PlusOutlined />} onClick={() => setInviteModalVisible(true)}>
                       {t('teams.invite_member')}
                     </Button>
@@ -618,7 +699,7 @@ const Teams: React.FC = () => {
           </Form.Item>
           <Form.Item name="role" label={t('common.role')} rules={[{ required: true, message: t('teams.please_select_role') }]}>
             <Select placeholder={t('teams.select_role')}>
-              <Option value={1}>{t('teams.admin')}</Option>
+              {(tenantPermissions?.can_grant_team_admin || isRoot) && <Option value={1}>{t('teams.admin')}</Option>}
               <Option value={2}>{t('teams.member')}</Option>
               <Option value={3}>{t('teams.observer')}</Option>
             </Select>

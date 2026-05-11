@@ -60,16 +60,38 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [unreadCount, setUnreadCount] = useState(0)
   const [notifications, setNotifications] = useState<any[]>([])
   const [notificationLoading, setNotificationLoading] = useState(false)
+  const [canAccessTeams, setCanAccessTeams] = useState(false)
 
   // Fetch unread notification count
   useEffect(() => {
     if (user) {
       fetchUnreadCount()
+      detectTeamsAccess()
       // Poll every 60 seconds
       const interval = setInterval(fetchUnreadCount, 60000)
       return () => clearInterval(interval)
     }
   }, [user])
+
+  const detectTeamsAccess = async () => {
+    try {
+      if ((user?.role ?? 0) >= 100) {
+        setCanAccessTeams(true)
+        return
+      }
+      const res = await fetch('/api/tenant', {
+        credentials: 'include',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('access_token') || ''}`
+        }
+      })
+      const json = await res.json()
+      const hasTeam = Boolean(json?.success && Array.isArray(json?.data) && json.data.length > 0)
+      setCanAccessTeams(hasTeam)
+    } catch (error) {
+      setCanAccessTeams(false)
+    }
+  }
 
   const fetchUnreadCount = async () => {
     try {
@@ -172,7 +194,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     )
   }
 
-  const isAdmin = (user.role ?? 0) >= 10
+  const role = user.role ?? 0
+  const isAdmin = role >= 10
 
   // Experience Center
   const experienceCenterGroup = {
@@ -228,17 +251,44 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     label: t('menu.ops_dashboard'),
     key: 'admin',
     children: [
-      { key: '/ops', icon: <SettingOutlined />, label: t('menu.ops_dashboard') },
+      { key: '/ops', icon: <SettingOutlined />, label: t('menu.ops_settings') },
       { key: '/ops/models', icon: <DatabaseOutlined />, label: t('menu.model_management_admin') },
       { key: '/ops/providers', icon: <CloudServerOutlined />, label: t('menu.provider_management') },
       { key: '/ops/notifications', icon: <BellOutlined />, label: t('menu.system_notifications') },
-      { key: '/teams', icon: <TeamOutlined />, label: t('menu.teams') },
     ]
   }
 
-  const menuItems = isAdmin
-    ? [experienceCenterGroup, modelGroup, consoleGroup, personalCenterGroup, adminGroup]
-    : [experienceCenterGroup, modelGroup, consoleGroup, personalCenterGroup]
+  const teamsGroup = canAccessTeams
+    ? {
+        type: 'group' as const,
+        label: t('menu.team_management'),
+        key: 'teams-group',
+        children: [{ key: '/teams', icon: <TeamOutlined />, label: t('menu.teams_settings') }],
+      }
+    : null
+
+  const groupedMenuItems = isAdmin
+    ? [experienceCenterGroup, modelGroup, consoleGroup, personalCenterGroup, adminGroup, ...(teamsGroup ? [teamsGroup] : [])]
+    : [experienceCenterGroup, modelGroup, consoleGroup, personalCenterGroup, ...(teamsGroup ? [teamsGroup] : [])]
+
+  const flatMenuItems = isAdmin
+    ? [
+        ...experienceCenterGroup.children,
+        ...modelGroup.children,
+        ...consoleGroup.children,
+        ...personalCenterGroup.children,
+        ...adminGroup.children,
+        ...(teamsGroup ? teamsGroup.children : []),
+      ]
+    : [
+        ...experienceCenterGroup.children,
+        ...modelGroup.children,
+        ...consoleGroup.children,
+        ...personalCenterGroup.children,
+        ...(teamsGroup ? teamsGroup.children : []),
+      ]
+
+  const menuItems = collapsed ? flatMenuItems : groupedMenuItems
 
   // Get greeting based on time
   const getGreeting = () => {
@@ -424,6 +474,14 @@ const ProtectedPage: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   return <AppLayout>{children}</AppLayout>
 }
 
+const TeamProtectedPage: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const token = localStorage.getItem('access_token')
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
+  return <AppLayout>{children}</AppLayout>
+}
+
 const App: React.FC = () => {
   return (
     <BrowserRouter>
@@ -439,7 +497,7 @@ const App: React.FC = () => {
         <Route path="/ops" element={<ProtectedPage><OpsDashboard /></ProtectedPage>} />
         <Route path="/ops/models" element={<ProtectedPage><ModelManagement /></ProtectedPage>} />
         <Route path="/ops/providers" element={<ProtectedPage><ProviderManagement /></ProtectedPage>} />
-        <Route path="/teams" element={<ProtectedPage><Teams /></ProtectedPage>} />
+        <Route path="/teams" element={<TeamProtectedPage><Teams /></TeamProtectedPage>} />
         <Route path="/docs" element={<ProtectedPage><ApiDocs /></ProtectedPage>} />
         <Route path="/profile" element={<ProtectedPage><Profile /></ProtectedPage>} />
         <Route path="/ops/notifications" element={<ProtectedPage><NotificationManage /></ProtectedPage>} />

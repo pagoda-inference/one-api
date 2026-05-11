@@ -42,7 +42,14 @@ const ProviderManagement: React.FC = () => {
   const loadOptions = async () => {
     try {
       const res = await getProviderStatuses()
-      if (res.data.success) setStatuses(res.data.data)
+      if (res.data.success) {
+        const backendStatuses = res.data.data || []
+        const mapped = backendStatuses.map((item: any) => ({
+          value: item.value,
+          label: getStatusLabel(item.value),
+        }))
+        setStatuses(mapped)
+      }
     } catch (error) {
       console.error('Failed to load options:', error)
     }

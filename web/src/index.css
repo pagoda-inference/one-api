@@ -349,6 +349,15 @@ body {
 }
 
 /* Menu */
+[data-theme="light"] .app-shell .ant-menu-item-group-title,
+[data-theme="dark"] .app-shell .ant-menu-item-group-title,
+.app-shell .ant-menu-item-group-title {
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--text-muted) !important;
+}
+
 [data-theme="dark"] .ant-menu {
   background: var(--header-bg);
   border-right: none;

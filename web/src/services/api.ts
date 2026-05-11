@@ -82,7 +82,9 @@ export interface Model {
   is_trial?: boolean
   trial_quota?: number
   sla?: string
+  visible_scope?: 'public' | 'department' | 'team'
   visible_to_teams?: string
+  visible_to_departments?: string
 }
 
 export interface ModelGroup {
@@ -244,6 +246,7 @@ export interface Tenant {
   settings: string
   company_id: number
   department_id: number
+  can_manage?: boolean
   created_at: string
   updated_at: string
 }
@@ -460,7 +463,7 @@ export const deleteChannel = (id: number) =>
 export const testChannel = (id: number) =>
   api.get<{ success: boolean; message?: string }>(`/channel/test/${id}`)
 
-export const getOpsUsers = (params?: { limit?: number; offset?: number; keyword?: string }) =>
+export const getOpsUsers = (params?: { limit?: number; offset?: number; keyword?: string; tenant_id?: number }) =>
   api.get('/admin/ops/users', { params })
 
 export const updateUser = (id: number, data: { group?: string; quota?: number; role?: number; status?: number }) =>
@@ -560,6 +563,15 @@ export interface Department {
   team_count?: number
 }
 
+export interface DepartmentMember {
+  id: number
+  username: string
+  display_name: string
+  email: string
+  role: string
+  is_department_admin: boolean
+}
+
 export const createCompany = (data: { name: string; code: string; logo_url?: string; description?: string; quota_limit?: number }) =>
   api.post('/company', data)
 
@@ -583,6 +595,12 @@ export const getDepartments = (companyId: number) =>
 
 export const getDepartment = (id: number) =>
   api.get<{ success: boolean; data: Department & { teams: any[] } }>(`/department/${id}`)
+
+export const getDepartmentMembers = (id: number) =>
+  api.get<{ success: boolean; data: { department_id: number; department_name: string; members: DepartmentMember[] } }>(`/department/${id}/members`)
+
+export const updateDepartmentMemberRole = (departmentId: number, userId: number, data: { is_department_admin: boolean }) =>
+  api.put<{ success: boolean; message?: string }>(`/department/${departmentId}/members/${userId}`, data)
 
 export const updateDepartment = (id: number, data: Partial<Department>) =>
   api.put(`/department/${id}`, data)
@@ -634,7 +652,9 @@ export interface ModelItem {
   sla: string
   rate_limit_rpm: number
   rate_limit_tpm: number
+  visible_scope: 'public' | 'department' | 'team'
   visible_to_teams: string
+  visible_to_departments: string
   created_at: number
   updated_at: number
 }
@@ -721,7 +741,7 @@ export const getAllTenants = () =>
   api.get<{ success: boolean; data: SimpleTenant[] }>('/admin/tenants')
 
 export const deleteTenant = (id: number) =>
-  api.delete<{ success: boolean; message?: string }>(`/admin/tenants/${id}`)
+  api.delete<{ success: boolean; message?: string }>(`/tenant/${id}`)
 
 // Option APIs for system settings
 export const getOptions = () =>

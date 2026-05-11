@@ -35,7 +35,7 @@ const Usage: React.FC = () => {
   const [models, setModels] = useState<Model[]>([])
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isRoot, setIsRoot] = useState(false)
 
   useEffect(() => {
     checkUserRole()
@@ -47,7 +47,8 @@ const Usage: React.FC = () => {
     if (userInfoStr) {
       try {
         const userInfo: User = JSON.parse(userInfoStr)
-        setIsAdmin((userInfo.role ?? 0) >= 10)
+        const role = userInfo.role ?? 0
+        setIsRoot(role >= 100)
       } catch (error) {
         console.error('Failed to parse user info:', error)
       }
@@ -67,8 +68,9 @@ const Usage: React.FC = () => {
       if (userInfoStr) {
         try {
           const userInfo: User = JSON.parse(userInfoStr)
-          isAdminUser = (userInfo.role ?? 0) >= 10
-          setIsAdmin(isAdminUser)
+          const role = userInfo.role ?? 0
+          isAdminUser = role >= 100
+          setIsRoot(role >= 100)
         } catch (error) {
           console.error('Failed to parse user info:', error)
         }
@@ -128,7 +130,7 @@ const Usage: React.FC = () => {
       if (userInfoStr) {
         try {
           const userInfo: User = JSON.parse(userInfoStr)
-          isAdminUser = (userInfo.role ?? 0) >= 10
+          isAdminUser = (userInfo.role ?? 0) >= 100
         } catch (error) {
           console.error('Failed to parse user info:', error)
         }
@@ -338,7 +340,7 @@ const Usage: React.FC = () => {
     return <Spin size="large" style={{ display: 'flex', justifyContent: 'center', marginTop: 100 }} />
   }
 
-  const statCards = isAdmin
+  const statCards = isRoot
     ? [
         { title: t('usage.total_consumed_quota'), value: (summary as any)?.total_quota ?? 0 },
         { title: t('usage.total_token'), value: (summary as any)?.total_tokens ?? 0 },
@@ -359,7 +361,7 @@ const Usage: React.FC = () => {
         style={{
           display: 'grid',
           gap: 16,
-          gridTemplateColumns: isAdmin
+          gridTemplateColumns: isRoot
             ? 'repeat(auto-fit, minmax(220px, 1fr))'
             : 'repeat(auto-fit, minmax(200px, 1fr))'
         }}
@@ -405,7 +407,7 @@ const Usage: React.FC = () => {
         </Row>
       </Card>
 
-      {isAdmin ? (
+      {isRoot ? (
         // Admin view: show user and model tables
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={12} style={{ display: 'flex' }}>
@@ -459,7 +461,7 @@ const Usage: React.FC = () => {
         </Row>
       )}
 
-      {!isAdmin && Array.isArray(dailyUsage) && dailyUsage.length > 0 ? (
+      {!isRoot && Array.isArray(dailyUsage) && dailyUsage.length > 0 ? (
         <Card title={t('usage.usage_trend_chart')} style={{ marginTop: 16 }}>
           <ReactECharts option={getUsageChartOption()} style={{ height: 300 }} />
         </Card>

@@ -41,6 +41,7 @@ const OpsDashboard: React.FC = () => {
   const [settingSaving, setSettingSaving] = useState(false)
   const [originalKey, setOriginalKey] = useState('')
   const [channelConfig, setChannelConfig] = useState('')
+  const [isRoot, setIsRoot] = useState(false)
   const [, setSettings] = useState({
     QuotaForNewUser: 0,
     QuotaForInviter: 0,
@@ -58,6 +59,20 @@ const OpsDashboard: React.FC = () => {
   })
 
   useEffect(() => {
+    const userInfoStr = localStorage.getItem('user_info')
+    if (userInfoStr) {
+      try {
+        const userInfo = JSON.parse(userInfoStr)
+        const root = (userInfo.role ?? 0) >= 100
+        setIsRoot(root)
+        if (!root && initialTab === '7') {
+          setActiveTab('1')
+          setSearchParams({ tab: '1' })
+        }
+      } catch (error) {
+        console.error('Failed to parse user info:', error)
+      }
+    }
     loadData()
     loadUsers()
     loadChannels()
@@ -65,6 +80,9 @@ const OpsDashboard: React.FC = () => {
   }, [])
 
   const handleTabChange = (key: string) => {
+    if (key === '7' && !isRoot) {
+      return
+    }
     setActiveTab(key)
     setSearchParams({ tab: key })
   }
@@ -697,6 +715,7 @@ const OpsDashboard: React.FC = () => {
           </Form>
         </TabPane>
 
+        {isRoot && (
         <TabPane tab={<span><SettingOutlined /> {t('ops.system_settings')}</span>} key="7">
           <Form form={settingForm} layout="vertical">
             <Card title={t('ops.group_multiplier')} style={{ marginTop: 16 }}>
@@ -827,6 +846,7 @@ const OpsDashboard: React.FC = () => {
             </Button>
           </Form>
         </TabPane>
+        )}
       </Tabs>
 
       <Modal

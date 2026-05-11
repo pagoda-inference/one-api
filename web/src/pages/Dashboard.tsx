@@ -22,7 +22,6 @@ const Dashboard: React.FC = () => {
   const { t } = useTranslation()
   const { appTheme } = useTheme()
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [dashboardData, setDashboardData] = useState<any>(null)
   const [opsStats, setOpsStats] = useState<any>(null)
   const [usageData, setUsageData] = useState<any[]>([])
@@ -32,6 +31,7 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('trend')
   const [signInRecords, setSignInRecords] = useState<SignInRecord[]>([])
   const [signingIn, setSigningIn] = useState(false)
+  const [isRoot, setIsRoot] = useState(false)
 
   useEffect(() => {
     checkUserRole()
@@ -43,7 +43,8 @@ const Dashboard: React.FC = () => {
     if (userInfoStr) {
       try {
         const userInfo: User = JSON.parse(userInfoStr)
-        setIsAdmin((userInfo.role ?? 0) >= 10)
+        const role = userInfo.role ?? 0
+        setIsRoot(role >= 100)
       } catch (error) {
         console.error('Failed to parse user info:', error)
       }
@@ -60,8 +61,9 @@ const Dashboard: React.FC = () => {
       if (userInfoStr) {
         try {
           const userInfo: User = JSON.parse(userInfoStr)
-          isAdminUser = (userInfo.role ?? 0) >= 10
-          setIsAdmin(isAdminUser)
+          const role = userInfo.role ?? 0
+          isAdminUser = role >= 100
+          setIsRoot(role >= 100)
         } catch (error) {
           console.error('Failed to parse user info:', error)
         }
@@ -422,7 +424,7 @@ const Dashboard: React.FC = () => {
   const user = dashboardData?.user || {}
 
   // Admin dashboard
-  if (isAdmin) {
+  if (isRoot) {
     return (
       <div>
         {/* Admin Stat Cards */}

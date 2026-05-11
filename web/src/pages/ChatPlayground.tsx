@@ -977,13 +977,13 @@ const ChatPlayground: React.FC = () => {
           marginBottom: 8,
         }}
       >
-        System Prompt
+        {t('chat.system_prompt')}
       </div>
       <TextArea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoSize={{ minRows: 3, maxRows: 6 }}
-        placeholder="可选的系统提示词"
+        placeholder={t('chat.system_prompt_placeholder')}
       />
     </div>
   )

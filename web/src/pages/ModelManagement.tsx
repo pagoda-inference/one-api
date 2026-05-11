@@ -3,7 +3,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { Table, Button, Space, Tag, Modal, Form, Input, Select, InputNumber, Upload, message, Popconfirm, Row, Checkbox } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, DatabaseOutlined, PictureOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { listModels, createModel, updateModel, deleteModel, batchDeleteModels, uploadModelLogo, getModelTypes, getModelStatuses, getProviders, listLogos, deleteLogo, getAllTenants, ModelItem, Provider, SimpleTenant } from '../services/api'
+import { listModels, createModel, updateModel, deleteModel, batchDeleteModels, uploadModelLogo, getModelTypes, getModelStatuses, getProviders, listLogos, deleteLogo, getAllTenants, getAllCompanies, getDepartments, ModelItem, Provider, SimpleTenant, Department } from '../services/api'
 import { useTranslation } from 'react-i18next'
 
 const { TextArea } = Input
@@ -25,10 +25,12 @@ const ModelManagement: React.FC = () => {
   const [logos, setLogos] = useState<{ name: string; url: string }[]>([])
   const [showLogoModal, setShowLogoModal] = useState(false)
   const [tenants, setTenants] = useState<SimpleTenant[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
 
   useEffect(() => {
     loadModels()
     loadTenants()
+    loadDepartments()
   }, [])
 
   const loadTenants = async () => {
@@ -39,6 +41,28 @@ const ModelManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load tenants:', error)
+    }
+  }
+
+  const loadDepartments = async () => {
+    try {
+      const companiesRes = await getAllCompanies()
+      if (!companiesRes.data.success) return
+      const companies = companiesRes.data.data || []
+      const allDepartments: Department[] = []
+      for (const company of companies) {
+        try {
+          const depRes = await getDepartments(company.id)
+          if (depRes.data.success) {
+            allDepartments.push(...(depRes.data.data || []))
+          }
+        } catch (error) {
+          console.error('Failed to load departments for company:', company.id, error)
+        }
+      }
+      setDepartments(allDepartments)
+    } catch (error) {
+      console.error('Failed to load departments:', error)
     }
   }
 
@@ -102,12 +126,16 @@ const ModelManagement: React.FC = () => {
     setEditingModel(null)
     form.resetFields()
     setIconPreview('')
+    form.setFieldsValue({ visible_scope: 'team' })
     setModalVisible(true)
   }
 
   const handleEdit = (record: ModelItem) => {
     setEditingModel(record)
-    form.setFieldsValue(record)
+    form.setFieldsValue({
+      ...record,
+      visible_scope: record.visible_scope || 'team',
+    })
     setIconPreview(record.icon_url || '')
     setModalVisible(true)
   }
@@ -148,6 +176,14 @@ const ModelManagement: React.FC = () => {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields()
+      if (values.visible_scope === 'public') {
+        values.visible_to_teams = ''
+        values.visible_to_departments = ''
+      } else if (values.visible_scope === 'department') {
+        values.visible_to_teams = ''
+      } else if (values.visible_scope === 'team') {
+        values.visible_to_departments = ''
+      }
       if (editingModel) {
         const res = await updateModel(editingModel.id, values)
         if (res.data.success) {
@@ -275,6 +311,17 @@ const ModelManagement: React.FC = () => {
       key: 'status',
       width: 100,
       render: (v: string) => <Tag color={getStatusColor(v)}>{getStatusLabel(v)}</Tag>
+    },
+    {
+      title: t('modelManagement.visible_scope'),
+      dataIndex: 'visible_scope',
+      width: 140,
+      render: (_, record) => {
+        const scope = record.visible_scope || 'team'
+        if (scope === 'public') return <Tag color="green">{t('modelManagement.scope_public')}</Tag>
+        if (scope === 'department') return <Tag color="blue">{t('modelManagement.scope_department')}</Tag>
+        return <Tag color="purple">{t('modelManagement.scope_team')}</Tag>
+      }
     },
     {
       title: t('modelManagement.sort_order'),
@@ -408,20 +455,68 @@ const ModelManagement: React.FC = () => {
             </Form.Item>
           </Row>
 
-          <Form.Item
-            name="visible_to_teams"
-            label={t('modelManagement.visible_teams')}
-            tooltip={t('modelManagement.visible_teams_tooltip')}
-            valuePropName="value"
-            getValueProps={(value) => ({ value: value ? value.split(',').filter(Boolean).map((v: string) => Number(v)) : [] })}
-            getValueFromEvent={(values) => values && values.length > 0 ? ',' + values.join(',') + ',' : ''}
-          >
+          <Form.Item name="visible_scope" label={t('modelManagement.visible_scope')} initialValue="team">
             <Select
-              mode="multiple"
-              allowClear
-              placeholder={t('modelManagement.visible_teams_placeholder')}
-              options={tenants.map(t => ({ value: t.id, label: t.name }))}
+              options={[
+                { value: 'public', label: t('modelManagement.scope_public') },
+                { value: 'department', label: t('modelManagement.scope_department') },
+                { value: 'team', label: t('modelManagement.scope_team') },
+              ]}
+              onChange={(value) => {
+                if (value === 'public') {
+                  form.setFieldsValue({ visible_to_teams: '', visible_to_departments: '' })
+                } else if (value === 'department') {
+                  form.setFieldsValue({ visible_to_teams: '' })
+                } else {
+                  form.setFieldsValue({ visible_to_departments: '' })
+                }
+              }}
             />
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.visible_scope !== curr.visible_scope}>
+            {({ getFieldValue }) => {
+              const scope = getFieldValue('visible_scope') || 'team'
+              if (scope === 'department') {
+                return (
+                  <Form.Item
+                    name="visible_to_departments"
+                    label={t('modelManagement.visible_departments')}
+                    tooltip={t('modelManagement.visible_departments_tooltip')}
+                    valuePropName="value"
+                    getValueProps={(value) => ({ value: value ? value.split(',').filter(Boolean).map((v: string) => Number(v)) : [] })}
+                    getValueFromEvent={(values) => values && values.length > 0 ? ',' + values.join(',') + ',' : ''}
+                  >
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      placeholder={t('modelManagement.visible_departments_placeholder')}
+                      options={departments.map(d => ({ value: d.id, label: d.name }))}
+                    />
+                  </Form.Item>
+                )
+              }
+              if (scope === 'team') {
+                return (
+                  <Form.Item
+                    name="visible_to_teams"
+                    label={t('modelManagement.visible_teams')}
+                    tooltip={t('modelManagement.visible_teams_tooltip')}
+                    valuePropName="value"
+                    getValueProps={(value) => ({ value: value ? value.split(',').filter(Boolean).map((v: string) => Number(v)) : [] })}
+                    getValueFromEvent={(values) => values && values.length > 0 ? ',' + values.join(',') + ',' : ''}
+                  >
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      placeholder={t('modelManagement.visible_teams_placeholder')}
+                      options={tenants.map(t => ({ value: t.id, label: t.name }))}
+                    />
+                  </Form.Item>
+                )
+              }
+              return null
+            }}
           </Form.Item>
 
           <Form.Item name="icon_url" label={t('modelManagement.logo_url')}>
