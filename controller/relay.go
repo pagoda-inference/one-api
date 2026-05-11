@@ -1535,6 +1535,50 @@ func RelayNotFound(c *gin.Context) {
 	})
 }
 
+// RelayResponses handles OpenAI Responses API /v1/responses requests
+// POST /v1/responses - create a response (streaming or non-streaming)
+// GET /v1/responses/:id - retrieve a response (P1, currently returns not_supported)
+// DELETE /v1/responses/:id - delete a response (P1, currently returns not_supported)
+func RelayResponses(c *gin.Context) {
+	if !config.ResponsesAPIEnabled {
+		err := model.Error{
+			Message: "Responses API is not enabled. Set RESPONSES_API_ENABLED=true to enable.",
+			Type:    "invalid_request_error",
+			Param:   "",
+			Code:    "responses_api_disabled",
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": err})
+		return
+	}
+
+	method := c.Request.Method
+	switch method {
+	case "GET", "DELETE":
+		// P1: return standardized not_supported error
+		err := model.Error{
+			Message: fmt.Sprintf("%s /v1/responses/:id is not yet implemented", method),
+			Type:    "not_supported_error",
+			Param:   "",
+			Code:    "not_implemented",
+		}
+		c.JSON(http.StatusNotImplemented, gin.H{"error": err})
+		return
+	case "POST":
+		// Delegate to relay controller
+		relayController.RelayResponsesHelper(c)
+		return
+	default:
+		err := model.Error{
+			Message: fmt.Sprintf("Method %s not allowed for /v1/responses", method),
+			Type:    "invalid_request_error",
+			Param:   "",
+			Code:    "method_not_allowed",
+		}
+		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": err})
+		return
+	}
+}
+
 // RelayAnthropicPassthrough handles Anthropic API /v1/messages requests in passthrough mode
 // This is used for vLLM backends that natively support Anthropic API format
 func RelayAnthropicPassthrough(c *gin.Context) {

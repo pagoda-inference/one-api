@@ -1,0 +1,404 @@
+package controller
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/pagoda-inference/one-api/common/client"
+	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/logger"
+	relaymeta "github.com/pagoda-inference/one-api/relay/meta"
+	relaymodel "github.com/pagoda-inference/one-api/relay/model"
+	"github.com/pagoda-inference/one-api/relay/relaymode"
+	billing "github.com/pagoda-inference/one-api/relay/billing"
+	billingratio "github.com/pagoda-inference/one-api/relay/billing/ratio"
+	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
+	"github.com/pagoda-inference/one-api/model"
+	"github.com/pagoda-inference/one-api/relay"
+)
+
+// RelayResponsesHelper handles the actual relay logic for OpenAI Responses API
+func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
+	ctx := c.Request.Context()
+	startTime := time.Now()
+
+	// 1. Parse request
+	requestBody, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return openai.ErrorWrapper(fmt.Errorf("failed to read request body: %w", err), "invalid_request", http.StatusBadRequest)
+	}
+
+	responsesReq, err := openai.ParseResponsesRequest(requestBody)
+	if err != nil {
+		return openai.ErrorWrapper(fmt.Errorf("failed to parse Responses request: %w", err), "invalid_request", http.StatusBadRequest)
+	}
+
+	// Validate request
+	if err := openai.ValidateResponsesRequest(responsesReq); err != nil {
+		return openai.ErrorWrapper(err, "invalid_request", http.StatusBadRequest)
+	}
+
+	// 2. Build meta
+	meta := relaymeta.GetByContext(c)
+	meta.Mode = relaymode.Responses
+	meta.OriginModelName = responsesReq.Model
+	meta.IsStream = responsesReq.Stream
+
+	// 3. Model mapping
+	responsesReq.Model, _ = getMappedModelName(responsesReq.Model, meta.ModelMapping)
+	meta.ActualModelName = responsesReq.Model
+
+	// 4. Get model info for pricing
+	modelInfo, err := getModelById(responsesReq.Model)
+	if err != nil {
+		logger.Warnf(ctx, "model not found: %s, using default price 0", responsesReq.Model)
+		modelInfo = nil
+	}
+	inputPrice := 0.0
+	outputPrice := 0.0
+	if modelInfo != nil {
+		inputPrice = modelInfo.InputPrice
+		outputPrice = modelInfo.OutputPrice
+	}
+	groupRatio := billingratio.GetGroupRatio(meta.Group)
+
+	// 5. Count prompt tokens
+	promptTokens := openai.CountResponsesInputTokens(responsesReq.Input, responsesReq.Model)
+	if responsesReq.Instructions != "" {
+		promptTokens += openai.GetResponsesInstructionTokens(responsesReq.Instructions, responsesReq.Model)
+	}
+	meta.PromptTokens = promptTokens
+
+	// 6. Convert to Chat request (needed for pre-consume and upstream)
+	chatReq := relaymodel.ConvertResponsesToChatRequest(responsesReq)
+
+	// 7. Pre-consume quota
+	preConsumedQuota, bizErr := PreConsumeQuota(ctx, chatReq, promptTokens, inputPrice, groupRatio, meta)
+	if bizErr != nil {
+		logger.Warnf(ctx, "PreConsumeQuota failed: %+v", *bizErr)
+		return bizErr
+	}
+
+	// 8. Marshal chat request
+	chatBody, err := json.Marshal(chatReq)
+	if err != nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(fmt.Errorf("failed to marshal chat request: %w", err), "convert_request_failed", http.StatusInternalServerError)
+	}
+
+	// 8. Get adaptor and make request
+	adaptor := relay.GetAdaptor(meta.APIType)
+	if adaptor == nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(fmt.Errorf("invalid api type: %d", meta.APIType), "invalid_api_type", http.StatusBadRequest)
+	}
+	adaptor.Init(meta)
+
+	// Build request URL
+	requestURL, err := adaptor.GetRequestURL(meta)
+	if err != nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(err, "get_request_url_failed", http.StatusInternalServerError)
+	}
+
+	// Create request
+	req, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(chatBody))
+	if err != nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(err, "create_request_failed", http.StatusInternalServerError)
+	}
+
+	// Setup headers
+	if err := adaptor.SetupRequestHeader(c, req, meta); err != nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(err, "setup_request_header_failed", http.StatusInternalServerError)
+	}
+
+	// Do request
+	logger.Debugf(ctx, "DoRequest: APIType=%d, Mode=%d, ChannelType=%d", meta.APIType, meta.Mode, meta.ChannelType)
+	resp, err := client.HTTPClient.Do(req)
+	if err != nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		logger.Errorf(ctx, "DoRequest failed: %s", err.Error())
+		return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
+	}
+
+	// 9. Handle response
+	if responsesReq.Stream {
+		return handleResponsesStream(c, resp, meta, preConsumedQuota, inputPrice, outputPrice, groupRatio, startTime)
+	}
+	return handleResponsesNonStream(c, resp, meta, preConsumedQuota, inputPrice, outputPrice, groupRatio, startTime)
+}
+
+func handleResponsesNonStream(c *gin.Context, resp *http.Response, meta *relaymeta.Meta, preConsumedQuota int64, inputPrice, outputPrice float64, groupRatio float64, startTime time.Time) *relaymodel.ErrorWithStatusCode {
+	ctx := c.Request.Context()
+
+	// Check for errors from upstream
+	if resp.StatusCode != http.StatusOK {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return relayErrorHandler(resp)
+	}
+
+	// Read response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(fmt.Errorf("failed to read response body: %w", err), "read_response_failed", http.StatusInternalServerError)
+	}
+
+	// Parse Chat response
+	var chatResp relaymodel.ChatCompletionsResponse
+	if err := json.Unmarshal(body, &chatResp); err != nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(fmt.Errorf("failed to unmarshal chat response: %w", err), "invalid_response", http.StatusInternalServerError)
+	}
+
+	// Check for error in response
+	if chatResp.Error.Message != "" {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return &relaymodel.ErrorWithStatusCode{
+			Error:      chatResp.Error,
+			StatusCode: resp.StatusCode,
+		}
+	}
+
+	// Convert to Responses format
+	responsesResp := relaymodel.ConvertChatResponseToResponses(&chatResp, meta.RequestURLPath)
+
+	// Log usage
+	usageSource := "exact"
+	if responsesResp.Usage == nil || responsesResp.Usage.TotalTokens == 0 {
+		usageSource = "fallback"
+		if responsesResp.Usage != nil && responsesResp.Usage.TotalTokens == 0 {
+			// Try to estimate from response
+			responsesResp.Usage = estimateUsageFromResponse(chatResp, meta.ActualModelName, meta.PromptTokens, inputPrice, outputPrice, groupRatio)
+		}
+	}
+
+	logResponse(ctx, meta, preConsumedQuota, responsesResp.Usage, usageSource, startTime, "")
+
+	// Post-consume quota async
+	if responsesResp.Usage != nil {
+		go PostConsumeQuota(ctx, responsesResp.Usage, meta, nil, inputPrice, outputPrice, groupRatio, preConsumedQuota, false)
+	}
+
+	c.JSON(http.StatusOK, responsesResp)
+	return nil
+}
+
+func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.Meta, preConsumedQuota int64, inputPrice, outputPrice float64, groupRatio float64, startTime time.Time) *relaymodel.ErrorWithStatusCode {
+	ctx := c.Request.Context()
+
+	if !config.ResponsesStreamEnabled {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(fmt.Errorf("streaming is not enabled for Responses API"), "stream_disabled", http.StatusBadRequest)
+	}
+
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Transfer-Encoding", "chunked")
+
+	// Stream chunks from upstream and transform to Responses format
+	var lastUsage *relaymodel.Usage
+	var status string
+	flusher, ok := c.Writer.(gin.Flusher)
+	if !ok {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(fmt.Errorf("streaming not supported"), "stream_not_supported", http.StatusInternalServerError)
+	}
+
+	// Create context for cancellation
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Channel to signal completion
+	done := make(chan struct{})
+
+	// Handle client disconnect
+	go func() {
+		select {
+		case <-streamCtx.Done():
+			// Context cancelled
+		case <-done:
+			// Stream completed
+		}
+		// Ensure cleanup
+		cancel()
+	}()
+
+	// Process stream
+	decoder := json.NewDecoder(resp.Body)
+	accumulatedText := ""
+	var finalUsage *relaymodel.Usage
+
+	for {
+		select {
+		case <-streamCtx.Done():
+			// Client disconnected or context cancelled
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			logResponse(ctx, meta, preConsumedQuota, nil, "interrupted", startTime, "client_disconnect")
+			return openai.ErrorWrapper(fmt.Errorf("stream interrupted"), "stream_interrupted", http.StatusInternalServerError)
+		default:
+		}
+
+		var chatResp relaymodel.ChatCompletionsStreamResponse
+		if err := decoder.Decode(&chatResp); err != nil {
+			if err == io.EOF {
+				// Stream ended
+				break
+			}
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			logResponse(ctx, meta, preConsumedQuota, nil, "interrupted", startTime, "decode_error")
+			return openai.ErrorWrapper(fmt.Errorf("failed to decode stream: %w", err), "stream_decode_error", http.StatusInternalServerError)
+		}
+
+		// Build Responses events from chat stream
+		events, err := openai.BuildResponsesStreamEvent(&chatResp)
+		if err != nil {
+			logger.Warnf(ctx, "BuildResponsesStreamEvent error: %v", err)
+			continue
+		}
+
+		// Send events to client
+		for _, event := range events {
+			// Track usage from done event
+			if event.Event == "response.done" {
+				if doneEvent, ok := event.Data.(relaymodel.ResponseDoneEvent); ok {
+					finalUsage = doneEvent.Response.Usage
+				}
+			}
+
+			// Track text for fallback usage calculation
+			if event.Event == "response.output_text.delta" {
+				if deltaEvent, ok := event.Data.(relaymodel.OutputTextDeltaEvent); ok {
+					accumulatedText += deltaEvent.Delta
+				}
+			}
+
+			sseLine := openai.SSEFormatResponsesEvent(event)
+			if sseLine != "" {
+				flusher.Write([]byte(sseLine))
+				flusher.Flush()
+			}
+		}
+
+		// Check for completion
+		if len(chatResp.Choices) > 0 && chatResp.Choices[0].FinishReason != nil {
+			status = *chatResp.Choices[0].FinishReason
+		}
+	}
+
+	close(done)
+
+	// Finalize quota
+	usageSource := "exact"
+	if finalUsage == nil || finalUsage.TotalTokens == 0 {
+		usageSource = "fallback"
+		if accumulatedText != "" {
+			// Estimate usage from accumulated text
+			finalUsage = &relaymodel.Usage{
+				PromptTokens:     meta.PromptTokens,
+				CompletionTokens:  openai.CountTokenInput(accumulatedText, meta.ActualModelName),
+				TotalTokens:       meta.PromptTokens + openai.CountTokenInput(accumulatedText, meta.ActualModelName),
+			}
+		}
+	}
+
+	logResponse(ctx, meta, preConsumedQuota, finalUsage, usageSource, startTime, status)
+
+	// Post-consume with actual/fallback usage
+	if finalUsage != nil {
+		go PostConsumeQuota(ctx, finalUsage, meta, nil, inputPrice, outputPrice, groupRatio, preConsumedQuota, false)
+	} else {
+		// No usage at all - return pre-consumed quota
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+	}
+
+	return nil
+}
+
+// getModelById returns model info by ID
+func getModelById(modelId string) (*relaymodel.ModelInfo, error) {
+	return model.GetModelById(modelId)
+}
+
+// estimateUsageFromResponse estimates usage when upstream doesn't provide it
+func estimateUsageFromResponse(chatResp relaymodel.ChatCompletionsResponse, modelName string, promptTokens int, inputPrice, outputPrice, groupRatio float64) *relaymodel.Usage {
+	// Calculate completion tokens from response
+	completionTokens := 0
+	if len(chatResp.Choices) > 0 {
+		content := chatResp.Choices[0].Message.StringContent()
+		completionTokens = openai.CountTokenInput(content, modelName)
+	}
+
+	multiplier := config.ResponsesUsageFallbackMultiplier
+	if multiplier <= 0 {
+		multiplier = 1.0
+	}
+
+	// Apply multiplier for fallback estimation
+	estimatedTotal := int64(float64(promptTokens+completionTokens) * multiplier)
+
+	return &relaymodel.Usage{
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:       int(estimatedTotal),
+	}
+}
+
+// logResponse logs structured information about the response
+func logResponse(ctx context.Context, meta *relaymeta.Meta, preConsumedQuota int64, usage *relaymodel.Usage, usageSource string, startTime time.Time, status string) {
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if usage == nil {
+		logger.Infof(ctx, "[Responses] request_id=%s user_id=%d token_id=%d model=%s stream=%v pre_consumed=%d final_quota=0 usage_source=%s status=%s latency_ms=%d error_type=none",
+			meta.RequestURLPath, meta.UserId, meta.TokenId, meta.ActualModelName, meta.IsStream, preConsumedQuota, usageSource, status, latencyMs)
+		return
+	}
+
+	logger.Infof(ctx, "[Responses] request_id=%s user_id=%d token_id=%d model=%s stream=%v pre_consumed=%d final_quota=%d usage_source=%s status=%s latency_ms=%d error_type=none prompt_tokens=%d completion_tokens=%d total_tokens=%d",
+		meta.RequestURLPath, meta.UserId, meta.TokenId, meta.ActualModelName, meta.IsStream, preConsumedQuota, usage.TotalTokens, usageSource, status, latencyMs, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
+}
+
+// relayErrorHandler handles error responses
+func relayErrorHandler(resp *http.Response) *relaymodel.ErrorWithStatusCode {
+	body, _ := io.ReadAll(resp.Body)
+	var errResp map[string]any
+	json.Unmarshal(body, &errResp)
+
+	message := "upstream error"
+	if err, ok := errResp["error"].(map[string]any); ok {
+		if msg, ok := err["message"].(string); ok {
+			message = msg
+		}
+	}
+
+	return &relaymodel.ErrorWithStatusCode{
+		Error: relaymodel.Error{
+			Message: message,
+			Type:    "upstream_error",
+			Param:   "",
+			Code:    fmt.Sprintf("status_%d", resp.StatusCode),
+		},
+		StatusCode: resp.StatusCode,
+	}
+}
+
+// getMappedModelName applies model name mapping
+func getMappedModelName(modelName string, modelMapping map[string]string) (string, bool) {
+	if modelMapping == nil {
+		return modelName, false
+	}
+	if mapped, ok := modelMapping[modelName]; ok {
+		return mapped, true
+	}
+	return modelName, false
+}

@@ -36,6 +36,7 @@ func SetRelayRouter(router *gin.Engine) {
 		relayV1Router.POST("/embeddings", controller.Relay)
 		relayV1Router.POST("/rerank", controller.Relay)
 		relayV1Router.POST("/file_parse", controller.Relay)
+		relayV1Router.POST("/responses", controller.RelayResponses)
 		relayV1Router.POST("/engines/:model/embeddings", controller.Relay)
 		relayV1Router.POST("/audio/transcriptions", controller.Relay)
 		relayV1Router.POST("/audio/translations", controller.Relay)

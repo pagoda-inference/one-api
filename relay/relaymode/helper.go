@@ -28,6 +28,8 @@ func GetByPath(path string) int {
 		relayMode = Rerank
 	} else if strings.HasPrefix(path, "/v1/oneapi/proxy") {
 		relayMode = Proxy
+	} else if strings.HasPrefix(path, "/v1/responses") {
+		relayMode = Responses
 	}
 	return relayMode
 }
