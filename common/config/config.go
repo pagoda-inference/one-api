@@ -149,8 +149,8 @@ var RateLimitKeyExpirationDuration = 20 * time.Minute
 var EnableMetric = env.Bool("ENABLE_METRIC", false)
 
 // Responses API feature flags
-var ResponsesAPIEnabled = false
-var ResponsesStreamEnabled = false
+var ResponsesAPIEnabled = true
+var ResponsesStreamEnabled = true
 var ResponsesStrictCompat = true
 var ResponsesUsageFallbackMultiplier = 1.0
 var MetricQueueSize = env.Int("METRIC_QUEUE_SIZE", 10)
