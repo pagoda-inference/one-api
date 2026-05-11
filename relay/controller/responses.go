@@ -18,6 +18,7 @@ import (
 	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
 	"github.com/pagoda-inference/one-api/relay"
+	adaptoriface "github.com/pagoda-inference/one-api/relay/adaptor"
 	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
 	"github.com/pagoda-inference/one-api/relay/apitype"
 	billing "github.com/pagoda-inference/one-api/relay/billing"
@@ -89,7 +90,14 @@ func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 		return bizErr
 	}
 
-	// 8. Marshal chat request
+	// 8. Marshal request bodies for dual-path upstream routing.
+	responsesBody, err := json.Marshal(responsesReq)
+	if err != nil {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(fmt.Errorf("failed to marshal responses request: %w", err), "convert_request_failed", http.StatusInternalServerError)
+	}
+
+	// Fallback body for chat-completions compatible upstreams.
 	chatBody, err := json.Marshal(chatReq)
 	if err != nil {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
@@ -104,22 +112,15 @@ func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	}
 	adaptor.Init(meta)
 
-	// Build upstream request URL in chat-completions compatibility mode.
-	// External path stays /v1/responses, but current compatibility implementation
-	// converts request body to chat schema, so upstream path must be chat/completions.
-	upstreamMeta := *meta
-	upstreamMeta.Mode = relaymode.ChatCompletions
-	if upstreamMeta.APIType == apitype.OpenAI {
-		upstreamMeta.RequestURLPath = "/v1/chat/completions"
-	}
-	requestURL, err := adaptor.GetRequestURL(&upstreamMeta)
+	// Primary path: passthrough to upstream responses endpoint.
+	requestURL, err := adaptor.GetRequestURL(meta)
 	if err != nil {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 		return openai.ErrorWrapper(err, "get_request_url_failed", http.StatusInternalServerError)
 	}
 
 	// Create request
-	req, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(chatBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(responsesBody))
 	if err != nil {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 		return openai.ErrorWrapper(err, "create_request_failed", http.StatusInternalServerError)
@@ -138,6 +139,24 @@ func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 		logger.Errorf(ctx, "DoRequest failed: %s", err.Error())
 		return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
+	}
+
+	// Dual-path fallback:
+	// If upstream responses endpoint is incompatible, retry with chat/completions.
+	// Keep this limited to OpenAI-compatible API type.
+	if meta.APIType == apitype.OpenAI && resp.StatusCode != http.StatusOK {
+		probeBody, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if shouldFallbackToChatCompletions(resp.StatusCode, probeBody) {
+			logger.Warnf(ctx, "responses upstream incompatible, fallback to chat/completions: status=%d body=%s", resp.StatusCode, truncateForLog(probeBody, 512))
+			resp, err = retryResponsesAsChat(ctx, c, adaptor, meta, chatBody)
+			if err != nil {
+				billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+				return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
+			}
+		} else {
+			resp.Body = io.NopCloser(bytes.NewBuffer(probeBody))
+		}
 	}
 
 	// 9. Handle response
@@ -511,4 +530,61 @@ func relayErrorHandler(resp *http.Response) *relaymodel.ErrorWithStatusCode {
 		},
 		StatusCode: resp.StatusCode,
 	}
+}
+
+func retryResponsesAsChat(ctx context.Context, c *gin.Context, adaptor adaptoriface.Adaptor, meta *relaymeta.Meta, chatBody []byte) (*http.Response, error) {
+	upstreamMeta := *meta
+	upstreamMeta.Mode = relaymode.ChatCompletions
+	if upstreamMeta.APIType == apitype.OpenAI {
+		upstreamMeta.RequestURLPath = "/v1/chat/completions"
+	}
+	requestURL, err := adaptor.GetRequestURL(&upstreamMeta)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewBuffer(chatBody))
+	if err != nil {
+		return nil, err
+	}
+	if err := adaptor.SetupRequestHeader(c, req, meta); err != nil {
+		return nil, err
+	}
+	return client.HTTPClient.Do(req)
+}
+
+func shouldFallbackToChatCompletions(statusCode int, body []byte) bool {
+	if statusCode == http.StatusOK {
+		return false
+	}
+	switch statusCode {
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusUnprocessableEntity:
+	default:
+		return false
+	}
+
+	s := strings.ToLower(string(body))
+	if strings.Contains(s, "missing") && strings.Contains(s, "input") {
+		return true
+	}
+	if strings.Contains(s, "field required") && strings.Contains(s, "input") {
+		return true
+	}
+	if strings.Contains(s, "/v1/responses") && strings.Contains(s, "not found") {
+		return true
+	}
+	if strings.Contains(s, "unsupported") && strings.Contains(s, "responses") {
+		return true
+	}
+	if strings.Contains(s, "unknown") && strings.Contains(s, "responses") {
+		return true
+	}
+	return false
+}
+
+func truncateForLog(body []byte, max int) string {
+	if len(body) <= max {
+		return string(body)
+	}
+	return string(body[:max]) + "..."
 }
