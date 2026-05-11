@@ -249,13 +249,15 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 
 		// SSE event accumulator
 		var eventData string
+		streamEnded := false
 
 		// Read lines until empty line (end of SSE event) or EOF
 		for {
 			line, err := br.ReadString('\n')
 			if err != nil {
 				if err == io.EOF {
-					// Stream ended
+					// Stream ended, break both loops gracefully
+					streamEnded = true
 					break
 				}
 				billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
@@ -295,6 +297,11 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 				eventData += "\n"
 			}
 			eventData += dataStr
+		}
+
+		// EOF reached with no pending event data: finish outer loop
+		if streamEnded && eventData == "" {
+			break
 		}
 
 		// Skip empty events
