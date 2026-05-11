@@ -335,6 +335,24 @@ func splitThinkBlocksFromText(input string) (cleanText string, thinkingText stri
 		}
 	}
 	clean := thinkBlockRe.ReplaceAllString(input, "")
+
+	// Handle malformed streams that emit orphan "</think>" without a matching "<think>".
+	// In this case, treat the prefix before each orphan close tag as leaked thinking content.
+	rest := clean
+	var cleanedParts []string
+	for {
+		idx := strings.Index(strings.ToLower(rest), "</think>")
+		if idx < 0 {
+			break
+		}
+		part := strings.TrimSpace(rest[:idx])
+		if part != "" {
+			thinkParts = append(thinkParts, part)
+		}
+		rest = rest[idx+len("</think>"):]
+	}
+	cleanedParts = append(cleanedParts, rest)
+	clean = strings.Join(cleanedParts, "")
 	clean = strings.ReplaceAll(clean, "<think>", "")
 	clean = strings.ReplaceAll(clean, "</think>", "")
 	clean = strings.TrimSpace(clean)
@@ -370,6 +388,16 @@ func splitThinkTaggedChunk(chunk string, inThink *bool, carry *string) (textOut 
 				input = ""
 			}
 			continue
+		}
+
+		// Malformed case: orphan closing tag appears before any opening tag.
+		// Treat preceding text as leaked thinking instead of user-visible text.
+		if closeIdx := strings.Index(strings.ToLower(input), "</think>"); closeIdx >= 0 {
+			if openIdx := strings.Index(strings.ToLower(input), "<think>"); openIdx < 0 || closeIdx < openIdx {
+				thinkingOut += input[:closeIdx]
+				input = input[closeIdx+len("</think>"):]
+				continue
+			}
 		}
 
 		if idx := strings.Index(strings.ToLower(input), "<think>"); idx >= 0 {
@@ -428,6 +456,29 @@ type AnthropicContent struct {
 
 func isAnthropicToolResultType(t string) bool {
 	return t == "tool_result" || strings.HasSuffix(t, "_tool_result")
+}
+
+func isEmptyAnthropicUserContentBlocks(blocks []AnthropicContent) bool {
+	if len(blocks) == 0 {
+		return true
+	}
+	for _, b := range blocks {
+		switch b.Type {
+		case "text":
+			if strings.TrimSpace(b.Text) != "" {
+				return false
+			}
+		case "image":
+			// image content is meaningful even without text
+			if b.Source != nil && (strings.TrimSpace(b.Source.Url) != "" || strings.TrimSpace(b.Source.Data) != "") {
+				return false
+			}
+		default:
+			// Unknown content block types should be treated as meaningful to avoid dropping data silently.
+			return false
+		}
+	}
+	return true
 }
 
 // parseAnthropicContent handles both string and array content formats
@@ -541,6 +592,12 @@ func ConvertAnthropicToOpenAI(req *AnthropicRequest) *model.GeneralOpenAIRequest
 
 	for _, msg := range req.Messages {
 		contentBlocks := parseAnthropicContent(msg.Content)
+		// VSCode/SDK can emit empty user turns when user only presses Enter.
+		// Do not forward empty user messages to upstream, otherwise the model may
+		// repeatedly reason about "(no content)" and derail tool execution flow.
+		if msg.Role == "user" && isEmptyAnthropicUserContentBlocks(contentBlocks) {
+			continue
+		}
 
 		// Fast path: single text block stays as plain string content.
 		if len(contentBlocks) == 1 && contentBlocks[0].Type == "text" && contentBlocks[0].ToolUseId == "" {

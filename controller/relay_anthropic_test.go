@@ -165,6 +165,29 @@ func TestAnthropicAdapterCompatibility(t *testing.T) {
 		}
 	})
 
+	t.Run("empty user turn is skipped to avoid no-content loops", func(t *testing.T) {
+		req := &AnthropicRequest{
+			Model: "bedi/deepseek-v4-flash",
+			Messages: []AnthropicMessage{
+				{Role: "user", Content: ""},
+				{Role: "user", Content: []any{map[string]any{"type": "text", "text": "   "}}},
+				{Role: "assistant", Content: []any{map[string]any{"type": "text", "text": "previous"}}},
+				{Role: "user", Content: []any{map[string]any{"type": "text", "text": "请继续"}}},
+			},
+		}
+
+		openaiReq := ConvertAnthropicToOpenAI(req)
+		if len(openaiReq.Messages) != 2 {
+			t.Fatalf("expected 2 messages after skipping empty user turns, got %#v", openaiReq.Messages)
+		}
+		if openaiReq.Messages[0].Role != "assistant" || openaiReq.Messages[0].StringContent() != "previous" {
+			t.Fatalf("unexpected first message after filtering: %#v", openaiReq.Messages[0])
+		}
+		if openaiReq.Messages[1].Role != "user" || openaiReq.Messages[1].StringContent() != "请继续" {
+			t.Fatalf("unexpected second message after filtering: %#v", openaiReq.Messages[1])
+		}
+	})
+
 	t.Run("non-stream tool arguments object preserved", func(t *testing.T) {
 		resp := map[string]any{
 			"id":    "chatcmpl-test",
@@ -421,6 +444,36 @@ func TestAnthropicAdapterCompatibility(t *testing.T) {
 				t.Fatalf("mismatched block type for same index %s: %s vs %s. output=%s", idx, prev, typ, outStr)
 			}
 			indexToType[idx] = typ
+		}
+	})
+}
+
+func TestThinkTagSanitization(t *testing.T) {
+	t.Run("orphan closing think tags are not surfaced as text", func(t *testing.T) {
+		clean, thinking := splitThinkBlocksFromText("继续执行，读取关键文件。</think>我在继续执行。")
+		if strings.Contains(clean, "</think>") {
+			t.Fatalf("clean text should not contain </think>, got: %q", clean)
+		}
+		if clean != "" {
+			t.Fatalf("expected clean text empty for orphan closing tag payload, got: %q", clean)
+		}
+		if !strings.Contains(thinking, "继续执行") {
+			t.Fatalf("expected thinking to contain leaked planning text, got: %q", thinking)
+		}
+	})
+
+	t.Run("stream chunk orphan closing think tags go to thinking channel", func(t *testing.T) {
+		inThink := false
+		carry := ""
+		text, thinking := splitThinkTaggedChunk("继续执行。</think>下一步。", &inThink, &carry)
+		if strings.Contains(text, "</think>") {
+			t.Fatalf("text output should not contain </think>, got: %q", text)
+		}
+		if text != "" {
+			t.Fatalf("expected text output empty for orphan closing tag payload, got: %q", text)
+		}
+		if !strings.Contains(thinking, "继续执行") {
+			t.Fatalf("expected thinking output contains leaked text, got: %q", thinking)
 		}
 	})
 }
