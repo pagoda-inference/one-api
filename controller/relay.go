@@ -1553,17 +1553,7 @@ func RelayResponses(c *gin.Context) {
 
 	method := c.Request.Method
 	switch method {
-	case "GET", "DELETE":
-		// P1: return standardized not_supported error
-		err := model.Error{
-			Message: fmt.Sprintf("%s /v1/responses/:id is not yet implemented", method),
-			Type:    "not_supported_error",
-			Param:   "",
-			Code:    "not_implemented",
-		}
-		c.JSON(http.StatusNotImplemented, gin.H{"error": err})
-		return
-case "POST":
+	case "POST":
 		// Delegate to relay controller
 		bizErr := relayController.RelayResponsesHelper(c)
 		if bizErr != nil {

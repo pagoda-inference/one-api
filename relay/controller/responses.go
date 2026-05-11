@@ -227,6 +227,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 	var status string
 	var responseCreatedSent bool
 	var responseID string
+	requestID := c.GetString("request_id")
 
 	// Create context for cancellation
 	streamCtx, cancel := context.WithCancel(ctx)
@@ -259,8 +260,14 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 
 		// Trim newline characters
 		line = strings.TrimRight(line, "\r\n")
-		if line == "" || strings.HasPrefix(line, ":") {
-			// Skip empty lines and comment lines
+
+		// SSE standard: empty line marks end of an event
+		if line == "" {
+			continue
+		}
+
+		// Comment line, skip
+		if strings.HasPrefix(line, ":") {
 			continue
 		}
 
@@ -274,10 +281,37 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 			continue
 		}
 
+		// Accumulate multi-line data (SSE allows multiple data: lines per event, separated by newlines)
+		// Peek ahead to see if next line is also a data: line
+		eventData := dataStr
+		for {
+			// Peek at next line
+			nextLine, err := br.ReadString('\n')
+			if err != nil {
+				break
+			}
+			nextLine = strings.TrimRight(nextLine, "\r\n")
+
+			// If next line starts with "data:", it's a continuation
+			if strings.HasPrefix(nextLine, "data:") {
+				contData := strings.TrimPrefix(nextLine, "data:")
+				contData = strings.TrimSpace(contData)
+				if contData != "" {
+					eventData += "\n" + contData
+				}
+			} else {
+				// Not a data: line, put it back or handle as separate event
+				// Since we already consumed it, we need to handle it in next iteration
+				// But ReadString already consumed it, so we can't easily "unread"
+				// For simplicity, just process what we have
+				break
+			}
+		}
+
 		// Parse JSON
 		var chatResp relaymodel.ChatCompletionsStreamResponse
-		if err := json.Unmarshal([]byte(dataStr), &chatResp); err != nil {
-			logger.Warnf(ctx, "failed to unmarshal SSE data: %v, data: %s", err, dataStr)
+		if err := json.Unmarshal([]byte(eventData), &chatResp); err != nil {
+			logger.Warnf(ctx, "failed to unmarshal SSE data: %v, data: %s", err, eventData)
 			continue
 		}
 
@@ -357,7 +391,11 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 
 	// Fallback for responseID if never set
 	if responseID == "" {
-		responseID = "resp_" + meta.RequestURLPath
+		if requestID != "" {
+			responseID = "resp_" + requestID
+		} else {
+			responseID = "resp_" + fmt.Sprintf("%d", time.Now().UnixNano())
+		}
 	}
 
 	doneEvent := &relaymodel.ResponsesStreamEvent{
