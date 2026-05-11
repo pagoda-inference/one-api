@@ -166,10 +166,10 @@ func handleResponsesNonStream(c *gin.Context, resp *http.Response, meta *relayme
 	}
 
 	// Check for error in response
-	if chatResp.Error.Message != "" {
+	if chatResp.Error != nil && chatResp.Error.Message != "" {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 		return &relaymodel.ErrorWithStatusCode{
-			Error:      chatResp.Error,
+			Error:      *chatResp.Error,
 			StatusCode: resp.StatusCode,
 		}
 	}
@@ -216,7 +216,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 	c.Header("Connection", "keep-alive")
 	c.Header("Transfer-Encoding", "chunked")
 
-	flusher, ok := c.Writer.(gin.Flusher)
+	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 		return openai.ErrorWrapper(fmt.Errorf("streaming not supported"), "stream_not_supported", http.StatusInternalServerError)
@@ -317,8 +317,8 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 		}
 
 		// Send response.created only once (first chunk)
-		if !responseCreatedSent && chatResp.ID != "" {
-			responseID = chatResp.ID
+		if !responseCreatedSent && chatResp.Id != "" {
+			responseID = chatResp.Id
 			createdEvent := &relaymodel.ResponsesStreamEvent{
 				Event: "response.created",
 				Data: relaymodel.ResponseCreatedEvent{
@@ -327,13 +327,13 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 						Object string `json:"object"`
 						Status string `json:"status"`
 					}{
-						ID:     chatResp.ID,
+						ID:     chatResp.Id,
 						Object: "response",
 						Status: "in_progress",
 					},
 				},
 			}
-			flusher.Write([]byte(openai.SSEFormatResponsesEvent(createdEvent)))
+			_, _ = c.Writer.Write([]byte(openai.SSEFormatResponsesEvent(createdEvent)))
 			flusher.Flush()
 			responseCreatedSent = true
 		}
@@ -366,10 +366,10 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 			}
 
 			sseLine := openai.SSEFormatResponsesEvent(event)
-			if sseLine != "" {
-				flusher.Write([]byte(sseLine))
-				flusher.Flush()
-			}
+				if sseLine != "" {
+					_, _ = c.Writer.Write([]byte(sseLine))
+					flusher.Flush()
+				}
 		}
 
 		// Check for completion
@@ -415,7 +415,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 			},
 		},
 	}
-	flusher.Write([]byte(openai.SSEFormatResponsesEvent(doneEvent)))
+	_, _ = c.Writer.Write([]byte(openai.SSEFormatResponsesEvent(doneEvent)))
 	flusher.Flush()
 
 	// Finalize quota
@@ -439,7 +439,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 }
 
 // getModelById returns model info by ID
-func getModelById(modelId string) (*relaymodel.ModelInfo, error) {
+func getModelById(modelId string) (*model.ModelInfo, error) {
 	return model.GetModelById(modelId)
 }
 
@@ -503,15 +503,4 @@ func relayErrorHandler(resp *http.Response) *relaymodel.ErrorWithStatusCode {
 		},
 		StatusCode: resp.StatusCode,
 	}
-}
-
-// getMappedModelName applies model name mapping
-func getMappedModelName(modelName string, modelMapping map[string]string) (string, bool) {
-	if modelMapping == nil {
-		return modelName, false
-	}
-	if mapped, ok := modelMapping[modelName]; ok {
-		return mapped, true
-	}
-	return modelName, false
 }

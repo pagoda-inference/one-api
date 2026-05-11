@@ -9,6 +9,23 @@ import (
 	relaymodel "github.com/pagoda-inference/one-api/relay/model"
 )
 
+func anyToString(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case []byte:
+		return string(val)
+	default:
+		if b, err := json.Marshal(val); err == nil {
+			return string(b)
+		}
+		return fmt.Sprintf("%v", val)
+	}
+}
+
 // ConvertResponsesRequest converts an OpenAI Responses request to a format suitable for upstream
 func ConvertResponsesRequest(req *relaymodel.ResponsesRequest) (*relaymodel.GeneralOpenAIRequest, error) {
 	chatReq := relaymodel.ConvertResponsesToChatRequest(req)
@@ -45,7 +62,7 @@ func ConvertChatStreamResponseToResponsesEvent(chatResp *relaymodel.ChatCompleti
 					Status string            `json:"status"`
 					Usage  *relaymodel.Usage `json:"usage,omitempty"`
 				}{
-					ID:     chatResp.ID,
+					ID:     chatResp.Id,
 					Object: "response",
 					Status: "completed",
 					Usage:  chatResp.Usage,
@@ -56,14 +73,14 @@ func ConvertChatStreamResponseToResponsesEvent(chatResp *relaymodel.ChatCompleti
 	}
 
 	// Handle content delta
-	if choice.Delta.Content != "" {
+	if deltaText := anyToString(choice.Delta.Content); deltaText != "" {
 		event := &relaymodel.ResponsesStreamEvent{
 			Event: "response.output_text.delta",
 			Data: relaymodel.OutputTextDeltaEvent{
 				ItemID:       fmt.Sprintf("resp_item_%d", choice.Index),
 				OutputIndex:  0,
 				ContentIndex: 0,
-				Delta:        choice.Delta.Content,
+				Delta:        deltaText,
 			},
 		}
 		return event, nil
@@ -72,12 +89,12 @@ func ConvertChatStreamResponseToResponsesEvent(chatResp *relaymodel.ChatCompleti
 	// Handle tool call delta
 	if len(choice.Delta.ToolCalls) > 0 {
 		tc := choice.Delta.ToolCalls[0]
-		if tc.Function.Arguments != "" {
+		if argsText := anyToString(tc.Function.Arguments); argsText != "" {
 			event := &relaymodel.ResponsesStreamEvent{
 				Event: "response.function_call_arguments.delta",
 				Data: relaymodel.FunctionCallArgumentsDeltaEvent{
-					ItemID: tc.ID,
-					Delta:  tc.Function.Arguments,
+					ItemID: tc.Id,
+					Delta:  argsText,
 				},
 			}
 			return event, nil
@@ -95,14 +112,14 @@ func BuildResponsesStreamEvent(chatResp *relaymodel.ChatCompletionsStreamRespons
 	// Process deltas
 	for _, choice := range chatResp.Choices {
 		// Content delta
-		if choice.Delta.Content != "" {
+		if deltaText := anyToString(choice.Delta.Content); deltaText != "" {
 			contentEvent := &relaymodel.ResponsesStreamEvent{
 				Event: "response.output_text.delta",
 				Data: relaymodel.OutputTextDeltaEvent{
 					ItemID:       fmt.Sprintf("resp_item_%d", choice.Index),
 					OutputIndex:  0,
 					ContentIndex: 0,
-					Delta:        choice.Delta.Content,
+					Delta:        deltaText,
 				},
 			}
 			events = append(events, contentEvent)
@@ -120,10 +137,10 @@ func BuildResponsesStreamEvent(chatResp *relaymodel.ChatCompletionsStreamRespons
 						Type         string `json:"type"`
 						FunctionCall *relaymodel.FunctionCall `json:"function_call,omitempty"`
 					}{
-						ID:   tc.ID,
+						ID:   tc.Id,
 						Type: "function_call",
 						FunctionCall: &relaymodel.FunctionCall{
-							ID:   tc.ID,
+							ID:   tc.Id,
 							Type: "function_call",
 						},
 					},
@@ -132,12 +149,12 @@ func BuildResponsesStreamEvent(chatResp *relaymodel.ChatCompletionsStreamRespons
 			events = append(events, itemCreatedEvent)
 
 			// Then function_call_arguments.delta
-			if tc.Function.Arguments != "" {
+			if argsText := anyToString(tc.Function.Arguments); argsText != "" {
 				argsDeltaEvent := &relaymodel.ResponsesStreamEvent{
 					Event: "response.function_call_arguments.delta",
 					Data: relaymodel.FunctionCallArgumentsDeltaEvent{
-						ItemID: tc.ID,
-						Delta:  tc.Function.Arguments,
+						ItemID: tc.Id,
+						Delta:  argsText,
 					},
 				}
 				events = append(events, argsDeltaEvent)
@@ -321,7 +338,11 @@ func FormatToolsForLogging(tools []relaymodel.Tool) string {
 	}
 	names := make([]string, 0, len(tools))
 	for _, t := range tools {
-		names = append(names, t.Name)
+		if t.Function.Name != "" {
+			names = append(names, t.Function.Name)
+			continue
+		}
+		names = append(names, "unknown")
 	}
 	return strings.Join(names, ", ")
 }

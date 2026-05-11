@@ -1554,7 +1554,7 @@ func RelayResponses(c *gin.Context) {
 	switch method {
 	case "POST":
 		// Delegate to relay controller
-		bizErr := relayController.RelayResponsesHelper(c)
+		bizErr := controller.RelayResponsesHelper(c)
 		if bizErr != nil {
 			c.JSON(bizErr.StatusCode, gin.H{"error": bizErr.Error})
 			return

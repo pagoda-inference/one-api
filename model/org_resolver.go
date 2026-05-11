@@ -26,8 +26,8 @@ func ResolveAndUpsertUserOrg(user *User, source string) error {
 		}
 		switch source {
 		case "lark_external":
-			targetCompanyID = pools.ExternalCompanyId
-			targetDepartmentID = pools.ExternalDepartmentId
+			targetCompanyID = pools.OutsourceCompanyId
+			targetDepartmentID = pools.OutsourceDepartmentId
 		case "lark", "lark_formal":
 			targetCompanyID = pools.FormalCompanyId
 			targetDepartmentID = pools.FormalDepartmentId

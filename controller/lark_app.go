@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +17,17 @@ import (
 	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
 )
+
+type larkSyncTask struct {
+	TaskID     string `json:"task_id"`
+	Status     string `json:"status"`
+	StartedAt  int64  `json:"started_at"`
+	FinishedAt int64  `json:"finished_at,omitempty"`
+	Error      string `json:"error,omitempty"`
+	Result     gin.H  `json:"result,omitempty"`
+}
+
+var larkSyncUsersTasks sync.Map
 
 // GetLarkOAuthApps handles GET /api/admin/lark-apps
 func GetLarkOAuthApps(c *gin.Context) {
@@ -1015,25 +1027,25 @@ func DebugLarkDepartmentResolve(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"app_id":               app.Id,
-			"app_name":             app.Name,
-			"department_id":        departmentID,
-			"mget_name":            func() string { n, _, _ := getLarkDepartmentNameByMGet(client, tenantToken, departmentID); return n }(),
-			"mget_raw":             getLarkDepartmentDebugByMGet(client, tenantToken, departmentID),
-			"batch_open_name":      batchOpenName,
+			"app_id":                app.Id,
+			"app_name":              app.Name,
+			"department_id":         departmentID,
+			"mget_name":             func() string { n, _, _ := getLarkDepartmentNameByMGet(client, tenantToken, departmentID); return n }(),
+			"mget_raw":              getLarkDepartmentDebugByMGet(client, tenantToken, departmentID),
+			"batch_open_name":       batchOpenName,
 			"batch_department_name": batchDeptName,
-			"batch_open_raw":       getLarkDepartmentDebugByBatch(client, tenantToken, departmentID, "open_department_id"),
-			"batch_department_raw": getLarkDepartmentDebugByBatch(client, tenantToken, departmentID, "department_id"),
-			"directory_by_id_name": directoryByIDName,
-			"directory_by_id_meta": directoryByIDMeta,
-			"directory_by_id_raw":  getLarkDepartmentDebugByDirectoryFilterID(client, tenantToken, departmentID),
-			"contact_map_name":     contactMapName,
-			"contact_map_size":     len(contactMap),
-			"contact_map_err":      errString(contactErr),
-			"contact_list_raw":     getLarkDepartmentRawByContactList(client, tenantToken),
-			"directory_map_name":   directoryMapName,
-			"directory_map_size":   len(directoryMap),
-			"directory_map_err":    errString(directoryErr),
+			"batch_open_raw":        getLarkDepartmentDebugByBatch(client, tenantToken, departmentID, "open_department_id"),
+			"batch_department_raw":  getLarkDepartmentDebugByBatch(client, tenantToken, departmentID, "department_id"),
+			"directory_by_id_name":  directoryByIDName,
+			"directory_by_id_meta":  directoryByIDMeta,
+			"directory_by_id_raw":   getLarkDepartmentDebugByDirectoryFilterID(client, tenantToken, departmentID),
+			"contact_map_name":      contactMapName,
+			"contact_map_size":      len(contactMap),
+			"contact_map_err":       errString(contactErr),
+			"contact_list_raw":      getLarkDepartmentRawByContactList(client, tenantToken),
+			"directory_map_name":    directoryMapName,
+			"directory_map_size":    len(directoryMap),
+			"directory_map_err":     errString(directoryErr),
 		},
 	})
 }
@@ -1057,23 +1069,83 @@ func SyncLarkUsersProfile(c *gin.Context) {
 		return
 	}
 
+	taskID := fmt.Sprintf("sync_%d", time.Now().UnixNano())
+	task := &larkSyncTask{
+		TaskID:    taskID,
+		Status:    "running",
+		StartedAt: time.Now().Unix(),
+	}
+	larkSyncUsersTasks.Store(taskID, task)
+
+	go func(id string) {
+		result, err := runSyncLarkUsersProfile()
+		taskAny, ok := larkSyncUsersTasks.Load(id)
+		if !ok {
+			return
+		}
+		t := taskAny.(*larkSyncTask)
+		t.FinishedAt = time.Now().Unix()
+		if err != nil {
+			t.Status = "failed"
+			t.Error = err.Error()
+		} else {
+			t.Status = "done"
+			t.Result = result
+		}
+		larkSyncUsersTasks.Store(id, t)
+	}(taskID)
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"success": true,
+		"data": gin.H{
+			"task_id": taskID,
+			"status":  "running",
+		},
+	})
+}
+
+// GetSyncLarkUsersProfileTask handles GET /api/admin/lark-apps/sync-users/:task_id
+func GetSyncLarkUsersProfileTask(c *gin.Context) {
+	role := c.GetInt(ctxkey.Role)
+	if role < model.RoleAdminUser {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "Admin access required",
+		})
+		return
+	}
+	taskID := strings.TrimSpace(c.Param("task_id"))
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "task_id is required",
+		})
+		return
+	}
+	taskAny, ok := larkSyncUsersTasks.Load(taskID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "task not found",
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    taskAny,
+	})
+}
+
+func runSyncLarkUsersProfile() (gin.H, error) {
 	// Use all apps (including disabled) for historical user backfill,
 	// because lark open_id is app-scoped.
 	apps, err := model.GetAllLarkOAuthApps()
 	if err != nil || len(apps) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "No Lark OAuth app found",
-		})
-		return
+		return nil, fmt.Errorf("no lark oauth app found")
 	}
 	users, err := model.GetUsersWithLarkID()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Failed to load lark-bound users: " + err.Error(),
-		})
-		return
+		return nil, fmt.Errorf("failed to load lark-bound users: %w", err)
 	}
 
 	total := len(users)
@@ -1105,19 +1177,14 @@ func SyncLarkUsersProfile(c *gin.Context) {
 	}
 
 	if len(tokenByAppID) == 0 {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": "No available lark tenant token",
-			"data": gin.H{
-				"total":           total,
-				"updated":         0,
-				"failed":          total,
-				"skipped":         0,
-				"errors":          errorsList,
-				"failed_examples": failedExamples,
-			},
-		})
-		return
+		return gin.H{
+			"total":           total,
+			"updated":         0,
+			"failed":          total,
+			"skipped":         0,
+			"errors":          errorsList,
+			"failed_examples": failedExamples,
+		}, fmt.Errorf("no available lark tenant token")
 	}
 
 	for _, u := range users {
@@ -1134,19 +1201,33 @@ func SyncLarkUsersProfile(c *gin.Context) {
 		var departmentID string
 		var departmentDebug string
 		var detailErr error
+		attemptTrace := make([]string, 0, len(apps)*2)
 
 		found := false
+		resolvedOrgSource := "lark_formal"
 		for _, app := range apps {
 			tenantToken, ok := tokenByAppID[app.Id]
 			if !ok || tenantToken == "" {
 				continue
+			}
+			appOrgSource := "lark_formal"
+			if app.ClientId == "cli_a95e1738cd391bda" {
+				appOrgSource = "lark_external"
 			}
 
 			if strings.HasPrefix(larkID, "ou_") {
 				// Normal case: lark_id stores open_id (ou_xxx).
 				// Do NOT fall back to convert endpoint here, otherwise the real open_id error gets masked.
 				email, avatar, departmentName, departmentSource, departmentID, departmentDebug, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
+				openTry := "ok"
+				if detailErr != nil {
+					openTry = detailErr.Error()
+				} else if strings.TrimSpace(email) == "" && strings.TrimSpace(avatar) == "" {
+					openTry = "empty_profile"
+				}
+				attemptTrace = append(attemptTrace, fmt.Sprintf("app=%s(%s) by_open_id=%s", app.Name, app.ClientId, truncate(openTry, 140)))
 				if detailErr == nil && (email != "" || avatar != "") {
+					resolvedOrgSource = appOrgSource
 					found = true
 					break
 				}
@@ -1155,14 +1236,30 @@ func SyncLarkUsersProfile(c *gin.Context) {
 
 			// Legacy/non-standard case: may store user_id in lark_id.
 			email, avatar, departmentName, departmentSource, departmentID, departmentDebug, detailErr = getLarkUserDetailByUserID(tenantToken, larkID)
+			userTry := "ok"
+			if detailErr != nil {
+				userTry = detailErr.Error()
+			} else if strings.TrimSpace(email) == "" && strings.TrimSpace(avatar) == "" {
+				userTry = "empty_profile"
+			}
+			attemptTrace = append(attemptTrace, fmt.Sprintf("app=%s(%s) by_user_id=%s", app.Name, app.ClientId, truncate(userTry, 140)))
 			if detailErr == nil && (email != "" || avatar != "") {
+				resolvedOrgSource = appOrgSource
 				found = true
 				break
 			}
 
 			// Fallback: try as open_id as last resort.
 			email, avatar, departmentName, departmentSource, departmentID, departmentDebug, detailErr = getLarkUserDetailByOpenID(tenantToken, larkID)
+			fallbackTry := "ok"
+			if detailErr != nil {
+				fallbackTry = detailErr.Error()
+			} else if strings.TrimSpace(email) == "" && strings.TrimSpace(avatar) == "" {
+				fallbackTry = "empty_profile"
+			}
+			attemptTrace = append(attemptTrace, fmt.Sprintf("app=%s(%s) fallback_open_id=%s", app.Name, app.ClientId, truncate(fallbackTry, 140)))
 			if detailErr == nil && (email != "" || avatar != "") {
+				resolvedOrgSource = appOrgSource
 				found = true
 				break
 			}
@@ -1170,9 +1267,13 @@ func SyncLarkUsersProfile(c *gin.Context) {
 
 		if !found {
 			failed++
-			logger.SysLogf("SyncLarkUsersProfile: user=%d lark_id=%s all apps failed, last_err=%v", u.Id, larkID, detailErr)
+			failReason := "not_found_in_any_app"
+			if detailErr != nil {
+				failReason = detailErr.Error()
+			}
+			logger.SysLogf("SyncLarkUsersProfile: user=%d lark_id=%s all apps failed, reason=%s trace=%s", u.Id, larkID, failReason, strings.Join(attemptTrace, " | "))
 			if len(failedExamples) < 20 {
-				failedExamples = append(failedExamples, fmt.Sprintf("user=%d lark_id=%s err=%v", u.Id, larkID, detailErr))
+				failedExamples = append(failedExamples, fmt.Sprintf("user=%d lark_id=%s reason=%s trace=%s", u.Id, larkID, failReason, truncate(strings.Join(attemptTrace, " | "), 260)))
 			}
 			continue
 		}
@@ -1199,11 +1300,11 @@ func SyncLarkUsersProfile(c *gin.Context) {
 			updated++
 		}
 
-		// Force org re-classification for all lark users: formal pool + real lark department.
+		// Re-classify by resolved app source: formal or external pool + resolved department.
 		if config.OrgMembershipV2Enabled {
 			u.CompanyId = 0
 			u.DepartmentId = 0
-			if err = model.ResolveAndUpsertUserOrg(u, "lark"); err == nil {
+			if err = model.ResolveAndUpsertUserOrg(u, resolvedOrgSource); err == nil {
 				if strings.TrimSpace(departmentName) != "" {
 					departmentResolved++
 				}
@@ -1221,7 +1322,7 @@ func SyncLarkUsersProfile(c *gin.Context) {
 						deptKeyMissExamples = append(deptKeyMissExamples, fmt.Sprintf("user=%d source=%s dept_id=%s debug=%s", u.Id, departmentSource, departmentID, truncate(departmentDebug, 220)))
 					}
 				}
-				_ = model.ResolveAndUpsertUserDepartmentByName(u, departmentName, "lark")
+				_ = model.ResolveAndUpsertUserDepartmentByName(u, departmentName, resolvedOrgSource)
 				orgUpdated++
 			}
 		}
@@ -1230,19 +1331,16 @@ func SyncLarkUsersProfile(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"total":                    total,
-			"updated":                  updated,
-			"org_updated":              orgUpdated,
-			"department_resolved":      departmentResolved,
-			"department_debug_hits":    departmentDebugHits,
-			"department_miss_examples": deptKeyMissExamples,
-			"failed":                   failed,
-			"skipped":                  skipped,
-			"errors":                   errorsList,
-			"failed_examples":          failedExamples,
-		},
-	})
+	return gin.H{
+		"total":                    total,
+		"updated":                  updated,
+		"org_updated":              orgUpdated,
+		"department_resolved":      departmentResolved,
+		"department_debug_hits":    departmentDebugHits,
+		"department_miss_examples": deptKeyMissExamples,
+		"failed":                   failed,
+		"skipped":                  skipped,
+		"errors":                   errorsList,
+		"failed_examples":          failedExamples,
+	}, nil
 }

@@ -22,8 +22,10 @@ const (
 
 const (
 	DefaultCompanyFormalName      = "正式员工池"
+	DefaultCompanyOutsourceName   = "外包注册池"
 	DefaultCompanyExternalName    = "外部注册池"
 	DefaultDepartmentFormalName   = "默认部门"
+	DefaultDepartmentOutsourceName = "默认部门"
 	DefaultDepartmentExternalName = "默认部门"
 )
 
@@ -55,6 +57,8 @@ type OrgMigrationReport struct {
 type OrgPoolRefs struct {
 	FormalCompanyId      int
 	FormalDepartmentId   int
+	OutsourceCompanyId   int
+	OutsourceDepartmentId int
 	ExternalCompanyId    int
 	ExternalDepartmentId int
 }
@@ -96,6 +100,12 @@ func EnsureDefaultOrgPools() (*OrgPoolRefs, error) {
 	if err != nil {
 		return nil, err
 	}
+	outsourceCompanyID, outsourceDepartmentID, err := ensureDefaultCompanyAndDepartment(
+		DefaultCompanyOutsourceName, DefaultDepartmentOutsourceName, "outsource",
+	)
+	if err != nil {
+		return nil, err
+	}
 	externalCompanyID, externalDepartmentID, err := ensureDefaultCompanyAndDepartment(
 		DefaultCompanyExternalName, DefaultDepartmentExternalName, "external",
 	)
@@ -103,14 +113,19 @@ func EnsureDefaultOrgPools() (*OrgPoolRefs, error) {
 		return nil, err
 	}
 	return &OrgPoolRefs{
-		FormalCompanyId:      formalCompanyID,
-		FormalDepartmentId:   formalDepartmentID,
-		ExternalCompanyId:    externalCompanyID,
-		ExternalDepartmentId: externalDepartmentID,
+		FormalCompanyId:       formalCompanyID,
+		FormalDepartmentId:    formalDepartmentID,
+		OutsourceCompanyId:    outsourceCompanyID,
+		OutsourceDepartmentId: outsourceDepartmentID,
+		ExternalCompanyId:     externalCompanyID,
+		ExternalDepartmentId:  externalDepartmentID,
 	}, nil
 }
 
 func classifyUserOrgSource(user *User) (isFormal bool, source string) {
+	if strings.TrimSpace(user.OrgSource) == "lark_external" {
+		return false, "lark_external"
+	}
 	if strings.TrimSpace(user.LarkId) != "" {
 		return true, "lark"
 	}
@@ -143,6 +158,9 @@ func MigrateUsersToDefaultOrgPools(apply bool, limit int) (*OrgMigrationReport, 
 		if isFormal {
 			targetCompanyID = pools.FormalCompanyId
 			targetDepartmentID = pools.FormalDepartmentId
+		} else if source == "lark_external" {
+			targetCompanyID = pools.OutsourceCompanyId
+			targetDepartmentID = pools.OutsourceDepartmentId
 		}
 		// Preserve explicit user assignment if it already exists.
 		if u.CompanyId > 0 && u.DepartmentId > 0 {

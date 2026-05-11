@@ -216,6 +216,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.GET("/lark-apps", controller.GetLarkOAuthApps)
 			adminRoute.POST("/lark-apps", controller.CreateLarkOAuthApp)
 			adminRoute.POST("/lark-apps/sync-users", controller.SyncLarkUsersProfile)
+			adminRoute.GET("/lark-apps/sync-users/:task_id", controller.GetSyncLarkUsersProfileTask)
 			adminRoute.PUT("/lark-apps/:id", controller.UpdateLarkOAuthApp)
 			adminRoute.DELETE("/lark-apps/:id", controller.DeleteLarkOAuthApp)
 		}

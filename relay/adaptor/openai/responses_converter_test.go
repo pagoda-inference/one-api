@@ -241,7 +241,7 @@ func TestBuildResponsesStreamEvent(t *testing.T) {
 				Object string `json:"object"`
 				Status string `json:"status"`
 			}{
-				ID:     chatResp.ID,
+				ID:     chatResp.Id,
 				Object: "response",
 				Status: "in_progress",
 			},
@@ -299,7 +299,7 @@ func TestHasTools(t *testing.T) {
 	reqWithTools := &relaymodel.ResponsesRequest{
 		Model: "gpt-4o",
 		Input: "hello",
-		Tools: []relaymodel.Tool{
+		Tools: []relaymodel.ResponsesTool{
 			{
 				Type:        "function",
 				Name:        "get_weather",
@@ -368,8 +368,8 @@ func TestCountResponsesInputTokens(t *testing.T) {
 
 func TestFormatToolsForLogging(t *testing.T) {
 	tools := []relaymodel.Tool{
-		{Name: "get_weather"},
-		{Name: "get_time"},
+		{Function: relaymodel.Function{Name: "get_weather"}},
+		{Function: relaymodel.Function{Name: "get_time"}},
 	}
 
 	logged := FormatToolsForLogging(tools)
