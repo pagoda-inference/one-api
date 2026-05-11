@@ -87,30 +87,10 @@ func ConvertChatStreamResponseToResponsesEvent(chatResp *relaymodel.ChatCompleti
 	return nil, nil
 }
 
-// BuildResponsesStreamEvent builds a Responses stream event from chat stream response
+// BuildResponsesStreamEvent builds Responses stream events from chat stream response
+// Note: Does NOT include response.created event - caller controls when to send it
 func BuildResponsesStreamEvent(chatResp *relaymodel.ChatCompletionsStreamResponse) ([]*relaymodel.ResponsesStreamEvent, error) {
 	events := []*relaymodel.ResponsesStreamEvent{}
-
-	if chatResp.ID == "" {
-		return events, nil
-	}
-
-	// response.created event
-	createdEvent := &relaymodel.ResponsesStreamEvent{
-		Event: "response.created",
-		Data: relaymodel.ResponseCreatedEvent{
-			Response: struct {
-				ID     string `json:"id"`
-				Object string `json:"object"`
-				Status string `json:"status"`
-			}{
-				ID:     chatResp.ID,
-				Object: "response",
-				Status: "in_progress",
-			},
-		},
-	}
-	events = append(events, createdEvent)
 
 	// Process deltas
 	for _, choice := range chatResp.Choices {
@@ -119,7 +99,7 @@ func BuildResponsesStreamEvent(chatResp *relaymodel.ChatCompletionsStreamRespons
 			contentEvent := &relaymodel.ResponsesStreamEvent{
 				Event: "response.output_text.delta",
 				Data: relaymodel.OutputTextDeltaEvent{
-					ItemID:       fmt.Sprintf("resp_item_%d", 0),
+					ItemID:       fmt.Sprintf("resp_item_%d", choice.Index),
 					OutputIndex:  0,
 					ContentIndex: 0,
 					Delta:        choice.Delta.Content,
@@ -163,27 +143,6 @@ func BuildResponsesStreamEvent(chatResp *relaymodel.ChatCompletionsStreamRespons
 				events = append(events, argsDeltaEvent)
 			}
 		}
-	}
-
-	// If usage is present (from StreamOptions.IncludeUsage), emit done with usage
-	if chatResp.Usage != nil {
-		doneEvent := &relaymodel.ResponsesStreamEvent{
-			Event: "response.done",
-			Data: relaymodel.ResponseDoneEvent{
-				Response: struct {
-					ID     string            `json:"id"`
-					Object string            `json:"object"`
-					Status string            `json:"status"`
-					Usage  *relaymodel.Usage `json:"usage,omitempty"`
-				}{
-					ID:     chatResp.ID,
-					Object: "response",
-					Status: "completed",
-					Usage:  chatResp.Usage,
-				},
-			},
-		}
-		events = append(events, doneEvent)
 	}
 
 	return events, nil

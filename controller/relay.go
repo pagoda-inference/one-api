@@ -1563,10 +1563,13 @@ func RelayResponses(c *gin.Context) {
 		}
 		c.JSON(http.StatusNotImplemented, gin.H{"error": err})
 		return
-	case "POST":
+case "POST":
 		// Delegate to relay controller
-		relayController.RelayResponsesHelper(c)
-		return
+		bizErr := relayController.RelayResponsesHelper(c)
+		if bizErr != nil {
+			c.JSON(bizErr.StatusCode, gin.H{"error": bizErr.Error})
+			return
+		}
 	default:
 		err := model.Error{
 			Message: fmt.Sprintf("Method %s not allowed for /v1/responses", method),

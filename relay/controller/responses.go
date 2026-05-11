@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -139,6 +140,9 @@ func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 func handleResponsesNonStream(c *gin.Context, resp *http.Response, meta *relaymeta.Meta, preConsumedQuota int64, inputPrice, outputPrice float64, groupRatio float64, startTime time.Time) *relaymodel.ErrorWithStatusCode {
 	ctx := c.Request.Context()
 
+	// Ensure resp.Body is closed
+	defer resp.Body.Close()
+
 	// Check for errors from upstream
 	if resp.StatusCode != http.StatusOK {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
@@ -175,17 +179,18 @@ func handleResponsesNonStream(c *gin.Context, resp *http.Response, meta *relayme
 	usageSource := "exact"
 	if responsesResp.Usage == nil || responsesResp.Usage.TotalTokens == 0 {
 		usageSource = "fallback"
-		if responsesResp.Usage != nil && responsesResp.Usage.TotalTokens == 0 {
-			// Try to estimate from response
-			responsesResp.Usage = estimateUsageFromResponse(chatResp, meta.ActualModelName, meta.PromptTokens, inputPrice, outputPrice, groupRatio)
-		}
+		// Try to estimate from response content
+		responsesResp.Usage = estimateUsageFromResponse(chatResp, meta.ActualModelName, meta.PromptTokens, inputPrice, outputPrice, groupRatio)
 	}
 
 	logResponse(ctx, meta, preConsumedQuota, responsesResp.Usage, usageSource, startTime, "")
 
-	// Post-consume quota async
-	if responsesResp.Usage != nil {
+	// Post-consume quota async (or rollback if usage is still nil)
+	if responsesResp.Usage != nil && responsesResp.Usage.TotalTokens > 0 {
 		go PostConsumeQuota(ctx, responsesResp.Usage, meta, nil, inputPrice, outputPrice, groupRatio, preConsumedQuota, false)
+	} else {
+		// Usage still nil/unavailable - rollback pre-consumed quota
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 	}
 
 	c.JSON(http.StatusOK, responsesResp)
@@ -200,44 +205,36 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 		return openai.ErrorWrapper(fmt.Errorf("streaming is not enabled for Responses API"), "stream_disabled", http.StatusBadRequest)
 	}
 
+	// Ensure resp.Body is closed
+	defer resp.Body.Close()
+
 	// Set SSE headers
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("Transfer-Encoding", "chunked")
 
-	// Stream chunks from upstream and transform to Responses format
-	var lastUsage *relaymodel.Usage
-	var status string
 	flusher, ok := c.Writer.(gin.Flusher)
 	if !ok {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 		return openai.ErrorWrapper(fmt.Errorf("streaming not supported"), "stream_not_supported", http.StatusInternalServerError)
 	}
 
+	// Track stream state
+	accumulatedText := ""
+	var finalUsage *relaymodel.Usage
+	var status string
+	var responseCreatedSent bool
+	var responseID string
+
 	// Create context for cancellation
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Channel to signal completion
-	done := make(chan struct{})
-
-	// Handle client disconnect
-	go func() {
-		select {
-		case <-streamCtx.Done():
-			// Context cancelled
-		case <-done:
-			// Stream completed
-		}
-		// Ensure cleanup
-		cancel()
-	}()
-
-	// Process stream
-	decoder := json.NewDecoder(resp.Body)
-	accumulatedText := ""
-	var finalUsage *relaymodel.Usage
+	// Read SSE line by line
+	reader := resp.Body
+	buf := make([]byte, 0, 4096)
+	lineBuf := make([]byte, 0, 4096)
 
 	for {
 		select {
@@ -249,78 +246,165 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 		default:
 		}
 
-		var chatResp relaymodel.ChatCompletionsStreamResponse
-		if err := decoder.Decode(&chatResp); err != nil {
-			if err == io.EOF {
-				// Stream ended
-				break
+		// Read more data if needed
+		if len(lineBuf) == 0 {
+			n, err := reader.Read(buf[:cap(buf)])
+			if err != nil {
+				if err == io.EOF {
+					// Stream ended normally
+					break
+				}
+				billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+				logResponse(ctx, meta, preConsumedQuota, nil, "interrupted", startTime, "read_error")
+				return openai.ErrorWrapper(fmt.Errorf("failed to read stream: %w", err), "stream_read_error", http.StatusInternalServerError)
 			}
-			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-			logResponse(ctx, meta, preConsumedQuota, nil, "interrupted", startTime, "decode_error")
-			return openai.ErrorWrapper(fmt.Errorf("failed to decode stream: %w", err), "stream_decode_error", http.StatusInternalServerError)
-		}
-
-		// Build Responses events from chat stream
-		events, err := openai.BuildResponsesStreamEvent(&chatResp)
-		if err != nil {
-			logger.Warnf(ctx, "BuildResponsesStreamEvent error: %v", err)
+			lineBuf = append(lineBuf, buf[:n]...)
 			continue
 		}
 
-		// Send events to client
-		for _, event := range events {
-			// Track usage from done event
-			if event.Event == "response.done" {
-				if doneEvent, ok := event.Data.(relaymodel.ResponseDoneEvent); ok {
-					finalUsage = doneEvent.Response.Usage
+		// Find newline
+		for i := 0; i < len(lineBuf); i++ {
+			if lineBuf[i] == '\n' {
+				line := string(lineBuf[:i])
+				lineBuf = lineBuf[i+1:]
+
+				// Skip empty lines and comment lines
+				if line == "" || strings.HasPrefix(line, ":") {
+					break
 				}
-			}
 
-			// Track text for fallback usage calculation
-			if event.Event == "response.output_text.delta" {
-				if deltaEvent, ok := event.Data.(relaymodel.OutputTextDeltaEvent); ok {
-					accumulatedText += deltaEvent.Delta
+				// Parse SSE data: prefix
+				if !strings.HasPrefix(line, "data:") {
+					break
 				}
-			}
+				dataStr := strings.TrimPrefix(line, "data:")
+				dataStr = strings.TrimSpace(dataStr)
+				if dataStr == "" {
+					break
+				}
+				if dataStr == "[DONE]" {
+					break
+				}
 
-			sseLine := openai.SSEFormatResponsesEvent(event)
-			if sseLine != "" {
-				flusher.Write([]byte(sseLine))
-				flusher.Flush()
-			}
-		}
+				// Parse JSON
+				var chatResp relaymodel.ChatCompletionsStreamResponse
+				if err := json.Unmarshal([]byte(dataStr), &chatResp); err != nil {
+					logger.Warnf(ctx, "failed to unmarshal SSE data: %v, data: %s", err, dataStr)
+					break
+				}
 
-		// Check for completion
-		if len(chatResp.Choices) > 0 && chatResp.Choices[0].FinishReason != nil {
-			status = *chatResp.Choices[0].FinishReason
+				// Send response.created only once (first chunk)
+				if !responseCreatedSent && chatResp.ID != "" {
+					responseID = chatResp.ID
+					createdEvent := &relaymodel.ResponsesStreamEvent{
+						Event: "response.created",
+						Data: relaymodel.ResponseCreatedEvent{
+							Response: struct {
+								ID     string `json:"id"`
+								Object string `json:"object"`
+								Status string `json:"status"`
+							}{
+								ID:     chatResp.ID,
+								Object: "response",
+								Status: "in_progress",
+							},
+						},
+					}
+					flusher.Write([]byte(openai.SSEFormatResponsesEvent(createdEvent)))
+					flusher.Flush()
+					responseCreatedSent = true
+				}
+
+				// Build and send delta events
+				events, err := openai.BuildResponsesStreamEvent(&chatResp)
+				if err != nil {
+					logger.Warnf(ctx, "BuildResponsesStreamEvent error: %v", err)
+					break
+				}
+
+				for _, event := range events {
+					// Skip response.created (already sent above)
+					if event.Event == "response.created" {
+						continue
+					}
+
+					// Track usage from done event
+					if event.Event == "response.done" {
+						if doneEvent, ok := event.Data.(relaymodel.ResponseDoneEvent); ok {
+							finalUsage = doneEvent.Response.Usage
+						}
+					}
+
+					// Track text for fallback usage calculation
+					if event.Event == "response.output_text.delta" {
+						if deltaEvent, ok := event.Data.(relaymodel.OutputTextDeltaEvent); ok {
+							accumulatedText += deltaEvent.Delta
+						}
+					}
+
+					sseLine := openai.SSEFormatResponsesEvent(event)
+					if sseLine != "" {
+						flusher.Write([]byte(sseLine))
+						flusher.Flush()
+					}
+				}
+
+				// Check for completion
+				if len(chatResp.Choices) > 0 && chatResp.Choices[0].FinishReason != nil {
+					status = *chatResp.Choices[0].FinishReason
+				}
+				break
+			}
 		}
 	}
 
-	close(done)
+	// Ensure response.done is always sent
+	if finalUsage == nil {
+		// Use fallback usage if no usage from upstream
+		if accumulatedText != "" {
+			finalUsage = &relaymodel.Usage{
+				PromptTokens:     meta.PromptTokens,
+				CompletionTokens: openai.CountTokenInput(accumulatedText, meta.ActualModelName),
+				TotalTokens:      meta.PromptTokens + openai.CountTokenInput(accumulatedText, meta.ActualModelName),
+			}
+		}
+	}
+
+	doneEvent := &relaymodel.ResponsesStreamEvent{
+		Event: "response.done",
+		Data: relaymodel.ResponseDoneEvent{
+			Response: struct {
+				ID     string            `json:"id"`
+				Object string            `json:"object"`
+				Status string            `json:"status"`
+				Usage  *relaymodel.Usage `json:"usage,omitempty"`
+			}{
+				ID:     responseID,
+				Object: "response",
+				Status: "completed",
+				Usage:  finalUsage,
+			},
+		},
+	}
+	flusher.Write([]byte(openai.SSEFormatResponsesEvent(doneEvent)))
+	flusher.Flush()
 
 	// Finalize quota
 	usageSource := "exact"
 	if finalUsage == nil || finalUsage.TotalTokens == 0 {
 		usageSource = "fallback"
-		if accumulatedText != "" {
-			// Estimate usage from accumulated text
-			finalUsage = &relaymodel.Usage{
-				PromptTokens:     meta.PromptTokens,
-				CompletionTokens:  openai.CountTokenInput(accumulatedText, meta.ActualModelName),
-				TotalTokens:       meta.PromptTokens + openai.CountTokenInput(accumulatedText, meta.ActualModelName),
-			}
+		if finalUsage == nil {
+			// No usage at all - return pre-consumed quota
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			logResponse(ctx, meta, preConsumedQuota, nil, usageSource, startTime, status)
+			return nil
 		}
 	}
 
 	logResponse(ctx, meta, preConsumedQuota, finalUsage, usageSource, startTime, status)
 
 	// Post-consume with actual/fallback usage
-	if finalUsage != nil {
-		go PostConsumeQuota(ctx, finalUsage, meta, nil, inputPrice, outputPrice, groupRatio, preConsumedQuota, false)
-	} else {
-		// No usage at all - return pre-consumed quota
-		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-	}
+	go PostConsumeQuota(ctx, finalUsage, meta, nil, inputPrice, outputPrice, groupRatio, preConsumedQuota, false)
 
 	return nil
 }

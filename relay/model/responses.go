@@ -79,16 +79,16 @@ type ResponsesResponse struct {
 
 // OutputItem represents a single output item in the response
 type OutputItem struct {
-	ID      string `json:"id"`
-	Type    string `json:"type"` // "message" | "function_call" | "reasoning" | "refusal"
-	Message *Message `json:"message,omitempty"`
-	FunctionCall *FunctionCall `json:"function_call,omitempty"`
-	Reasoning *Reasoning `json:"reasoning,omitempty"`
-	Refusal string `json:"refusal,omitempty"`
+	ID           string            `json:"id"`
+	Type         string            `json:"type"` // "message" | "function_call" | "reasoning" | "refusal"
+	Message      *ResponseMessage  `json:"message,omitempty"`
+	FunctionCall *FunctionCall     `json:"function_call,omitempty"`
+	Reasoning    *Reasoning        `json:"reasoning,omitempty"`
+	Refusal      string            `json:"refusal,omitempty"`
 }
 
-// Message represents a message output item
-type Message struct {
+// ResponseMessage represents a message output item in Responses format
+type ResponseMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"` // or []ContentBlock for multimodal
 }
@@ -299,7 +299,7 @@ func ConvertChatResponseToResponses(chatResp *ChatCompletionsResponse, requestID
 		item := OutputItem{
 			ID:   fmt.Sprintf("resp_item_%d", i),
 			Type: "message",
-			Message: &Message{
+			Message: &ResponseMessage{
 				Role:    choice.Message.Role,
 				Content: choice.Message.Content,
 			},
@@ -316,7 +316,7 @@ func ConvertChatResponseToResponses(chatResp *ChatCompletionsResponse, requestID
 				Name:      tc.Function.Name,
 				Arguments: tc.Function.Arguments,
 			}
-			item.Message = &Message{
+			item.Message = &ResponseMessage{
 				Role:    "assistant",
 				Content: choice.Message.Content,
 			}
