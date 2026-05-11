@@ -103,8 +103,11 @@ func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	}
 	adaptor.Init(meta)
 
-	// Build request URL
-	requestURL, err := adaptor.GetRequestURL(meta)
+	// Build upstream request URL in chat-completions compatibility mode.
+	// External path stays /v1/responses, but upstream currently expects chat schema.
+	upstreamMeta := *meta
+	upstreamMeta.Mode = relaymode.ChatCompletions
+	requestURL, err := adaptor.GetRequestURL(&upstreamMeta)
 	if err != nil {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
 		return openai.ErrorWrapper(err, "get_request_url_failed", http.StatusInternalServerError)
