@@ -27,8 +27,12 @@ func GetMarketModels(c *gin.Context) {
 
 	userId := c.GetInt(ctxkey.Id)
 	tenantIds, _ := model.GetUserTenantIds(userId)
+	departmentIds := []int{}
+	if user, err := model.GetUserById(userId, true); err == nil && user.DepartmentId > 0 {
+		departmentIds = append(departmentIds, user.DepartmentId)
+	}
 
-	models, total, err := model.GetVisibleModelsForTenants(tenantIds, keyword, modelType, limit, offset)
+	models, total, err := model.GetVisibleModelsForTenants(tenantIds, departmentIds, keyword, modelType, limit, offset)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -106,6 +110,10 @@ func GetMarketProviders(c *gin.Context) {
 func GetMarketStats(c *gin.Context) {
 	userId := c.GetInt(ctxkey.Id)
 	tenantIds, _ := model.GetUserTenantIds(userId)
+	departmentIds := []int{}
+	if user, err := model.GetUserById(userId, true); err == nil && user.DepartmentId > 0 {
+		departmentIds = append(departmentIds, user.DepartmentId)
+	}
 
 	// Get all active models
 	var allModels []*model.ModelInfo
@@ -122,7 +130,7 @@ func GetMarketStats(c *gin.Context) {
 	// Filter by visibility
 	var visibleModels []*model.ModelInfo
 	for _, m := range allModels {
-		if isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+		if isModelVisibleToUser(m.VisibleScope, m.VisibleToTeams, m.VisibleToDepartments, tenantIds, departmentIds) {
 			visibleModels = append(visibleModels, m)
 		}
 	}
@@ -212,22 +220,25 @@ func CalculatePrice(c *gin.Context) {
 // formatModelInfo formats a ModelInfo for API response
 func formatModelInfo(m *model.ModelInfo) gin.H {
 	return gin.H{
-		"id":           m.Id,
-		"name":         m.Name,
-		"provider":     m.Provider,
-		"model_type":   m.ModelType,
-		"description":  m.Description,
-		"context_len":  m.ContextLen,
-		"input_price":  m.InputPrice,
-		"output_price": m.OutputPrice,
-		"capabilities": m.Capabilities,
-		"tags":         m.Tags,
-		"status":       m.Status,
-		"icon_url":     m.IconUrl,
-		"group_id":     m.GroupId,
-		"is_trial":     m.IsTrial,
-		"trial_quota":  m.TrialQuota,
-		"sla":          m.SLA,
+		"id":                     m.Id,
+		"name":                   m.Name,
+		"provider":               m.Provider,
+		"model_type":             m.ModelType,
+		"description":            m.Description,
+		"context_len":            m.ContextLen,
+		"input_price":            m.InputPrice,
+		"output_price":           m.OutputPrice,
+		"capabilities":           m.Capabilities,
+		"tags":                   m.Tags,
+		"status":                 m.Status,
+		"icon_url":               m.IconUrl,
+		"group_id":               m.GroupId,
+		"is_trial":               m.IsTrial,
+		"trial_quota":            m.TrialQuota,
+		"sla":                    m.SLA,
+		"visible_scope":          m.VisibleScope,
+		"visible_to_teams":       m.VisibleToTeams,
+		"visible_to_departments": m.VisibleToDepartments,
 	}
 }
 
@@ -245,6 +256,10 @@ func GetMarketGroups(c *gin.Context) {
 
 	userId := c.GetInt(ctxkey.Id)
 	tenantIds, _ := model.GetUserTenantIds(userId)
+	departmentIds := []int{}
+	if user, err := model.GetUserById(userId, true); err == nil && user.DepartmentId > 0 {
+		departmentIds = append(departmentIds, user.DepartmentId)
+	}
 
 	// Build response with model count per provider (filtered by user visibility)
 	data := make([]gin.H, 0)
@@ -261,7 +276,7 @@ func GetMarketGroups(c *gin.Context) {
 		// Count models visible to user
 		modelCount := 0
 		for _, m := range models {
-			if isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+			if isModelVisibleToUser(m.VisibleScope, m.VisibleToTeams, m.VisibleToDepartments, tenantIds, departmentIds) {
 				modelCount++
 			}
 		}
@@ -417,6 +432,10 @@ func GetUserTrials(c *gin.Context) {
 func GetPlaygroundModels(c *gin.Context) {
 	userId := c.GetInt(ctxkey.Id)
 	tenantIds, _ := model.GetUserTenantIds(userId)
+	departmentIds := []int{}
+	if user, err := model.GetUserById(userId, true); err == nil && user.DepartmentId > 0 {
+		departmentIds = append(departmentIds, user.DepartmentId)
+	}
 
 	models, err := model.GetTrialModels()
 	if err != nil {
@@ -430,7 +449,7 @@ func GetPlaygroundModels(c *gin.Context) {
 	// Filter by visibility and format response
 	data := make([]gin.H, 0)
 	for _, m := range models {
-		if !isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+		if !isModelVisibleToUser(m.VisibleScope, m.VisibleToTeams, m.VisibleToDepartments, tenantIds, departmentIds) {
 			continue
 		}
 		isVL := m.PlaygroundEnableVL

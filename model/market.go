@@ -12,26 +12,28 @@ import (
 
 // ModelInfo represents a model available in the marketplace
 type ModelInfo struct {
-	Id             string  `json:"id" gorm:"primaryKey;size:64"`
-	Name           string  `json:"name" gorm:"size:128"`      // 显示名称
-	Provider       string  `json:"provider" gorm:"size:64"`   // 提供商
-	ModelType      string  `json:"model_type" gorm:"size:32"` // chat/embedding/image/audio
-	Description    string  `json:"description" gorm:"type:text"`
-	ContextLen     int     `json:"context_len" gorm:"default:4096"`                  // 上下文长度
-	InputPrice     float64 `json:"input_price" gorm:"type:decimal(10,4);default:0"`  // 输入价格(元/千token)
-	OutputPrice    float64 `json:"output_price" gorm:"type:decimal(10,4);default:0"` // 输出价格(元/千token)
-	Capabilities   string  `json:"capabilities" gorm:"type:text"`                    // JSON array of capabilities
-	Status         string  `json:"status" gorm:"size:32;default:active"`             // active/maintenance/deprecated
-	SortOrder      int     `json:"sort_order" gorm:"default:0"`
-	IconUrl        string  `json:"icon_url" gorm:"size:255"`
-	GroupId        int     `json:"group_id" gorm:"default:0"`           // 模型分组ID
-	Tags           string  `json:"tags" gorm:"type:text"`               // JSON array of tags
-	IsTrial        bool    `json:"is_trial" gorm:"default:false"`       // 是否支持试用
-	TrialQuota     int64   `json:"trial_quota" gorm:"default:0"`        // 试用额度
-	SLA            string  `json:"sla" gorm:"size:32;default:standard"` // SLA等级: standard/premium/enterprise
-	RateLimitRPM   int     `json:"rate_limit_rpm" gorm:"default:0"`     // 模型级别 RPM 限流 (0=不限)
-	RateLimitTPM   int     `json:"rate_limit_tpm" gorm:"default:0"`     // 模型级别 TPM 限流 (0=不限)
-	VisibleToTeams string  `json:"visible_to_teams" gorm:"type:text"`   // 可见团队，格式",1,2,3,"，空=公共模型
+	Id                   string  `json:"id" gorm:"primaryKey;size:64"`
+	Name                 string  `json:"name" gorm:"size:128"`      // 显示名称
+	Provider             string  `json:"provider" gorm:"size:64"`   // 提供商
+	ModelType            string  `json:"model_type" gorm:"size:32"` // chat/embedding/image/audio
+	Description          string  `json:"description" gorm:"type:text"`
+	ContextLen           int     `json:"context_len" gorm:"default:4096"`                  // 上下文长度
+	InputPrice           float64 `json:"input_price" gorm:"type:decimal(10,4);default:0"`  // 输入价格(元/千token)
+	OutputPrice          float64 `json:"output_price" gorm:"type:decimal(10,4);default:0"` // 输出价格(元/千token)
+	Capabilities         string  `json:"capabilities" gorm:"type:text"`                    // JSON array of capabilities
+	Status               string  `json:"status" gorm:"size:32;default:active"`             // active/maintenance/deprecated
+	SortOrder            int     `json:"sort_order" gorm:"default:0"`
+	IconUrl              string  `json:"icon_url" gorm:"size:255"`
+	GroupId              int     `json:"group_id" gorm:"default:0"`                 // 模型分组ID
+	Tags                 string  `json:"tags" gorm:"type:text"`                     // JSON array of tags
+	IsTrial              bool    `json:"is_trial" gorm:"default:false"`             // 是否支持试用
+	TrialQuota           int64   `json:"trial_quota" gorm:"default:0"`              // 试用额度
+	SLA                  string  `json:"sla" gorm:"size:32;default:standard"`       // SLA等级: standard/premium/enterprise
+	RateLimitRPM         int     `json:"rate_limit_rpm" gorm:"default:0"`           // 模型级别 RPM 限流 (0=不限)
+	RateLimitTPM         int     `json:"rate_limit_tpm" gorm:"default:0"`           // 模型级别 TPM 限流 (0=不限)
+	VisibleScope         string  `json:"visible_scope" gorm:"size:32;default:team"` // 可见范围: public/department/team
+	VisibleToTeams       string  `json:"visible_to_teams" gorm:"type:text"`         // 可见团队，格式",1,2,3,"
+	VisibleToDepartments string  `json:"visible_to_departments" gorm:"type:text"`   // 可见部门，格式",1,2,3,"
 	// 体验中心配置
 	PlaygroundMaxTokens               int     `json:"playground_max_tokens" gorm:"default:8192"`                 // 体验中心最大token
 	PlaygroundTemperature             float64 `json:"playground_temperature" gorm:"default:0.6"`                 // 体验中心温度
@@ -151,6 +153,9 @@ func (m *ModelInfo) Create() error {
 	if m.Status == "" {
 		m.Status = ModelStatusActive
 	}
+	if m.VisibleScope == "" {
+		m.VisibleScope = "team"
+	}
 	return DB.Create(m).Error
 }
 
@@ -253,7 +258,7 @@ func SearchModels(keyword string, modelType string, limit int, offset int) ([]*M
 }
 
 // GetVisibleModelsForTenants retrieves active models visible to given tenant IDs with accurate pagination.
-func GetVisibleModelsForTenants(tenantIds []int, keyword string, modelType string, limit int, offset int) ([]*ModelInfo, int64, error) {
+func GetVisibleModelsForTenants(tenantIds []int, departmentIds []int, keyword string, modelType string, limit int, offset int) ([]*ModelInfo, int64, error) {
 	var (
 		models []*ModelInfo
 		total  int64
@@ -267,10 +272,17 @@ func GetVisibleModelsForTenants(tenantIds []int, keyword string, modelType strin
 		query = query.Where("model_type = ?", modelType)
 	}
 
-	// Visibility filter: public model OR model visible to one of user's tenant IDs.
-	visibleQuery := query.Where("visible_to_teams = '' OR visible_to_teams IS NULL")
+	// Visibility filter by scope:
+	// public: all users
+	// department: department match
+	// team(default): team match
+	visibleQuery := query.Where("(visible_scope = 'public')")
+	for _, did := range departmentIds {
+		visibleQuery = visibleQuery.Or("(visible_scope = 'department' AND visible_to_departments LIKE ?)", fmt.Sprintf("%%,%d,%%", did))
+	}
+	visibleQuery = visibleQuery.Or("((visible_scope = '' OR visible_scope IS NULL OR visible_scope = 'team') AND (visible_to_teams = '' OR visible_to_teams IS NULL))")
 	for _, tid := range tenantIds {
-		visibleQuery = visibleQuery.Or("visible_to_teams LIKE ?", fmt.Sprintf("%%,%d,%%", tid))
+		visibleQuery = visibleQuery.Or("((visible_scope = '' OR visible_scope IS NULL OR visible_scope = 'team') AND visible_to_teams LIKE ?)", fmt.Sprintf("%%,%d,%%", tid))
 	}
 
 	if err := visibleQuery.Count(&total).Error; err != nil {

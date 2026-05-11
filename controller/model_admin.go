@@ -16,22 +16,24 @@ import (
 )
 
 type ModelRequest struct {
-	Id            string  `json:"id"`
-	Name          string  `json:"name"`
-	Provider      string  `json:"provider"`
-	ModelType     string  `json:"model_type"`
-	Description   string  `json:"description"`
-	ContextLen    int     `json:"context_len"`
-	InputPrice    float64 `json:"input_price"`
-	OutputPrice   float64 `json:"output_price"`
-	Capabilities  string  `json:"capabilities"`
-	Status        string  `json:"status"`
-	IconUrl       string  `json:"icon_url"`
-	SortOrder     int     `json:"sort_order"`
-	RateLimitRPM  int     `json:"rate_limit_rpm"`
-	RateLimitTPM  int     `json:"rate_limit_tpm"`
-	VisibleToTeams string  `json:"visible_to_teams"`
-	IsTrial        bool    `json:"is_trial"`
+	Id                   string  `json:"id"`
+	Name                 string  `json:"name"`
+	Provider             string  `json:"provider"`
+	ModelType            string  `json:"model_type"`
+	Description          string  `json:"description"`
+	ContextLen           int     `json:"context_len"`
+	InputPrice           float64 `json:"input_price"`
+	OutputPrice          float64 `json:"output_price"`
+	Capabilities         string  `json:"capabilities"`
+	Status               string  `json:"status"`
+	IconUrl              string  `json:"icon_url"`
+	SortOrder            int     `json:"sort_order"`
+	RateLimitRPM         int     `json:"rate_limit_rpm"`
+	RateLimitTPM         int     `json:"rate_limit_tpm"`
+	VisibleScope         string  `json:"visible_scope"`
+	VisibleToTeams       string  `json:"visible_to_teams"`
+	VisibleToDepartments string  `json:"visible_to_departments"`
+	IsTrial              bool    `json:"is_trial"`
 }
 
 type UploadLogoResponse struct {
@@ -82,23 +84,25 @@ func CreateModel(c *gin.Context) {
 	}
 
 	m := &model.ModelInfo{
-		Id:           req.Id,
-		Name:         req.Name,
-		Provider:     req.Provider,
-		ModelType:    req.ModelType,
-		Description:  req.Description,
-		ContextLen:   req.ContextLen,
-		InputPrice:   req.InputPrice,
-		OutputPrice:  req.OutputPrice,
-		Capabilities: req.Capabilities,
-		Status:       req.Status,
-		IconUrl:      req.IconUrl,
-		SortOrder:    req.SortOrder,
-		RateLimitRPM: req.RateLimitRPM,
-		RateLimitTPM: req.RateLimitTPM,
-		VisibleToTeams: req.VisibleToTeams,
-		CreatedAt:    time.Now().Unix(),
-		UpdatedAt:    time.Now().Unix(),
+		Id:                   req.Id,
+		Name:                 req.Name,
+		Provider:             req.Provider,
+		ModelType:            req.ModelType,
+		Description:          req.Description,
+		ContextLen:           req.ContextLen,
+		InputPrice:           req.InputPrice,
+		OutputPrice:          req.OutputPrice,
+		Capabilities:         req.Capabilities,
+		Status:               req.Status,
+		IconUrl:              req.IconUrl,
+		SortOrder:            req.SortOrder,
+		RateLimitRPM:         req.RateLimitRPM,
+		RateLimitTPM:         req.RateLimitTPM,
+		VisibleScope:         req.VisibleScope,
+		VisibleToTeams:       req.VisibleToTeams,
+		VisibleToDepartments: req.VisibleToDepartments,
+		CreatedAt:            time.Now().Unix(),
+		UpdatedAt:            time.Now().Unix(),
 	}
 
 	if m.Id == "" {
@@ -106,6 +110,9 @@ func CreateModel(c *gin.Context) {
 	}
 	if m.Status == "" {
 		m.Status = "active"
+	}
+	if m.VisibleScope == "" {
+		m.VisibleScope = "team"
 	}
 
 	// 自动分配 sort_order：如果未指定或为0，则分配最大值+1
@@ -206,9 +213,11 @@ func UpdateModel(c *gin.Context) {
 	if req.RateLimitTPM >= 0 {
 		m.RateLimitTPM = req.RateLimitTPM
 	}
-	if req.VisibleToTeams != "" {
-		m.VisibleToTeams = req.VisibleToTeams
+	if req.VisibleScope != "" {
+		m.VisibleScope = req.VisibleScope
 	}
+	m.VisibleToTeams = req.VisibleToTeams
+	m.VisibleToDepartments = req.VisibleToDepartments
 	m.IsTrial = req.IsTrial
 	m.UpdatedAt = time.Now().Unix()
 

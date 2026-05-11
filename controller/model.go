@@ -134,6 +134,10 @@ func ListModels(c *gin.Context) {
 
 	// Get user's team IDs for visibility filtering
 	tenantIds, _ := model.GetUserTenantIds(userId)
+	departmentIds := []int{}
+	if user, err := model.GetUserById(userId, true); err == nil && user.DepartmentId > 0 {
+		departmentIds = append(departmentIds, user.DepartmentId)
+	}
 
 	// Get all active models from model_info directly (no longer依赖 abilities 表)
 	allMarketModels, err := model.GetActiveModels("", 0, 0)
@@ -145,7 +149,7 @@ func ListModels(c *gin.Context) {
 	availableOpenAIModels := make([]OpenAIModels, 0, len(allMarketModels))
 	for _, m := range allMarketModels {
 		// Check visibility: public models (visibleToTeams="") or user's team is in visibleToTeams
-		if !isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+		if !isModelVisibleToUser(m.VisibleScope, m.VisibleToTeams, m.VisibleToDepartments, tenantIds, departmentIds) {
 			continue // Skip models not visible to user
 		}
 		if model, ok := modelsMap[m.Id]; ok {
@@ -171,9 +175,23 @@ func ListModels(c *gin.Context) {
 
 // isModelVisibleToUser checks if a model is visible to a user based on visibleToTeams
 // visibleToTeams format: ",1,2,3," or "" (empty means public)
-func isModelVisibleToUser(visibleToTeams string, tenantIds []int) bool {
+func isModelVisibleToUser(visibleScope string, visibleToTeams string, visibleToDepartments string, tenantIds []int, departmentIds []int) bool {
+	scope := strings.TrimSpace(strings.ToLower(visibleScope))
+	if scope == "public" {
+		return true
+	}
+	if scope == "department" {
+		for _, did := range departmentIds {
+			if strings.Contains(visibleToDepartments, fmt.Sprintf(",%d,", did)) {
+				return true
+			}
+		}
+		return false
+	}
+	// Backward compatibility:
+	// empty scope means team scope; empty team list means public for legacy records.
 	if visibleToTeams == "" {
-		return true // Public model
+		return true
 	}
 	for _, tid := range tenantIds {
 		if strings.Contains(visibleToTeams, fmt.Sprintf(",%d,", tid)) {
@@ -187,10 +205,14 @@ func RetrieveModel(c *gin.Context) {
 	modelId := strings.TrimPrefix(c.Param("model"), "/")
 	userId := c.GetInt(ctxkey.Id)
 	tenantIds, _ := model.GetUserTenantIds(userId)
+	departmentIds := []int{}
+	if user, err := model.GetUserById(userId, true); err == nil && user.DepartmentId > 0 {
+		departmentIds = append(departmentIds, user.DepartmentId)
+	}
 
 	// Check visibility
 	marketModel, err := model.GetModelById(modelId)
-	if err == nil && !isModelVisibleToUser(marketModel.VisibleToTeams, tenantIds) {
+	if err == nil && !isModelVisibleToUser(marketModel.VisibleScope, marketModel.VisibleToTeams, marketModel.VisibleToDepartments, tenantIds, departmentIds) {
 		c.JSON(200, gin.H{
 			"error": relaymodel.Error{
 				Message: fmt.Sprintf("The model '%s' does not exist", modelId),
@@ -222,6 +244,10 @@ func GetUserAvailableModels(c *gin.Context) {
 
 	// Get user's team IDs for visibility filtering
 	tenantIds, _ := model.GetUserTenantIds(id)
+	departmentIds := []int{}
+	if user, err := model.GetUserById(id, true); err == nil && user.DepartmentId > 0 {
+		departmentIds = append(departmentIds, user.DepartmentId)
+	}
 
 	// Get all active models from model_info directly
 	models, err := model.GetActiveModels("", 0, 0)
@@ -232,7 +258,7 @@ func GetUserAvailableModels(c *gin.Context) {
 	// Filter by visibility
 	var visibleModels []string
 	for _, m := range models {
-		if !isModelVisibleToUser(m.VisibleToTeams, tenantIds) {
+		if !isModelVisibleToUser(m.VisibleScope, m.VisibleToTeams, m.VisibleToDepartments, tenantIds, departmentIds) {
 			continue
 		}
 		visibleModels = append(visibleModels, m.Id)
