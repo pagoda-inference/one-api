@@ -1,0 +1,170 @@
+### OpenAI Responses API - Basic Tests
+
+# Variables
+@baseUrl = http://localhost:3000
+@token = your_api_token_here
+
+### Test 1: Responses API disabled (default) - should return 404
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "hello"
+}
+
+### Test 2: Non-streaming response
+# Enable Responses API first: RESPONSES_API_ENABLED=true
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Say hello in exactly 3 words"
+}
+
+> {%
+client.test("Non-streaming response works", function() {
+  if (typeof response.status !== "undefined") {
+    client.assert(response.status === 200, "Expected status 200");
+  }
+  if (typeof response.body !== "undefined" && response.body.id) {
+    client.assert(response.body.id.startsWith("resp_"), "Response ID should start with resp_");
+    client.assert(response.body.object === "response", "Object should be 'response'");
+    client.assert(response.body.status === "completed", "Status should be 'completed'");
+  }
+});
+%}
+
+### Test 3: Input as array
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": [
+    {"type": "input_text", "text": "Hello"},
+    {"type": "input_text", "text": "World"}
+  ]
+}
+
+> {%
+client.test("Array input works", function() {
+  if (typeof response.status !== "undefined") {
+    client.assert(response.status === 200, "Expected status 200");
+  }
+});
+%}
+
+### Test 4: With instructions (system prompt)
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "What is 2+2?",
+  "instructions": "You are a math tutor. Answer questions directly and concisely."
+}
+
+> {%
+client.test("Instructions work", function() {
+  if (typeof response.status !== "undefined") {
+    client.assert(response.status === 200, "Expected status 200");
+  }
+});
+%}
+
+### Test 5: With temperature
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Give me a random number between 1 and 10",
+  "temperature": 0.9
+}
+
+> {%
+client.test("Temperature parameter works", function() {
+  if (typeof response.status !== "undefined") {
+    client.assert(response.status === 200, "Expected status 200");
+  }
+});
+%}
+
+### Test 6: Max output tokens
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Write a haiku about coding",
+  "max_output_tokens": 50
+}
+
+> {%
+client.test("Max output tokens works", function() {
+  if (typeof response.status !== "undefined") {
+    client.assert(response.status === 200, "Expected status 200");
+  }
+});
+%}
+
+### Test 7: Missing model - should return error
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "input": "hello"
+}
+
+> {%
+client.test("Missing model returns error", function() {
+  if (typeof response.status !== "undefined") {
+    client.assert(response.status === 400, "Expected status 400");
+  }
+});
+%}
+
+### Test 8: Missing input - should return error
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o"
+}
+
+> {%
+client.test("Missing input returns error", function() {
+  if (typeof response.status !== "undefined") {
+    client.assert(response.status === 400, "Expected status 400");
+  }
+});
+%}
+
+### Test 9: previous_response_id not supported
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "continue the story",
+  "previous_response_id": "resp_abc123"
+}
+
+> {%
+client.test("previous_response_id not supported", function() {
+  if (typeof response.status !== "undefined") {
+    client.assert(response.status === 400, "Expected status 400");
+  }
+});
+%}

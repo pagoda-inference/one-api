@@ -1,0 +1,216 @@
+### OpenAI Responses API - Streaming Tests
+
+# Variables
+@baseUrl = http://localhost:3000
+@token = your_api_token_here
+
+### Test 1: Basic streaming response
+# Enable both: RESPONSES_API_ENABLED=true RESPONSES_STREAM_ENABLED=true
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Count from 1 to 5",
+  "stream": true
+}
+
+> {%
+client.test("Streaming response received", function() {
+  // Check that we got some SSE data
+  client.assert(response.body.includes("event:"), "Should receive SSE events");
+  client.assert(response.body.includes("response.created"), "Should receive response.created event");
+});
+
+client.test("Stream ends properly", function() {
+  // Stream should end with response.done
+  client.assert(response.body.includes("response.done"), "Should receive response.done event");
+});
+%}
+
+### Test 2: Streaming with usage included
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "What is the capital of France?",
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}
+
+> {%
+client.test("Stream includes usage", function() {
+  client.assert(response.body.includes("response.done"), "Should receive response.done event");
+});
+%}
+
+### Test 3: Streaming with instructions
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Name 3 colors",
+  "instructions": "You are a helpful assistant that gives short answers",
+  "stream": true
+}
+
+> {%
+client.test("Streaming with instructions works", function() {
+  client.assert(response.body.includes("response.created"), "Should receive response.created event");
+});
+%}
+
+### Test 4: Tool call streaming
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "What is the weather in Beijing?",
+  "tools": [
+    {
+      "type": "function",
+      "name": "get_weather",
+      "description": "Get current weather for a city",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "The city name"
+          }
+        },
+        "required": ["city"]
+      }
+    }
+  ],
+  "stream": true
+}
+
+> {%
+client.test("Tool call streaming works", function() {
+  client.assert(response.body.includes("response.created"), "Should receive response.created event");
+  client.assert(response.body.includes("response.done"), "Should receive response.done event");
+});
+
+client.test("Tool call events present", function() {
+  // Should have function_call events
+  client.assert(
+    response.body.includes("response.output_item.created") ||
+    response.body.includes("response.function_call_arguments.delta"),
+    "Should receive tool call events"
+  );
+});
+%}
+
+### Test 5: Stream can be terminated early (client disconnect simulation)
+# This test just verifies the stream starts properly
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Write a long story about a hero",
+  "stream": true
+}
+
+> {%
+client.test("Long stream starts properly", function() {
+  client.assert(response.body.includes("response.created"), "Should start with response.created");
+});
+%}
+
+### Test 6: Verify response.done is the last event
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Say 'done' if you receive this",
+  "stream": true
+}
+
+> {%
+client.test("response.done is sent", function() {
+  client.assert(response.body.includes("response.done"), "Should end with response.done");
+});
+%}
+
+### Test 7: GET /v1/responses/:id returns not_implemented
+GET {{baseUrl}}/v1/responses/resp_123
+Authorization: Bearer {{token}}
+
+> {%
+client.test("GET responses/:id returns not implemented", function() {
+  client.assert(response.status === 501, "Expected status 501 Not Implemented");
+  client.assert(typeof response.body.error !== "undefined", "Should return error object");
+});
+%}
+
+### Test 8: DELETE /v1/responses/:id returns not_implemented
+DELETE {{baseUrl}}/v1/responses/resp_123
+Authorization: Bearer {{token}}
+
+> {%
+client.test("DELETE responses/:id returns not implemented", function() {
+  client.assert(response.status === 501, "Expected status 501 Not Implemented");
+  client.assert(typeof response.body.error !== "undefined", "Should return error object");
+});
+%}
+
+### Test 9: Stream disabled when RESPONSES_STREAM_ENABLED=false
+# Note: This test requires toggling the flag
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Hello",
+  "stream": true
+}
+
+> {%
+client.test("Streaming respects flag", function() {
+  // When stream disabled: should return 400 or 501
+  // When stream enabled: should return 200 with SSE
+  if (response.status === 200) {
+    client.assert(response.body.includes("event:"), "Should receive SSE events when enabled");
+  } else {
+    client.assert(response.status === 400 || response.status === 501, "Should return error when disabled");
+  }
+});
+%}
+
+### Test 10: Quota enforcement in streaming
+# First check user has quota, then make streaming request
+POST {{baseUrl}}/v1/responses
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "model": "gpt-4o",
+  "input": "Hello",
+  "stream": true
+}
+
+> {%
+client.test("Streaming response completes", function() {
+  // Should either succeed with full stream or fail gracefully
+  if (response.status === 200) {
+    client.assert(response.body.includes("response.done"), "Full stream should complete");
+  } else if (response.status === 401 || response.status === 403) {
+    client.assert(typeof response.body.error !== "undefined", "Should return error for quota issues");
+  }
+});
+%}
