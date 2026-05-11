@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -231,10 +232,8 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Read SSE line by line
-	reader := resp.Body
-	buf := make([]byte, 0, 4096)
-	lineBuf := make([]byte, 0, 4096)
+	// Use bufio.Reader for proper SSE line parsing
+	br := bufio.NewReader(resp.Body)
 
 	for {
 		select {
@@ -246,115 +245,101 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 		default:
 		}
 
-		// Read more data if needed
-		if len(lineBuf) == 0 {
-			n, err := reader.Read(buf[:cap(buf)])
-			if err != nil {
-				if err == io.EOF {
-					// Stream ended normally
-					break
-				}
-				billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-				logResponse(ctx, meta, preConsumedQuota, nil, "interrupted", startTime, "read_error")
-				return openai.ErrorWrapper(fmt.Errorf("failed to read stream: %w", err), "stream_read_error", http.StatusInternalServerError)
+		// Read a line (SSE format: "data: {...}\n")
+		line, err := br.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				// Stream ended normally
+				break
 			}
-			lineBuf = append(lineBuf, buf[:n]...)
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			logResponse(ctx, meta, preConsumedQuota, nil, "interrupted", startTime, "read_error")
+			return openai.ErrorWrapper(fmt.Errorf("failed to read stream: %w", err), "stream_read_error", http.StatusInternalServerError)
+		}
+
+		// Trim newline characters
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" || strings.HasPrefix(line, ":") {
+			// Skip empty lines and comment lines
 			continue
 		}
 
-		// Find newline
-		for i := 0; i < len(lineBuf); i++ {
-			if lineBuf[i] == '\n' {
-				line := string(lineBuf[:i])
-				lineBuf = lineBuf[i+1:]
+		// Parse SSE data: prefix
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		dataStr := strings.TrimPrefix(line, "data:")
+		dataStr = strings.TrimSpace(dataStr)
+		if dataStr == "" || dataStr == "[DONE]" {
+			continue
+		}
 
-				// Skip empty lines and comment lines
-				if line == "" || strings.HasPrefix(line, ":") {
-					break
-				}
+		// Parse JSON
+		var chatResp relaymodel.ChatCompletionsStreamResponse
+		if err := json.Unmarshal([]byte(dataStr), &chatResp); err != nil {
+			logger.Warnf(ctx, "failed to unmarshal SSE data: %v, data: %s", err, dataStr)
+			continue
+		}
 
-				// Parse SSE data: prefix
-				if !strings.HasPrefix(line, "data:") {
-					break
-				}
-				dataStr := strings.TrimPrefix(line, "data:")
-				dataStr = strings.TrimSpace(dataStr)
-				if dataStr == "" {
-					break
-				}
-				if dataStr == "[DONE]" {
-					break
-				}
-
-				// Parse JSON
-				var chatResp relaymodel.ChatCompletionsStreamResponse
-				if err := json.Unmarshal([]byte(dataStr), &chatResp); err != nil {
-					logger.Warnf(ctx, "failed to unmarshal SSE data: %v, data: %s", err, dataStr)
-					break
-				}
-
-				// Send response.created only once (first chunk)
-				if !responseCreatedSent && chatResp.ID != "" {
-					responseID = chatResp.ID
-					createdEvent := &relaymodel.ResponsesStreamEvent{
-						Event: "response.created",
-						Data: relaymodel.ResponseCreatedEvent{
-							Response: struct {
-								ID     string `json:"id"`
-								Object string `json:"object"`
-								Status string `json:"status"`
-							}{
-								ID:     chatResp.ID,
-								Object: "response",
-								Status: "in_progress",
-							},
-						},
-					}
-					flusher.Write([]byte(openai.SSEFormatResponsesEvent(createdEvent)))
-					flusher.Flush()
-					responseCreatedSent = true
-				}
-
-				// Build and send delta events
-				events, err := openai.BuildResponsesStreamEvent(&chatResp)
-				if err != nil {
-					logger.Warnf(ctx, "BuildResponsesStreamEvent error: %v", err)
-					break
-				}
-
-				for _, event := range events {
-					// Skip response.created (already sent above)
-					if event.Event == "response.created" {
-						continue
-					}
-
-					// Track usage from done event
-					if event.Event == "response.done" {
-						if doneEvent, ok := event.Data.(relaymodel.ResponseDoneEvent); ok {
-							finalUsage = doneEvent.Response.Usage
-						}
-					}
-
-					// Track text for fallback usage calculation
-					if event.Event == "response.output_text.delta" {
-						if deltaEvent, ok := event.Data.(relaymodel.OutputTextDeltaEvent); ok {
-							accumulatedText += deltaEvent.Delta
-						}
-					}
-
-					sseLine := openai.SSEFormatResponsesEvent(event)
-					if sseLine != "" {
-						flusher.Write([]byte(sseLine))
-						flusher.Flush()
-					}
-				}
-
-				// Check for completion
-				if len(chatResp.Choices) > 0 && chatResp.Choices[0].FinishReason != nil {
-					status = *chatResp.Choices[0].FinishReason
-				}
-				break
+		// Send response.created only once (first chunk)
+		if !responseCreatedSent && chatResp.ID != "" {
+			responseID = chatResp.ID
+			createdEvent := &relaymodel.ResponsesStreamEvent{
+				Event: "response.created",
+				Data: relaymodel.ResponseCreatedEvent{
+					Response: struct {
+						ID     string `json:"id"`
+						Object string `json:"object"`
+						Status string `json:"status"`
+					}{
+						ID:     chatResp.ID,
+						Object: "response",
+						Status: "in_progress",
+					},
+				},
 			}
+			flusher.Write([]byte(openai.SSEFormatResponsesEvent(createdEvent)))
+			flusher.Flush()
+			responseCreatedSent = true
+		}
+
+		// Build and send delta events
+		events, err := openai.BuildResponsesStreamEvent(&chatResp)
+		if err != nil {
+			logger.Warnf(ctx, "BuildResponsesStreamEvent error: %v", err)
+			continue
+		}
+
+		for _, event := range events {
+			// Skip response.created (already sent above)
+			if event.Event == "response.created" {
+				continue
+			}
+
+			// Track usage from done event
+			if event.Event == "response.done" {
+				if doneEvent, ok := event.Data.(relaymodel.ResponseDoneEvent); ok {
+					finalUsage = doneEvent.Response.Usage
+				}
+			}
+
+			// Track text for fallback usage calculation
+			if event.Event == "response.output_text.delta" {
+				if deltaEvent, ok := event.Data.(relaymodel.OutputTextDeltaEvent); ok {
+					accumulatedText += deltaEvent.Delta
+				}
+			}
+
+			sseLine := openai.SSEFormatResponsesEvent(event)
+			if sseLine != "" {
+				flusher.Write([]byte(sseLine))
+				flusher.Flush()
+			}
+		}
+
+		// Check for completion
+		if len(chatResp.Choices) > 0 && chatResp.Choices[0].FinishReason != nil {
+			status = *chatResp.Choices[0].FinishReason
 		}
 	}
 
@@ -368,6 +353,11 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 				TotalTokens:      meta.PromptTokens + openai.CountTokenInput(accumulatedText, meta.ActualModelName),
 			}
 		}
+	}
+
+	// Fallback for responseID if never set
+	if responseID == "" {
+		responseID = "resp_" + meta.RequestURLPath
 	}
 
 	doneEvent := &relaymodel.ResponsesStreamEvent{
