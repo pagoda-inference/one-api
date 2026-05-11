@@ -238,9 +238,11 @@ func TryRecoverChannel(channelId int) {
 
 	cb := GetCircuitBreaker(channelId)
 	state := cb.GetState()
-	// Recover if circuit breaker is closed OR if it's already half-open
-	// (half-open means it's already testing recovery)
-	if state == StateClosed || state == StateHalfOpen {
+	// Recover when:
+	// 1) circuit breaker already closed/half-open, or
+	// 2) circuit breaker is open but probe window has elapsed (AllowRequest=true).
+	// Health checker only calls this after a successful probe, so this is safe.
+	if state == StateClosed || state == StateHalfOpen || (state == StateOpen && cb.AllowRequest()) {
 		EnableChannel(channelId, channel.Name)
 	}
 }
