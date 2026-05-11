@@ -138,7 +138,8 @@ func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl, dep
 					AvatarOrigin string `json:"avatar_origin"`
 					Avatar72     string `json:"avatar_72"`
 				} `json:"avatar"`
-				DepartmentIDs []string `json:"department_ids"`
+				DepartmentIDs     []string `json:"department_ids"`
+				OpenDepartmentIDs []string `json:"open_department_ids"`
 			} `json:"user"`
 		} `json:"data"`
 	}
@@ -150,38 +151,55 @@ func getLarkUserDetail(accessToken string, openId string) (email, avatarUrl, dep
 	}
 
 	departmentName = ""
+	fetchDept := func(deptID string, idType string) string {
+		req3, reqErr := http.NewRequest("GET", fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/departments/%s?department_id_type=%s&user_id_type=open_id", deptID, idType), nil)
+		if reqErr != nil {
+			return ""
+		}
+		req3.Header.Set("Authorization", "Bearer "+accessToken)
+		resp3, doErr := client.Do(req3)
+		if doErr != nil {
+			return ""
+		}
+		body3, _ := io.ReadAll(resp3.Body)
+		_ = resp3.Body.Close()
+		if resp3.StatusCode != http.StatusOK {
+			return ""
+		}
+		var deptResp struct {
+			Code int `json:"code"`
+			Data struct {
+				Department struct {
+					Name string `json:"name"`
+					I18N struct {
+						ZhCN string `json:"zh_cn"`
+						EnUS string `json:"en_us"`
+					} `json:"i18n_name"`
+				} `json:"department"`
+			} `json:"data"`
+		}
+		if json.Unmarshal(body3, &deptResp) != nil || deptResp.Code != 0 {
+			return ""
+		}
+		if deptResp.Data.Department.I18N.ZhCN != "" {
+			return deptResp.Data.Department.I18N.ZhCN
+		}
+		if deptResp.Data.Department.Name != "" {
+			return deptResp.Data.Department.Name
+		}
+		return deptResp.Data.Department.I18N.EnUS
+	}
 	if len(detailResp.Data.User.DepartmentIDs) > 0 {
 		deptID := detailResp.Data.User.DepartmentIDs[0]
-		req3, reqErr := http.NewRequest("GET", fmt.Sprintf("https://open.feishu.cn/open-apis/contact/v3/departments/%s?department_id_type=department_id", deptID), nil)
-		if reqErr == nil {
-			req3.Header.Set("Authorization", "Bearer "+accessToken)
-			if resp3, doErr := client.Do(req3); doErr == nil {
-				body3, _ := io.ReadAll(resp3.Body)
-				_ = resp3.Body.Close()
-				if resp3.StatusCode == http.StatusOK {
-					var deptResp struct {
-						Code int `json:"code"`
-						Data struct {
-							Department struct {
-								Name string `json:"name"`
-								I18N struct {
-									ZhCN string `json:"zh_cn"`
-									EnUS string `json:"en_us"`
-								} `json:"i18n_name"`
-							} `json:"department"`
-						} `json:"data"`
-					}
-					if json.Unmarshal(body3, &deptResp) == nil && deptResp.Code == 0 {
-						if deptResp.Data.Department.I18N.ZhCN != "" {
-							departmentName = deptResp.Data.Department.I18N.ZhCN
-						} else if deptResp.Data.Department.Name != "" {
-							departmentName = deptResp.Data.Department.Name
-						} else {
-							departmentName = deptResp.Data.Department.I18N.EnUS
-						}
-					}
-				}
-			}
+		departmentName = fetchDept(deptID, "department_id")
+		if departmentName == "" {
+			departmentName = fetchDept(deptID, "open_department_id")
+		}
+	} else if len(detailResp.Data.User.OpenDepartmentIDs) > 0 {
+		deptID := detailResp.Data.User.OpenDepartmentIDs[0]
+		departmentName = fetchDept(deptID, "open_department_id")
+		if departmentName == "" {
+			departmentName = fetchDept(deptID, "department_id")
 		}
 	}
 	avatar := detailResp.Data.User.Avatar.AvatarOrigin

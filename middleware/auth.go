@@ -67,6 +67,9 @@ func authHelper(c *gin.Context, minRole int) {
 	c.Set("username", username)
 	c.Set("role", role)
 	c.Set("id", id)
+	// Keep backward compatibility with legacy keys while also setting structured ctx keys.
+	c.Set(ctxkey.Role, role)
+	c.Set(ctxkey.Id, id)
 	c.Next()
 }
 
@@ -279,6 +282,68 @@ func AdminTokenAuth() func(c *gin.Context) {
 		c.Set(ctxkey.Role, user.Role)
 		c.Set("username", user.Username)
 
+		c.Next()
+	}
+}
+
+// RootAdminTokenAuth supports both session and token authentication for root-only admin APIs
+func RootAdminTokenAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		// Try session auth first
+		session := sessions.Default(c)
+		id := session.Get("id")
+		if id != nil {
+			role := session.Get("role")
+			if role.(int) >= model.RoleRootUser {
+				c.Set("id", id)
+				c.Set("role", role)
+				c.Set("username", session.Get("username"))
+				c.Next()
+				return
+			}
+		}
+
+		// Try token auth
+		key := c.Request.Header.Get("Authorization")
+		if key == "" {
+			abortWithMessage(c, http.StatusUnauthorized, "未提供认证令牌")
+			return
+		}
+		key = strings.TrimPrefix(key, "Bearer ")
+		key = strings.TrimPrefix(key, "sk-")
+		parts := strings.Split(key, "-")
+		key = parts[0]
+
+		token, err := model.ValidateUserToken(key)
+		if err != nil {
+			abortWithMessage(c, http.StatusUnauthorized, err.Error())
+			return
+		}
+
+		if token.Status != model.TokenStatusEnabled {
+			abortWithMessage(c, http.StatusUnauthorized, "令牌状态不可用")
+			return
+		}
+
+		user, err := model.GetUserById(token.UserId, false)
+		if err != nil || user == nil {
+			abortWithMessage(c, http.StatusUnauthorized, "用户不存在")
+			return
+		}
+		if user.Role < model.RoleRootUser {
+			abortWithMessage(c, http.StatusForbidden, "无权进行此操作，需要超级管理员权限")
+			return
+		}
+
+		userEnabled, err := model.CacheIsUserEnabled(token.UserId)
+		if err != nil || !userEnabled {
+			abortWithMessage(c, http.StatusForbidden, "用户已被封禁")
+			return
+		}
+
+		c.Set(ctxkey.Id, token.UserId)
+		c.Set(ctxkey.Role, user.Role)
+		c.Set("username", user.Username)
 		c.Next()
 	}
 }

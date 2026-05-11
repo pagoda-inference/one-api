@@ -242,3 +242,71 @@ func GetUserOrgMembershipByDepartment(userId int, departmentId int) (*UserOrgMem
 	}
 	return &item, nil
 }
+
+func HasActiveUserOrgMembershipInDepartment(userId int, departmentId int) bool {
+	var count int64
+	if err := DB.Model(&UserOrgMembership{}).
+		Where("user_id = ? AND department_id = ? AND status = ?", userId, departmentId, OrgMembershipStatusActive).
+		Count(&count).Error; err != nil {
+		return false
+	}
+	return count > 0
+}
+
+func IsDepartmentAdminInDepartment(userId int, departmentId int) bool {
+	var count int64
+	if err := DB.Model(&UserOrgMembership{}).
+		Where("user_id = ? AND department_id = ? AND role = ? AND status = ?", userId, departmentId, OrgRoleDepartmentAdmin, OrgMembershipStatusActive).
+		Count(&count).Error; err != nil {
+		return false
+	}
+	return count > 0
+}
+
+func IsTeamAdminInTenant(userId int, tenantId int) bool {
+	var count int64
+	if err := DB.Model(&UserOrgMembership{}).
+		Where("user_id = ? AND tenant_id = ? AND role = ? AND status = ?", userId, tenantId, OrgRoleTeamAdmin, OrgMembershipStatusActive).
+		Count(&count).Error; err != nil {
+		return false
+	}
+	return count > 0
+}
+
+func ListDepartmentMemberships(departmentId int) ([]*UserOrgMembership, error) {
+	var items []*UserOrgMembership
+	err := DB.Where("department_id = ? AND status = ?", departmentId, OrgMembershipStatusActive).
+		Order("id ASC").
+		Find(&items).Error
+	return items, err
+}
+
+func UpsertDepartmentMembershipRole(userId int, companyId int, departmentId int, role string, source string) error {
+	now := helper.GetTimestamp()
+	mem := &UserOrgMembership{}
+	err := DB.Where("user_id = ? AND company_id = ?", userId, companyId).First(mem).Error
+	if err != nil {
+		if err != gorm.ErrRecordNotFound {
+			return err
+		}
+		mem = &UserOrgMembership{
+			UserId:       userId,
+			CompanyId:    companyId,
+			DepartmentId: departmentId,
+			TenantId:     0,
+			Role:         role,
+			Source:       source,
+			Status:       OrgMembershipStatusActive,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		return DB.Create(mem).Error
+	}
+	return DB.Model(mem).Updates(map[string]interface{}{
+		"department_id": departmentId,
+		"role":          role,
+		"status":        OrgMembershipStatusActive,
+		"updated_at":    now,
+		"source":        source,
+	}).Error
+}

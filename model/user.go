@@ -137,6 +137,45 @@ func GetAllUsers(startIdx int, num int, order string, keyword string) (users []*
 	return users, nil
 }
 
+// GetAllUsersByDepartment returns users in a specific department (excluding deleted)
+// with optional keyword filter and pagination.
+func GetAllUsersByDepartment(departmentId int, startIdx int, num int, order string, keyword string) (users []*User, err error) {
+	users = make([]*User, 0, num)
+	query := DB.Table("users").Where("status != ? AND department_id = ?", UserStatusDeleted, departmentId)
+
+	if keyword != "" {
+		kw := "%" + keyword + "%"
+		query = query.Where("username LIKE ? OR email LIKE ? OR display_name LIKE ?", kw, kw, kw)
+	}
+
+	switch order {
+	case "quota":
+		query = query.Order("quota desc")
+	case "used_quota":
+		query = query.Order("used_quota desc")
+	case "request_count":
+		query = query.Order("request_count desc")
+	default:
+		query = query.Order("id desc")
+	}
+
+	err = query.Limit(num).Offset(startIdx).Find(&users).Error
+	return users, err
+}
+
+// GetTotalUsersCountByDepartment returns count of users in a specific department
+// (excluding deleted) with optional keyword filter.
+func GetTotalUsersCountByDepartment(departmentId int, keyword string) (int64, error) {
+	var count int64
+	query := DB.Table("users").Where("status != ? AND department_id = ?", UserStatusDeleted, departmentId)
+	if keyword != "" {
+		kw := "%" + keyword + "%"
+		query = query.Where("username LIKE ? OR email LIKE ? OR display_name LIKE ?", kw, kw, kw)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
 func CountUsers() (int64, error) {
 	var count int64
 	err := DB.Model(&User{}).Where("status != ?", UserStatusDeleted).Count(&count).Error

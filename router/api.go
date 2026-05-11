@@ -127,6 +127,7 @@ func SetApiRouter(router *gin.Engine) {
 			tenantRoute.GET("/", controller.GetMyTenants)
 			tenantRoute.GET("/:id", controller.GetTenant)
 			tenantRoute.PUT("/:id", controller.UpdateTenant)
+			tenantRoute.DELETE("/:id", controller.DeleteTenantScoped)
 			tenantRoute.GET("/:id/users", controller.GetTenantUsersAPI)
 			tenantRoute.POST("/:id/users", controller.InviteUser)
 			tenantRoute.DELETE("/:id/users/:userId", controller.RemoveUser)
@@ -155,6 +156,8 @@ func SetApiRouter(router *gin.Engine) {
 		departmentRoute.Use(middleware.UserAuth())
 		{
 			departmentRoute.GET("/:id", controller.GetDepartment)
+			departmentRoute.GET("/:id/members", controller.GetDepartmentMembers)
+			departmentRoute.PUT("/:id/members/:userId", controller.UpdateDepartmentMemberRole)
 			departmentRoute.PUT("/:id", controller.UpdateDepartment)
 			departmentRoute.DELETE("/:id", controller.DeleteDepartment)
 		}
@@ -184,8 +187,6 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.DELETE("/notifications/:id", controller.DeleteNotification)
 			adminRoute.GET("/system/health", controller.GetSystemHealth)
 			adminRoute.GET("/reports/export", controller.ExportReport)
-			adminRoute.GET("/tenants", controller.GetAllTenantsForAdmin)
-			adminRoute.DELETE("/tenants/:id", controller.DeleteTenant)
 
 			// Model management routes
 			adminRoute.GET("/models", controller.AdminListModels)
@@ -217,10 +218,15 @@ func SetApiRouter(router *gin.Engine) {
 			adminRoute.POST("/lark-apps/sync-users", controller.SyncLarkUsersProfile)
 			adminRoute.PUT("/lark-apps/:id", controller.UpdateLarkOAuthApp)
 			adminRoute.DELETE("/lark-apps/:id", controller.DeleteLarkOAuthApp)
-
-			// Org migration (root only check in controller)
-			adminRoute.GET("/org/config", controller.GetOrgMigrationConfig)
-			adminRoute.POST("/org/migrate-users", controller.MigrateOrgUsers)
+		}
+		rootAdminRoute := apiRouter.Group("/admin")
+		rootAdminRoute.Use(middleware.RootAdminTokenAuth())
+		{
+			rootAdminRoute.GET("/tenants", controller.GetAllTenantsForAdmin)
+			rootAdminRoute.DELETE("/tenants/:id", controller.DeleteTenant)
+			rootAdminRoute.POST("/lark-apps/debug-department", controller.DebugLarkDepartmentResolve)
+			rootAdminRoute.GET("/org/config", controller.GetOrgMigrationConfig)
+			rootAdminRoute.POST("/org/migrate-users", controller.MigrateOrgUsers)
 		}
 
 		optionRoute := apiRouter.Group("/option")

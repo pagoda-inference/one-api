@@ -374,16 +374,10 @@ func GetChannelHealth(c *gin.Context) {
 // GetOpsUsers handles GET /api/admin/ops/users
 func GetOpsUsers(c *gin.Context) {
 	role := c.GetInt(ctxkey.Role)
-	fmt.Printf("[DEBUG GetOpsUsers] role=%d, RoleAdminUser=%d\n", role, model.RoleAdminUser)
-	if role < model.RoleAdminUser {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Admin access required"})
-		return
-	}
-
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	offset, _ := strconv.Atoi(c.Query("offset"))
 	keyword := c.Query("keyword")
-	fmt.Printf("[DEBUG GetOpsUsers] limit=%d, offset=%d, keyword=%s\n", limit, offset, keyword)
+	tenantId, _ := strconv.Atoi(c.Query("tenant_id"))
 	if limit <= 0 || limit > 1000 {
 		limit = 1000 // Increased to allow fetching more users for search
 	}
@@ -391,17 +385,80 @@ func GetOpsUsers(c *gin.Context) {
 		offset = 0
 	}
 
-	users, err := model.GetAllUsers(offset, limit, "", keyword)
-	fmt.Printf("[DEBUG GetOpsUsers] after GetAllUsers: users=%d, err=%v\n", len(users), err)
+	userId := c.GetInt(ctxkey.Id)
+	if userId == 0 {
+		userId = c.GetInt(ctxkey.UserId)
+	}
+	if userId == 0 {
+		userId = c.GetInt("id")
+	}
+	// Non-platform-admin can only access tenant-scoped candidates when they are
+	// department/team admin for that tenant.
+	if role < model.RoleAdminUser {
+		if !(config.OrgMembershipV2Enabled && tenantId > 0) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Admin access required"})
+			return
+		}
+		isDeptAdmin, isTeamAdmin, pErr := getTenantScopePermission(userId, tenantId)
+		if pErr != nil || (!isDeptAdmin && !isTeamAdmin) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+			return
+		}
+	}
+
+	users := make([]*model.User, 0)
+	var total int64
+	var err error
+	scoped := false
+
+	// Scope restriction with tenant context:
+	// When tenant_id is provided, candidate list must be department-scoped.
+	// This prevents cross-department/global leakage in team invite flow.
+	if tenantId > 0 {
+		tenant, tErr := model.GetTenantById(tenantId)
+		if tErr != nil || tenant == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid tenant"})
+			return
+		}
+		if tenant.DepartmentId <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Tenant has no department scope"})
+			return
+		}
+		// Non-root users must be allowed in this tenant scope first.
+		if role != model.RoleRootUser {
+			if !config.OrgMembershipV2Enabled {
+				c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+				return
+			}
+			isDeptAdmin, isTeamAdmin, pErr := getTenantScopePermission(userId, tenantId)
+			if pErr != nil || (!isDeptAdmin && !isTeamAdmin && role < model.RoleAdminUser) {
+				c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+				return
+			}
+		}
+		scoped = true
+		users, err = model.GetAllUsersByDepartment(tenant.DepartmentId, offset, limit, "", keyword)
+		if err == nil {
+			total, _ = model.GetTotalUsersCountByDepartment(tenant.DepartmentId, keyword)
+		}
+	}
+
+	// Fallback to existing global behavior (root/platform admin).
+	if !scoped {
+		if role < model.RoleAdminUser {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+			return
+		}
+		users, err = model.GetAllUsers(offset, limit, "", keyword)
+		if err == nil {
+			total, _ = model.GetTotalUsersCount(keyword)
+		}
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to get users"})
 		return
 	}
-
-	// Get total count with the same keyword filter
-	total, err := model.GetTotalUsersCount(keyword)
-	if err != nil {
-		fmt.Printf("[DEBUG GetOpsUsers] failed to get total count: %v\n", err)
+	if total == 0 {
 		total = int64(len(users))
 	}
 

@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/config"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
+	"github.com/pagoda-inference/one-api/common/helper"
 	"github.com/pagoda-inference/one-api/model"
 )
 
@@ -31,24 +32,104 @@ func getTenantScopePermission(userId int, tenantId int) (isDepartmentAdmin bool,
 		return false, false, err
 	}
 	if tenant.DepartmentId > 0 {
-		deptMembership, deptErr := model.GetUserOrgMembershipByDepartment(userId, tenant.DepartmentId)
-		if deptErr == nil && deptMembership != nil && deptMembership.Role == model.OrgRoleDepartmentAdmin {
+		if model.IsDepartmentAdminInDepartment(userId, tenant.DepartmentId) {
 			return true, false, nil
 		}
 	}
-	teamMembership, teamErr := model.GetUserOrgMembershipByTenant(userId, tenantId)
-	if teamErr == nil && teamMembership != nil && teamMembership.Role == model.OrgRoleTeamAdmin {
+	if model.IsTeamAdminInTenant(userId, tenantId) {
 		return false, true, nil
 	}
 	return false, false, nil
 }
 
-func canManageTenantInV2(userId int, tenantId int) bool {
+type TenantPermissions struct {
+	CanInviteMember   bool `json:"can_invite_member"`
+	CanRemoveMember   bool `json:"can_remove_member"`
+	CanSetQuota       bool `json:"can_set_quota"`
+	CanSetMemberRole  bool `json:"can_set_member_role"`
+	CanDeleteTeam     bool `json:"can_delete_team"`
+	CanGrantTeamAdmin bool `json:"can_grant_team_admin"`
+	CanUpdateTeam     bool `json:"can_update_team"`
+	IsDepartmentAdmin bool `json:"is_department_admin"`
+	IsTeamAdmin       bool `json:"is_team_admin"`
+	IsOwner           bool `json:"is_owner"`
+}
+
+func buildTenantPermissions(userId, userRole, tenantId int, tenant *model.Tenant) TenantPermissions {
+	p := TenantPermissions{}
+	if userRole == model.RoleRootUser {
+		p.CanInviteMember = true
+		p.CanRemoveMember = true
+		p.CanSetQuota = true
+		p.CanSetMemberRole = true
+		p.CanDeleteTeam = true
+		p.CanGrantTeamAdmin = true
+		p.CanUpdateTeam = true
+		return p
+	}
+	if tenant != nil && tenant.DepartmentId > 0 {
+		p.IsDepartmentAdmin = model.IsDepartmentAdminInDepartment(userId, tenant.DepartmentId)
+	}
+	p.IsTeamAdmin = model.IsTeamAdminInTenant(userId, tenantId)
+	if role, err := model.GetUserRoleInTenant(userId, tenantId); err == nil && role != nil {
+		if role.Role == model.RoleOwner {
+			p.IsOwner = true
+		}
+		// Canonical team permission source:
+		// user_tenant_roles.role=admin means this user is team admin in that team.
+		if role.Role == model.RoleAdmin {
+			p.IsTeamAdmin = true
+		}
+	}
+	manage := p.IsDepartmentAdmin || p.IsTeamAdmin || p.IsOwner
+	// Simplified policy:
+	// - department_admin/owner manage membership lifecycle (invite/remove)
+	// - team_admin manages quota + member/viewer role only
+	p.CanInviteMember = p.IsDepartmentAdmin || p.IsOwner
+	p.CanRemoveMember = p.IsDepartmentAdmin || p.IsOwner
+	p.CanSetQuota = manage
+	p.CanSetMemberRole = p.IsDepartmentAdmin || p.IsTeamAdmin || p.IsOwner
+	p.CanDeleteTeam = p.IsDepartmentAdmin || p.IsOwner
+	p.CanGrantTeamAdmin = p.IsDepartmentAdmin || p.IsOwner
+	p.CanUpdateTeam = p.IsDepartmentAdmin || p.IsOwner
+	return p
+}
+
+func buildTenantPermissionDebug(userId, tenantId int, tenant *model.Tenant) gin.H {
+	roleVal := -1
+	if role, err := model.GetUserRoleInTenant(userId, tenantId); err == nil && role != nil {
+		roleVal = role.Role
+	}
+	deptID := 0
+	if tenant != nil {
+		deptID = tenant.DepartmentId
+	}
+	return gin.H{
+		"user_id":               userId,
+		"tenant_id":             tenantId,
+		"tenant_department_id":  deptID,
+		"is_department_admin":   deptID > 0 && model.IsDepartmentAdminInDepartment(userId, deptID),
+		"is_team_admin":         model.IsTeamAdminInTenant(userId, tenantId),
+		"is_team_admin_by_role": roleVal == model.RoleAdmin,
+		"tenant_role":           roleVal,
+	}
+}
+
+func canAccessTenantInV2(userId int, tenantId int) bool {
 	isDeptAdmin, isTeamAdmin, err := getTenantScopePermission(userId, tenantId)
 	if err != nil {
 		return false
 	}
 	return isDeptAdmin || isTeamAdmin
+}
+
+func canManageTenantInV2(userId int, tenantId int) bool {
+	tenant, err := model.GetTenantById(tenantId)
+	if err != nil {
+		return false
+	}
+	p := buildTenantPermissions(userId, model.RoleCommonUser, tenantId, tenant)
+	return p.CanInviteMember || p.CanSetMemberRole || p.CanSetQuota
 }
 
 func canManageTargetUserInV2(userId int, tenantId int, targetUserId int) bool {
@@ -63,14 +144,18 @@ func canManageTargetUserInV2(userId int, tenantId int, targetUserId int) bool {
 	if err != nil {
 		return false
 	}
-	targetUser, err := model.GetUserById(targetUserId, false)
-	if err != nil || targetUser == nil {
-		return false
-	}
 	if tenant.DepartmentId <= 0 {
 		return false
 	}
 	// Scope rule: department_admin/team_admin can only operate users in same department.
+	// Prefer org-membership table to avoid stale users.department_id.
+	if model.HasActiveUserOrgMembershipInDepartment(targetUserId, tenant.DepartmentId) {
+		return true
+	}
+	targetUser, err := model.GetUserById(targetUserId, false)
+	if err != nil || targetUser == nil {
+		return false
+	}
 	return targetUser.DepartmentId == tenant.DepartmentId
 }
 
@@ -88,7 +173,51 @@ func CreateTenant(c *gin.Context) {
 		return
 	}
 
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
+	userRole := c.GetInt(ctxkey.Role)
+
+	// Non-root users should always create teams inside their own org scope.
+	// This guarantees root can locate new teams under company/department tree.
+	if userRole != model.RoleRootUser {
+		// 1) Prefer explicit user profile assignment.
+		if (req.CompanyId <= 0 || req.DepartmentId <= 0) && userId > 0 {
+			if u, uErr := model.GetUserById(userId, true); uErr == nil && u != nil {
+				if u.CompanyId > 0 && u.DepartmentId > 0 {
+					req.CompanyId = u.CompanyId
+					req.DepartmentId = u.DepartmentId
+				}
+			}
+		}
+		// 2) Fallback to org memberships.
+		if req.CompanyId <= 0 || req.DepartmentId <= 0 {
+			if memberships, mErr := model.GetActiveUserOrgMemberships(userId); mErr == nil {
+				for _, m := range memberships {
+					if m == nil || m.CompanyId <= 0 || m.DepartmentId <= 0 {
+						continue
+					}
+					// Prefer admin-scoped membership first.
+					if m.Role == model.OrgRoleDepartmentAdmin || m.Role == model.OrgRoleTeamAdmin {
+						req.CompanyId = m.CompanyId
+						req.DepartmentId = m.DepartmentId
+						break
+					}
+					// Fallback to any active membership.
+					if req.CompanyId <= 0 || req.DepartmentId <= 0 {
+						req.CompanyId = m.CompanyId
+						req.DepartmentId = m.DepartmentId
+					}
+				}
+			}
+		}
+		// 3) Hard fail to prevent orphan teams (department_id=0) invisible in root tree.
+		if req.CompanyId <= 0 || req.DepartmentId <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"message": "Cannot resolve company/department for team creation, please sync org memberships first",
+			})
+			return
+		}
+	}
 
 	tenant := &model.Tenant{
 		Name:         req.Name,
@@ -109,6 +238,16 @@ func CreateTenant(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to add user to tenant: " + err.Error()})
 		return
 	}
+	// Keep org-membership tenant linkage for team admin lookup in org-v2.
+	if config.OrgMembershipV2Enabled && tenant.CompanyId > 0 && tenant.DepartmentId > 0 {
+		_ = model.UpsertDepartmentMembershipRole(userId, tenant.CompanyId, tenant.DepartmentId, model.OrgRoleTeamAdmin, "team_create")
+		model.DB.Model(&model.UserOrgMembership{}).
+			Where("user_id = ? AND company_id = ? AND department_id = ?", userId, tenant.CompanyId, tenant.DepartmentId).
+			Updates(map[string]interface{}{
+				"tenant_id":  tenant.Id,
+				"updated_at": helper.GetTimestamp(),
+			})
+	}
 
 	// Record audit log
 	model.RecordAuditLog(tenant.Id, userId, ActionCreateUser, "tenant", tenant.Id, "", c.ClientIP(), c.Request.UserAgent())
@@ -121,7 +260,7 @@ func CreateTenant(c *gin.Context) {
 
 // GetMyTenants handles GET /api/tenant
 func GetMyTenants(c *gin.Context) {
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 	userRole := c.GetInt(ctxkey.Role)
 
 	type TenantInfo struct {
@@ -157,6 +296,7 @@ func GetMyTenants(c *gin.Context) {
 		}
 
 		tenants = make([]*TenantInfo, 0, len(roles))
+		tenantMap := make(map[int]*TenantInfo)
 		for _, role := range roles {
 			tenant, err := model.GetTenantById(role.TenantId)
 			if err != nil {
@@ -180,6 +320,37 @@ func GetMyTenants(c *gin.Context) {
 			info.UserCount = count
 
 			tenants = append(tenants, info)
+			tenantMap[tenant.Id] = info
+		}
+
+		// department_admin should be able to view all teams under managed departments.
+		// Merge those teams into the same response (without duplicates).
+		if memberships, mErr := model.GetActiveUserOrgMemberships(userId); mErr == nil {
+			for _, m := range memberships {
+				if m == nil || m.Role != model.OrgRoleDepartmentAdmin || m.DepartmentId <= 0 {
+					continue
+				}
+				deptTeams, tErr := model.GetDepartmentTeams(m.DepartmentId)
+				if tErr != nil {
+					continue
+				}
+				for _, t := range deptTeams {
+					if t == nil {
+						continue
+					}
+					if _, exists := tenantMap[t.Id]; exists {
+						continue
+					}
+					count, _ := model.CountTenantUsers(t.Id)
+					info := &TenantInfo{
+						Tenant:    *t,
+						Role:      model.RoleAdmin, // manage-level view for department admin
+						UserCount: count,
+					}
+					tenants = append(tenants, info)
+					tenantMap[t.Id] = info
+				}
+			}
 		}
 	}
 
@@ -192,13 +363,32 @@ func GetMyTenants(c *gin.Context) {
 // GetTenant handles GET /api/tenant/:id
 func GetTenant(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
+	userRole := c.GetInt(ctxkey.Role)
 
-	// Check if user has access to this tenant
-	role, err := model.GetUserRoleInTenant(userId, tenantId)
-	if err != nil {
-		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Access denied"})
-		return
+	// Check if user has access to this tenant.
+	// root: always allowed
+	// org-v2 department/team admin: allowed even if not in user_tenant_roles
+	// legacy: must be tenant member
+	var role *model.UserTenantRole
+	var err error
+	if userRole != model.RoleRootUser {
+		role, err = model.GetUserRoleInTenant(userId, tenantId)
+		if err != nil {
+			if config.OrgMembershipV2Enabled && canAccessTenantInV2(userId, tenantId) {
+				role = &model.UserTenantRole{Role: model.RoleAdmin, Status: 1}
+			} else {
+				c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Access denied"})
+				return
+			}
+		}
+		// If user is department/team admin in org-v2, grant manage-level view in this page.
+		// This ensures member-management actions (invite/quota/role edit) are visible.
+		if config.OrgMembershipV2Enabled && canManageTenantInV2(userId, tenantId) && role != nil && role.Role > model.RoleAdmin {
+			role.Role = model.RoleAdmin
+		}
+	} else {
+		role = &model.UserTenantRole{Role: model.RoleOwner, Status: 1}
 	}
 
 	tenant, err := model.GetTenantById(tenantId)
@@ -210,13 +400,64 @@ func GetTenant(c *gin.Context) {
 	// Get quota allocations
 	allocs, _ := model.GetAllQuotaAllocations(tenantId)
 
+	perms := buildTenantPermissions(userId, userRole, tenantId, tenant)
+	canManage := perms.CanInviteMember || perms.CanSetQuota || perms.CanSetMemberRole
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
 			"tenant":            tenant,
 			"user_role":         role,
+			"can_manage":        canManage,
+			"permissions":       perms,
+			"permission_debug":  buildTenantPermissionDebug(userId, tenantId, tenant),
 			"quota_allocations": allocs,
 		},
+	})
+}
+
+// DeleteTenantScoped handles DELETE /api/tenant/:id
+// Permission:
+// - root can delete any team
+// - legacy owner can delete own team
+// - org-v2 department_admin can delete teams under same department
+func DeleteTenantScoped(c *gin.Context) {
+	tenantId, _ := strconv.Atoi(c.Param("id"))
+	userId := c.GetInt(ctxkey.Id)
+	userRole := c.GetInt(ctxkey.Role)
+
+	tenant, err := model.GetTenantById(tenantId)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Tenant not found"})
+		return
+	}
+
+	allowed := false
+	if userRole == model.RoleRootUser {
+		allowed = true
+	}
+	if !allowed {
+		if role, e := model.GetUserRoleInTenant(userId, tenantId); e == nil && role.Role == model.RoleOwner {
+			allowed = true
+		}
+	}
+	if !allowed {
+		perms := buildTenantPermissions(userId, userRole, tenantId, tenant)
+		allowed = perms.CanDeleteTeam
+	}
+	if !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+		return
+	}
+
+	if err := model.DeleteTenant(tenantId); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Failed to delete tenant: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Tenant deleted successfully",
 	})
 }
 
@@ -273,16 +514,18 @@ func DeleteTenant(c *gin.Context) {
 // UpdateTenant handles PUT /api/tenant/:id
 func UpdateTenant(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check if user has permission (owner only, or root)
-	if userRole != model.RoleRootUser {
-		role, err := model.GetUserRoleInTenant(userId, tenantId)
-		if err != nil || role.Role != model.RoleOwner {
-			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only owner can update tenant"})
-			return
-		}
+	tenant, err := model.GetTenantById(tenantId)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Tenant not found"})
+		return
+	}
+	perms := buildTenantPermissions(userId, userRole, tenantId, tenant)
+	if !perms.CanUpdateTeam {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+		return
 	}
 
 	var req struct {
@@ -296,12 +539,6 @@ func UpdateTenant(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid request"})
-		return
-	}
-
-	tenant, err := model.GetTenantById(tenantId)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Tenant not found"})
 		return
 	}
 
@@ -338,25 +575,18 @@ func UpdateTenant(c *gin.Context) {
 // InviteUser handles POST /api/tenant/:id/users
 func InviteUser(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin/owner in legacy mode, or department_admin/team_admin in org-v2 mode, or root)
-	if userRole != model.RoleRootUser {
-		allowed := false
-		if config.OrgMembershipV2Enabled {
-			allowed = canManageTenantInV2(userId, tenantId)
-		}
-		if !allowed {
-			role, err := model.GetUserRoleInTenant(userId, tenantId)
-			if err == nil && (role.Role == model.RoleOwner || role.Role == model.RoleAdmin) {
-				allowed = true
-			}
-		}
-		if !allowed {
-			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
-			return
-		}
+	tenant, tErr := model.GetTenantById(tenantId)
+	if tErr != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Tenant not found"})
+		return
+	}
+	perms := buildTenantPermissions(userId, userRole, tenantId, tenant)
+	if !perms.CanInviteMember {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+		return
 	}
 
 	var req struct {
@@ -381,10 +611,14 @@ func InviteUser(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid role"})
 		return
 	}
+	// team_admin can only invite as member/viewer.
+	if perms.IsTeamAdmin && req.Role < model.RoleMember {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Team admin can only invite member/viewer"})
+		return
+	}
 
 	// Check user count limit
 	count, _ := model.CountTenantUsers(tenantId)
-	tenant, _ := model.GetTenantById(tenantId)
 	if count >= int64(tenant.MaxUsers) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Max users reached"})
 		return
@@ -416,27 +650,21 @@ func InviteUser(c *gin.Context) {
 func RemoveUser(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	targetUserId, _ := strconv.Atoi(c.Param("userId"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin/owner in legacy mode, or department_admin/team_admin in org-v2 mode, or root)
+	tenant, tErr := model.GetTenantById(tenantId)
+	if tErr != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Tenant not found"})
+		return
+	}
+	perms := buildTenantPermissions(userId, userRole, tenantId, tenant)
+	// Check permission
 	var role *model.UserTenantRole
-	var err error
-	if userRole != model.RoleRootUser {
-		allowed := false
-		if config.OrgMembershipV2Enabled {
-			allowed = canManageTenantInV2(userId, tenantId)
-		}
-		if !allowed {
-			role, err = model.GetUserRoleInTenant(userId, tenantId)
-			if err == nil && (role.Role == model.RoleOwner || role.Role == model.RoleAdmin) {
-				allowed = true
-			}
-		}
-		if !allowed {
-			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
-			return
-		}
+	role, _ = model.GetUserRoleInTenant(userId, tenantId)
+	if !perms.CanRemoveMember {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+		return
 	}
 
 	// Cannot remove owner (unless root)
@@ -476,28 +704,18 @@ func RemoveUser(c *gin.Context) {
 func UpdateUserRole(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
 	targetUserId, _ := strconv.Atoi(c.Param("userId"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission:
-	// legacy mode: owner only
-	// org-v2 mode: owner or department_admin
-	if userRole != model.RoleRootUser {
-		allowed := false
-		role, err := model.GetUserRoleInTenant(userId, tenantId)
-		if err == nil && role.Role == model.RoleOwner {
-			allowed = true
-		}
-		if config.OrgMembershipV2Enabled && !allowed {
-			isDeptAdmin, _, depErr := getTenantScopePermission(userId, tenantId)
-			if depErr == nil && isDeptAdmin {
-				allowed = true
-			}
-		}
-		if !allowed {
-			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Only owner or department admin can update roles"})
-			return
-		}
+	tenant, tErr := model.GetTenantById(tenantId)
+	if tErr != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Tenant not found"})
+		return
+	}
+	perms := buildTenantPermissions(userId, userRole, tenantId, tenant)
+	if !perms.CanSetMemberRole {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+		return
 	}
 
 	var req struct {
@@ -516,9 +734,21 @@ func UpdateUserRole(c *gin.Context) {
 	}
 
 	// Cannot change owner role
-	if targetRole, _ := model.GetUserRoleInTenant(targetUserId, tenantId); targetRole.Role == model.RoleOwner {
+	targetRole, _ := model.GetUserRoleInTenant(targetUserId, tenantId)
+	if targetRole != nil && targetRole.Role == model.RoleOwner {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Cannot change owner role"})
 		return
+	}
+	// team_admin can only switch non-admin users between member/viewer
+	if perms.IsTeamAdmin && !perms.IsDepartmentAdmin && !perms.IsOwner && userRole != model.RoleRootUser {
+		if req.Role != model.RoleMember && req.Role != model.RoleViewer {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Team admin can only set member/viewer"})
+			return
+		}
+		if targetRole != nil && (targetRole.Role == model.RoleAdmin || targetRole.Role == model.RoleOwner) {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Team admin cannot change admin/owner role"})
+			return
+		}
 	}
 
 	if err := model.UpdateUserRoleInTenant(targetUserId, tenantId, req.Role); err != nil {
@@ -540,25 +770,18 @@ func UpdateUserRole(c *gin.Context) {
 // AllocateUserQuota handles POST /api/tenant/:id/quota
 func AllocateUserQuotaAPI(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 	userRole := c.GetInt(ctxkey.Role)
 
-	// Check permission (admin/owner in legacy mode, or department_admin/team_admin in org-v2 mode, or root)
-	if userRole != model.RoleRootUser {
-		allowed := false
-		if config.OrgMembershipV2Enabled {
-			allowed = canManageTenantInV2(userId, tenantId)
-		}
-		if !allowed {
-			role, err := model.GetUserRoleInTenant(userId, tenantId)
-			if err == nil && (role.Role == model.RoleOwner || role.Role == model.RoleAdmin) {
-				allowed = true
-			}
-		}
-		if !allowed {
-			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
-			return
-		}
+	tenant, tErr := model.GetTenantById(tenantId)
+	if tErr != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Tenant not found"})
+		return
+	}
+	perms := buildTenantPermissions(userId, userRole, tenantId, tenant)
+	if !perms.CanSetQuota {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Permission denied"})
+		return
 	}
 
 	var req struct {
@@ -585,7 +808,6 @@ func AllocateUserQuotaAPI(c *gin.Context) {
 	}
 
 	// Check if tenant has enough quota
-	tenant, _ := model.GetTenantById(tenantId)
 	if tenant.QuotaLimit > 0 && tenant.QuotaUsed+req.Quota > tenant.QuotaLimit {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Tenant quota limit exceeded"})
 		return
@@ -614,7 +836,7 @@ func AllocateUserQuotaAPI(c *gin.Context) {
 // GetAuditLogs handles GET /api/tenant/:id/audit
 func GetAuditLogsAPI(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 
 	// Check permission (admin/owner in legacy mode, or department_admin/team_admin in org-v2 mode)
 	var err error
@@ -662,7 +884,7 @@ func GetAuditLogsAPI(c *gin.Context) {
 // GetTenantUsers handles GET /api/tenant/:id/users
 func GetTenantUsersAPI(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 	userRole := c.GetInt(ctxkey.Role)
 
 	var role *model.UserTenantRole
@@ -744,7 +966,7 @@ func GetTenantUsersAPI(c *gin.Context) {
 // LeaveTenant handles POST /api/tenant/:id/leave
 func LeaveTenant(c *gin.Context) {
 	tenantId, _ := strconv.Atoi(c.Param("id"))
-	userId := c.GetInt(ctxkey.UserId)
+	userId := c.GetInt(ctxkey.Id)
 
 	role, err := model.GetUserRoleInTenant(userId, tenantId)
 	if err != nil {
