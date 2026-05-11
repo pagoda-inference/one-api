@@ -12,7 +12,7 @@ type ResponsesRequest struct {
 	Model               string                  `json:"model"`
 	Input               any                     `json:"input"` // string or []InputContent
 	Instructions        string                  `json:"instructions,omitempty"`
-	Tools               []Tool                  `json:"tools,omitempty"`
+	Tools               []ResponsesTool         `json:"tools,omitempty"`
 	ToolChoice          any                     `json:"tool_choice,omitempty"`
 	Temperature         *float64                `json:"temperature,omitempty"`
 	TopP                *float64                `json:"top_p,omitempty"`
@@ -42,13 +42,13 @@ type ResponsesStreamOptions struct {
 	IncludeUsage bool `json:"include_usage,omitempty"`
 }
 
-// Tool represents a tool that can be called during the response
-type Tool struct {
-	Type         string          `json:"type"`
-	Name         string          `json:"name,omitempty"`
-	Description  string          `json:"description,omitempty"`
-	Parameters   any             `json:"parameters,omitempty"` // JSON schema object
-	Strict       bool            `json:"strict,omitempty"`
+// ResponsesTool represents a tool in the OpenAI Responses API format
+type ResponsesTool struct {
+	Type        string `json:"type"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Parameters  any    `json:"parameters,omitempty"`
+	Strict      bool   `json:"strict,omitempty"`
 }
 
 // ReasoningConfig configures reasoning behavior
@@ -171,6 +171,39 @@ type ResponseDoneEvent struct {
 	} `json:"response"`
 }
 
+// ChatCompletionsResponse is a minimal chat-completions response shape used by responses conversion.
+type ChatCompletionsResponse struct {
+	Id      string                         `json:"id"`
+	Object  string                         `json:"object,omitempty"`
+	Created int64                          `json:"created,omitempty"`
+	Model   string                         `json:"model,omitempty"`
+	Choices []ChatCompletionsResponseChoice `json:"choices"`
+	Usage   *Usage                         `json:"usage,omitempty"`
+	Error   *Error                         `json:"error,omitempty"`
+}
+
+type ChatCompletionsResponseChoice struct {
+	Index        int     `json:"index"`
+	Message      Message `json:"message"`
+	FinishReason string  `json:"finish_reason,omitempty"`
+}
+
+// ChatCompletionsStreamResponse is a minimal stream chunk shape used by responses conversion.
+type ChatCompletionsStreamResponse struct {
+	Id      string                               `json:"id"`
+	Object  string                               `json:"object,omitempty"`
+	Created int64                                `json:"created,omitempty"`
+	Model   string                               `json:"model,omitempty"`
+	Choices []ChatCompletionsStreamResponseChoice `json:"choices"`
+	Usage   *Usage                               `json:"usage,omitempty"`
+}
+
+type ChatCompletionsStreamResponseChoice struct {
+	Index        int      `json:"index"`
+	Delta        Message  `json:"delta"`
+	FinishReason *string  `json:"finish_reason,omitempty"`
+}
+
 // ConvertResponsesToChatRequest converts an OpenAI Responses request to a unified Chat request
 func ConvertResponsesToChatRequest(req *ResponsesRequest) *GeneralOpenAIRequest {
 	// Build messages from input
@@ -230,21 +263,19 @@ func ConvertResponsesToChatRequest(req *ResponsesRequest) *GeneralOpenAIRequest 
 	}
 
 	// Convert tools
-	var tools any
+	var tools []Tool
 	if len(req.Tools) > 0 {
-		toolDefs := make([]ToolDefinition, 0, len(req.Tools))
 		for _, t := range req.Tools {
-			toolDefs = append(toolDefs, ToolDefinition{
-				Type:        t.Type,
-				Function: &FunctionDefinition{
+			tools = append(tools, Tool{
+				Id:   fmt.Sprintf("tool_%d", len(tools)),
+				Type: t.Type,
+				Function: Function{
 					Name:        t.Name,
 					Description: t.Description,
 					Parameters:  t.Parameters,
-					Strict:      t.Strict,
 				},
 			})
 		}
-		tools = toolDefs
 	}
 
 	// Build request
@@ -255,10 +286,10 @@ func ConvertResponsesToChatRequest(req *ResponsesRequest) *GeneralOpenAIRequest 
 	}
 
 	if req.Temperature != nil {
-		chatReq.Temperature = *req.Temperature
+		chatReq.Temperature = req.Temperature
 	}
 	if req.TopP != nil {
-		chatReq.TopP = *req.TopP
+		chatReq.TopP = req.TopP
 	}
 	if req.MaxOutputTokens != nil {
 		chatReq.MaxTokens = *req.MaxOutputTokens
@@ -288,7 +319,7 @@ func ConvertChatResponseToResponses(chatResp *ChatCompletionsResponse, requestID
 		Output:    []OutputItem{},
 	}
 
-	if chatResp.Error.Message != "" {
+	if chatResp.Error != nil && chatResp.Error.Message != "" {
 		response.Error = chatResp.Error
 		response.Status = "failed"
 		return response
@@ -301,7 +332,7 @@ func ConvertChatResponseToResponses(chatResp *ChatCompletionsResponse, requestID
 			Type: "message",
 			Message: &ResponseMessage{
 				Role:    choice.Message.Role,
-				Content: choice.Message.Content,
+				Content: choice.Message.StringContent(),
 			},
 		}
 
@@ -318,7 +349,7 @@ func ConvertChatResponseToResponses(chatResp *ChatCompletionsResponse, requestID
 			}
 			item.Message = &ResponseMessage{
 				Role:    "assistant",
-				Content: choice.Message.Content,
+				Content: choice.Message.StringContent(),
 			}
 		}
 
