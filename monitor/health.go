@@ -88,7 +88,9 @@ func (hc *HealthChecker) Stop() {
 	hc.wg.Wait()
 }
 
-// checkAllChannels performs health checks on all enabled channels
+// checkAllChannels performs health checks on channels that are eligible for probing:
+// - always include enabled channels
+// - include auto-disabled channels when auto-enable is enabled, so they can recover
 func (hc *HealthChecker) checkAllChannels() {
 	channels, err := hc.getEnabledChannels()
 	if err != nil {
@@ -120,10 +122,16 @@ func (hc *HealthChecker) checkAllChannels() {
 	hc.wg.Wait()
 }
 
-// getEnabledChannels retrieves all enabled channels from database
+// getEnabledChannels retrieves channels to probe from database.
+// NOTE: name kept for backward compatibility in call sites.
 func (hc *HealthChecker) getEnabledChannels() ([]*model.Channel, error) {
 	var channels []*model.Channel
-	err := model.DB.Where("status = ?", model.ChannelStatusEnabled).Find(&channels).Error
+	db := model.DB
+	if config.AutomaticEnableChannelEnabled {
+		err := db.Where("status IN ?", []int{model.ChannelStatusEnabled, model.ChannelStatusAutoDisabled}).Find(&channels).Error
+		return channels, err
+	}
+	err := db.Where("status = ?", model.ChannelStatusEnabled).Find(&channels).Error
 	return channels, err
 }
 
