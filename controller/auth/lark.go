@@ -347,6 +347,21 @@ func LarkOAuth(c *gin.Context) {
 	}
 	code := c.Query("code")
 	appId := c.Query("app_id") // Get app_id from query parameter
+	orgSource := "lark_formal"
+	if appId != "" {
+		if id, convErr := strconv.Atoi(appId); convErr == nil {
+			if app, appErr := model.GetLarkOAuthAppById(id); appErr == nil && app != nil {
+				switch app.ClientId {
+				case "cli_a95e1738cd391bda":
+					orgSource = "lark_external"
+				case "cli_a94c9bd14ef95bd2":
+					orgSource = "lark_formal"
+				default:
+					orgSource = "lark_formal"
+				}
+			}
+		}
+	}
 	larkUser, accessToken, err := getLarkUserInfoByCode(code, appId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -357,6 +372,12 @@ func LarkOAuth(c *gin.Context) {
 	}
 	// Fetch email and avatar from Lark Contact API; fallback to authen fields when unavailable
 	larkEmail, larkAvatar, larkDepartmentName, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
+	// Fallback to robust resolver chain (same as sync-users) when department is missing.
+	if strings.TrimSpace(larkDepartmentName) == "" && accessToken != "" && larkUser.getLarkID() != "" {
+		if _, _, deptName, _, _, _, detailErr := controller.GetLarkUserDetailByOpenIDForAuth(accessToken, larkUser.getLarkID()); detailErr == nil {
+			larkDepartmentName = strings.TrimSpace(deptName)
+		}
+	}
 	if larkEmail == "" {
 		larkEmail = larkUser.Email
 	}
@@ -390,8 +411,8 @@ func LarkOAuth(c *gin.Context) {
 			logger.SysLogf("LarkOAuth: failed to update user email/avatar, user_id=%d, err=%v", user.Id, err)
 		}
 		if config.OrgMembershipV2Enabled {
-			_ = model.ResolveAndUpsertUserOrg(&user, "lark")
-			_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, "lark")
+			_ = model.ResolveAndUpsertUserOrg(&user, orgSource)
+			_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, orgSource)
 		}
 	} else {
 		if config.RegisterEnabled {
@@ -414,8 +435,8 @@ func LarkOAuth(c *gin.Context) {
 				return
 			}
 			if config.OrgMembershipV2Enabled {
-				_ = model.ResolveAndUpsertUserOrg(&user, "lark")
-				_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, "lark")
+				_ = model.ResolveAndUpsertUserOrg(&user, orgSource)
+				_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, orgSource)
 			}
 		} else {
 			c.JSON(http.StatusOK, gin.H{
@@ -439,6 +460,21 @@ func LarkOAuth(c *gin.Context) {
 func LarkBind(c *gin.Context) {
 	code := c.Query("code")
 	appId := c.Query("app_id") // Get app_id from query parameter
+	orgSource := "lark_formal"
+	if appId != "" {
+		if id, convErr := strconv.Atoi(appId); convErr == nil {
+			if app, appErr := model.GetLarkOAuthAppById(id); appErr == nil && app != nil {
+				switch app.ClientId {
+				case "cli_a95e1738cd391bda":
+					orgSource = "lark_external"
+				case "cli_a94c9bd14ef95bd2":
+					orgSource = "lark_formal"
+				default:
+					orgSource = "lark_formal"
+				}
+			}
+		}
+	}
 	larkUser, accessToken, err := getLarkUserInfoByCode(code, appId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -449,6 +485,11 @@ func LarkBind(c *gin.Context) {
 	}
 	// Fetch email and avatar from Lark Contact API; fallback to authen fields when unavailable
 	larkEmail, larkAvatar, larkDepartmentName, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
+	if strings.TrimSpace(larkDepartmentName) == "" && accessToken != "" && larkUser.getLarkID() != "" {
+		if _, _, deptName, _, _, _, detailErr := controller.GetLarkUserDetailByOpenIDForAuth(accessToken, larkUser.getLarkID()); detailErr == nil {
+			larkDepartmentName = strings.TrimSpace(deptName)
+		}
+	}
 	if larkEmail == "" {
 		larkEmail = larkUser.Email
 	}
@@ -497,8 +538,8 @@ func LarkBind(c *gin.Context) {
 		return
 	}
 	if config.OrgMembershipV2Enabled {
-		_ = model.ResolveAndUpsertUserOrg(&user, "lark")
-		_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, "lark")
+		_ = model.ResolveAndUpsertUserOrg(&user, orgSource)
+		_ = model.ResolveAndUpsertUserDepartmentByName(&user, larkDepartmentName, orgSource)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

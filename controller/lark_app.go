@@ -949,6 +949,12 @@ func getLarkUserDetailByOpenID(tenantAccessToken, openID string) (string, string
 	return extractLarkContactUser(&detailResp, client, tenantAccessToken)
 }
 
+// GetLarkUserDetailByOpenIDForAuth exposes the robust department resolving chain
+// used by sync-users, so OAuth login path can reuse the same logic.
+func GetLarkUserDetailByOpenIDForAuth(tenantAccessToken, openID string) (string, string, string, string, string, string, error) {
+	return getLarkUserDetailByOpenID(tenantAccessToken, openID)
+}
+
 // DebugLarkDepartmentResolve handles POST /api/admin/lark-apps/debug-department
 func DebugLarkDepartmentResolve(c *gin.Context) {
 	role := c.GetInt(ctxkey.Role)
