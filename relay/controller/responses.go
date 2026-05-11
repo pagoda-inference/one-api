@@ -14,16 +14,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common/client"
 	"github.com/pagoda-inference/one-api/common/config"
+	"github.com/pagoda-inference/one-api/common/helper"
 	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/model"
+	"github.com/pagoda-inference/one-api/relay"
+	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
+	"github.com/pagoda-inference/one-api/relay/apitype"
+	billing "github.com/pagoda-inference/one-api/relay/billing"
+	billingratio "github.com/pagoda-inference/one-api/relay/billing/ratio"
 	relaymeta "github.com/pagoda-inference/one-api/relay/meta"
 	relaymodel "github.com/pagoda-inference/one-api/relay/model"
 	"github.com/pagoda-inference/one-api/relay/relaymode"
-	"github.com/pagoda-inference/one-api/common/helper"
-	billing "github.com/pagoda-inference/one-api/relay/billing"
-	billingratio "github.com/pagoda-inference/one-api/relay/billing/ratio"
-	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
-	"github.com/pagoda-inference/one-api/model"
-	"github.com/pagoda-inference/one-api/relay"
 )
 
 // RelayResponsesHelper handles the actual relay logic for OpenAI Responses API
@@ -104,9 +105,13 @@ func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	adaptor.Init(meta)
 
 	// Build upstream request URL in chat-completions compatibility mode.
-	// External path stays /v1/responses, but upstream currently expects chat schema.
+	// External path stays /v1/responses, but current compatibility implementation
+	// converts request body to chat schema, so upstream path must be chat/completions.
 	upstreamMeta := *meta
 	upstreamMeta.Mode = relaymode.ChatCompletions
+	if upstreamMeta.APIType == apitype.OpenAI {
+		upstreamMeta.RequestURLPath = "/v1/chat/completions"
+	}
 	requestURL, err := adaptor.GetRequestURL(&upstreamMeta)
 	if err != nil {
 		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
@@ -369,10 +374,10 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 			}
 
 			sseLine := openai.SSEFormatResponsesEvent(event)
-				if sseLine != "" {
-					_, _ = c.Writer.Write([]byte(sseLine))
-					flusher.Flush()
-				}
+			if sseLine != "" {
+				_, _ = c.Writer.Write([]byte(sseLine))
+				flusher.Flush()
+			}
 		}
 
 		// Check for completion
@@ -466,7 +471,7 @@ func estimateUsageFromResponse(chatResp relaymodel.ChatCompletionsResponse, mode
 	return &relaymodel.Usage{
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
-		TotalTokens:       int(estimatedTotal),
+		TotalTokens:      int(estimatedTotal),
 	}
 }
 
