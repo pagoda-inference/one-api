@@ -1240,7 +1240,7 @@ func runSyncLarkUsersProfile() (gin.H, error) {
 					openTry = "empty_profile"
 				}
 				attemptTrace = append(attemptTrace, fmt.Sprintf("app=%s(%s) by_open_id=%s", app.Name, app.ClientId, truncate(openTry, 140)))
-				if detailErr == nil && (email != "" || avatar != "") {
+				if detailErr == nil {
 					resolvedOrgSource = appOrgSource
 					found = true
 					break
@@ -1257,7 +1257,7 @@ func runSyncLarkUsersProfile() (gin.H, error) {
 				userTry = "empty_profile"
 			}
 			attemptTrace = append(attemptTrace, fmt.Sprintf("app=%s(%s) by_user_id=%s", app.Name, app.ClientId, truncate(userTry, 140)))
-			if detailErr == nil && (email != "" || avatar != "") {
+			if detailErr == nil {
 				resolvedOrgSource = appOrgSource
 				found = true
 				break
@@ -1272,7 +1272,7 @@ func runSyncLarkUsersProfile() (gin.H, error) {
 				fallbackTry = "empty_profile"
 			}
 			attemptTrace = append(attemptTrace, fmt.Sprintf("app=%s(%s) fallback_open_id=%s", app.Name, app.ClientId, truncate(fallbackTry, 140)))
-			if detailErr == nil && (email != "" || avatar != "") {
+			if detailErr == nil {
 				resolvedOrgSource = appOrgSource
 				found = true
 				break
