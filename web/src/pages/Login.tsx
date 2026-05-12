@@ -37,8 +37,8 @@ const Login: React.FC = () => {
       const data = await res.json()
       if (data.success && data.data && data.data.length > 0) {
         setLarkApps(data.data)
-        // If only one app, select it by default
-        if (data.data.length === 1) {
+        // Default to the first enabled app to avoid falling back to legacy hardcoded client_id.
+        if (data.data.length >= 1) {
           setSelectedAppId(data.data[0].id)
         }
       }
@@ -93,21 +93,19 @@ const Login: React.FC = () => {
       }
       const state = stateData.data
 
-      // Use selected app's client_id or fall back to legacy behavior
-      let clientId = ''
-      let redirectUri = ''
-
-      if (selectedAppId) {
-        const app = larkApps.find(a => a.id === selectedAppId)
-        if (app) {
-          clientId = app.client_id
-          redirectUri = `${window.location.origin}/oauth/lark?app_id=${selectedAppId}`
-        }
-      } else {
-        // Legacy single-app mode
-        clientId = 'cli_a94c9bd14ef95bd2' // Fallback client_id
-        redirectUri = `${window.location.origin}/oauth/lark`
+      // Always resolve app from backend-provided app list to preserve org source.
+      if (!larkApps.length) {
+        message.error(language === 'zh' ? '未配置飞书应用，请联系管理员' : 'No Lark app configured, please contact admin')
+        return
       }
+      const targetAppId = selectedAppId ?? larkApps[0].id
+      const app = larkApps.find(a => a.id === targetAppId)
+      if (!app || !app.client_id) {
+        message.error(language === 'zh' ? '飞书应用配置无效，请联系管理员' : 'Invalid Lark app config, please contact admin')
+        return
+      }
+      const clientId = app.client_id
+      const redirectUri = `${window.location.origin}/oauth/lark?app_id=${targetAppId}`
 
       const larkAuthUrl = `https://accounts.feishu.cn/open-apis/authen/v1/authorize?redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${clientId}&state=${state}`
       window.location.href = larkAuthUrl
