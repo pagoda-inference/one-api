@@ -33,7 +33,7 @@ import NotificationManage from './pages/NotificationManage'
 import BatchInference from './pages/BatchInference'
 import ChatPlayground from './pages/ChatPlayground'
 import PlaygroundConfig from './pages/PlaygroundConfig'
-import { logout, User, getUnreadNotificationCount, getNotifications, markNotificationAsRead } from './services/api'
+import { logout, User, getUnreadNotificationCount, getNotifications, markNotificationAsRead, getUserInfo } from './services/api'
 
 const { Content } = Layout
 
@@ -61,6 +61,30 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<any[]>([])
   const [notificationLoading, setNotificationLoading] = useState(false)
   const [canAccessTeams, setCanAccessTeams] = useState(false)
+
+  // Refresh user profile from backend to avoid stale localStorage after org sync/migration.
+  useEffect(() => {
+    const refreshUser = async () => {
+      if (!user) return
+      try {
+        const res = await getUserInfo()
+        const latest = res?.data?.data
+        if (latest && latest.id) {
+          setUser(latest)
+          localStorage.setItem('user_info', JSON.stringify(latest))
+        }
+      } catch (error: any) {
+        const status = error?.response?.status
+        if (status === 401 || status === 403) {
+          localStorage.removeItem('user_info')
+          localStorage.removeItem('access_token')
+          setUser(null)
+          navigate('/login')
+        }
+      }
+    }
+    refreshUser()
+  }, [navigate, user?.id])
 
   // Fetch unread notification count
   useEffect(() => {
