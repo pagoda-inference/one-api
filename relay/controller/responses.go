@@ -112,50 +112,55 @@ func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	}
 	adaptor.Init(meta)
 
-	// Primary path: passthrough to upstream responses endpoint.
-	requestURL, err := adaptor.GetRequestURL(meta)
-	if err != nil {
-		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-		return openai.ErrorWrapper(err, "get_request_url_failed", http.StatusInternalServerError)
-	}
+	useNativeResponses := shouldUseNativeResponsesUpstream(meta)
+	var resp *http.Response
+	if useNativeResponses {
+		// Primary path: passthrough to native responses endpoint.
+		requestURL, urlErr := adaptor.GetRequestURL(meta)
+		if urlErr != nil {
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			return openai.ErrorWrapper(urlErr, "get_request_url_failed", http.StatusInternalServerError)
+		}
+		req, reqErr := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(responsesBody))
+		if reqErr != nil {
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			return openai.ErrorWrapper(reqErr, "create_request_failed", http.StatusInternalServerError)
+		}
+		if err = adaptor.SetupRequestHeader(c, req, meta); err != nil {
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			return openai.ErrorWrapper(err, "setup_request_header_failed", http.StatusInternalServerError)
+		}
+		logger.Debugf(ctx, "Responses route: native passthrough, APIType=%d, ChannelType=%d, base=%s", meta.APIType, meta.ChannelType, meta.BaseURL)
+		resp, err = client.HTTPClient.Do(req)
+		if err != nil {
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			logger.Errorf(ctx, "DoRequest failed: %s", err.Error())
+			return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
+		}
 
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(responsesBody))
-	if err != nil {
-		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-		return openai.ErrorWrapper(err, "create_request_failed", http.StatusInternalServerError)
-	}
-
-	// Setup headers
-	if err := adaptor.SetupRequestHeader(c, req, meta); err != nil {
-		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-		return openai.ErrorWrapper(err, "setup_request_header_failed", http.StatusInternalServerError)
-	}
-
-	// Do request
-	logger.Debugf(ctx, "DoRequest: APIType=%d, Mode=%d, ChannelType=%d", meta.APIType, meta.Mode, meta.ChannelType)
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-		logger.Errorf(ctx, "DoRequest failed: %s", err.Error())
-		return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
-	}
-
-	// Dual-path fallback:
-	// If upstream responses endpoint is incompatible, retry with chat/completions.
-	// Keep this limited to OpenAI-compatible API type.
-	if meta.APIType == apitype.OpenAI && resp.StatusCode != http.StatusOK {
-		probeBody, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if shouldFallbackToChatCompletions(resp.StatusCode, probeBody) {
-			logger.Warnf(ctx, "responses upstream incompatible, fallback to chat/completions: status=%d body=%s", resp.StatusCode, truncateForLog(probeBody, 512))
-			resp, err = retryResponsesAsChat(ctx, c, adaptor, meta, chatBody)
-			if err != nil {
-				billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
-				return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
+		// If native path is incompatible, fallback to chat/completions.
+		if meta.APIType == apitype.OpenAI && resp.StatusCode != http.StatusOK {
+			probeBody, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			if shouldFallbackToChatCompletions(resp.StatusCode, probeBody) {
+				logger.Warnf(ctx, "responses upstream incompatible, fallback to chat/completions: status=%d body=%s", resp.StatusCode, truncateForLog(probeBody, 512))
+				resp, err = retryResponsesAsChat(ctx, c, adaptor, meta, chatBody)
+				if err != nil {
+					billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+					return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
+				}
+			} else {
+				resp.Body = io.NopCloser(bytes.NewBuffer(probeBody))
 			}
-		} else {
-			resp.Body = io.NopCloser(bytes.NewBuffer(probeBody))
+		}
+	} else {
+		// Compatibility path (same spirit as anthropic->chat conversion):
+		// non-native responses upstreams should directly use chat/completions.
+		logger.Debugf(ctx, "Responses route: direct chat fallback, APIType=%d, ChannelType=%d, base=%s", meta.APIType, meta.ChannelType, meta.BaseURL)
+		resp, err = retryResponsesAsChat(ctx, c, adaptor, meta, chatBody)
+		if err != nil {
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			return openai.ErrorWrapper(err, "do_request_failed", http.StatusInternalServerError)
 		}
 	}
 
@@ -581,6 +586,25 @@ func relayErrorHandler(resp *http.Response) *relaymodel.ErrorWithStatusCode {
 			Code:    fmt.Sprintf("status_%d", resp.StatusCode),
 		},
 		StatusCode: resp.StatusCode,
+	}
+}
+
+func shouldUseNativeResponsesUpstream(meta *relaymeta.Meta) bool {
+	if meta == nil {
+		return false
+	}
+	// Only OpenAI-compatible channels with a real responses endpoint should use native passthrough.
+	// Everything else behaves like anthropic: convert to chat/completions.
+	switch meta.APIType {
+	case apitype.OpenAI:
+		base := strings.ToLower(strings.TrimSpace(meta.BaseURL))
+		if strings.Contains(base, "api.openai.com") {
+			return true
+		}
+		// Other OpenAI-compatible providers remain chat fallback by default unless explicitly whitelisted later.
+		return false
+	default:
+		return false
 	}
 }
 
