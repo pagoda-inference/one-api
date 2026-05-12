@@ -268,6 +268,13 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 	// Ensure resp.Body is closed
 	defer resp.Body.Close()
 
+	// Upstream returned non-200 before any stream content.
+	// Surface the real upstream error instead of misleading EOF-prelude errors.
+	if resp.StatusCode != http.StatusOK {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return relayErrorHandler(resp)
+	}
+
 	// Set SSE headers
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
