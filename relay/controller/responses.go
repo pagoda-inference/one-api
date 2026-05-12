@@ -185,6 +185,32 @@ func handleResponsesNonStream(c *gin.Context, resp *http.Response, meta *relayme
 		return openai.ErrorWrapper(fmt.Errorf("failed to read response body: %w", err), "read_response_failed", http.StatusInternalServerError)
 	}
 
+	// Native Responses payload passthrough.
+	if isNativeResponsesBody(body) {
+		var nativeResp relaymodel.ResponsesResponse
+		usageSource := "exact"
+		if err := json.Unmarshal(body, &nativeResp); err != nil {
+			usageSource = "fallback"
+		}
+		if nativeResp.Usage == nil || nativeResp.Usage.TotalTokens == 0 {
+			usageSource = "fallback"
+		}
+		logResponse(ctx, meta, preConsumedQuota, nativeResp.Usage, usageSource, startTime, nativeResp.Status)
+		if nativeResp.Usage != nil && nativeResp.Usage.TotalTokens > 0 {
+			go PostConsumeQuota(ctx, nativeResp.Usage, meta, nil, inputPrice, outputPrice, groupRatio, preConsumedQuota, false)
+		} else {
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		}
+		for k, v := range resp.Header {
+			if len(v) > 0 {
+				c.Writer.Header().Set(k, v[0])
+			}
+		}
+		c.Writer.WriteHeader(resp.StatusCode)
+		_, _ = c.Writer.Write(body)
+		return nil
+	}
+
 	// Parse Chat response
 	var chatResp relaymodel.ChatCompletionsResponse
 	if err := json.Unmarshal(body, &chatResp); err != nil {
@@ -263,6 +289,32 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 
 	// Use bufio.Reader for proper SSE line parsing
 	br := bufio.NewReader(resp.Body)
+	firstEventLine := ""
+	firstDataLine := ""
+	rawPrelude := ""
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			return openai.ErrorWrapper(fmt.Errorf("failed to read stream prelude: %w", err), "stream_read_error", http.StatusInternalServerError)
+		}
+		rawPrelude += line
+		trimmed := strings.TrimRight(line, "\r\n")
+		if strings.HasPrefix(trimmed, "event:") && firstEventLine == "" {
+			firstEventLine = trimmed
+		}
+		if strings.HasPrefix(trimmed, "data:") && firstDataLine == "" {
+			firstDataLine = strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
+		}
+		// End of first SSE event block.
+		if trimmed == "" {
+			break
+		}
+	}
+	if strings.HasPrefix(firstEventLine, "event: response.") || isNativeResponsesDataLine(firstDataLine) {
+		return handleNativeResponsesStream(c, resp, br, firstEventLine, firstDataLine, meta, preConsumedQuota, inputPrice, outputPrice, groupRatio, startTime)
+	}
+	br = bufio.NewReader(io.MultiReader(strings.NewReader(rawPrelude), br))
 
 	for {
 		select {
@@ -530,6 +582,123 @@ func relayErrorHandler(resp *http.Response) *relaymodel.ErrorWithStatusCode {
 		},
 		StatusCode: resp.StatusCode,
 	}
+}
+
+func isNativeResponsesBody(body []byte) bool {
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		return false
+	}
+	obj, _ := m["object"].(string)
+	_, hasOutput := m["output"]
+	_, hasStatus := m["status"]
+	return obj == "response" || (hasOutput && hasStatus)
+}
+
+func isNativeResponsesDataLine(data string) bool {
+	if data == "" || data == "[DONE]" {
+		return false
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(data), &m); err != nil {
+		return false
+	}
+	_, hasResponse := m["response"]
+	_, hasDelta := m["delta"]
+	_, hasItemID := m["item_id"]
+	return hasResponse || (hasDelta && hasItemID)
+}
+
+func handleNativeResponsesStream(c *gin.Context, resp *http.Response, br *bufio.Reader, firstEventLine, firstDataLine string, meta *relaymeta.Meta, preConsumedQuota int64, inputPrice, outputPrice float64, groupRatio float64, startTime time.Time) *relaymodel.ErrorWithStatusCode {
+	ctx := c.Request.Context()
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		return openai.ErrorWrapper(fmt.Errorf("streaming not supported"), "stream_not_supported", http.StatusInternalServerError)
+	}
+
+	// Forward the first event block already read.
+	if firstEventLine != "" {
+		_, _ = c.Writer.Write([]byte(firstEventLine + "\n"))
+	}
+	if firstDataLine != "" {
+		_, _ = c.Writer.Write([]byte("data: " + firstDataLine + "\n\n"))
+	}
+	flusher.Flush()
+
+	var finalUsage *relaymodel.Usage
+	parseDoneUsage := func(data string) {
+		var envelope map[string]any
+		if err := json.Unmarshal([]byte(data), &envelope); err != nil {
+			return
+		}
+		respObj, _ := envelope["response"].(map[string]any)
+		if respObj == nil {
+			return
+		}
+		usageObj, _ := respObj["usage"].(map[string]any)
+		if usageObj == nil {
+			return
+		}
+		pt, _ := usageObj["prompt_tokens"].(float64)
+		ct, _ := usageObj["completion_tokens"].(float64)
+		tt, _ := usageObj["total_tokens"].(float64)
+		finalUsage = &relaymodel.Usage{
+			PromptTokens:     int(pt),
+			CompletionTokens: int(ct),
+			TotalTokens:      int(tt),
+		}
+	}
+	if strings.HasPrefix(firstEventLine, "event: response.done") && firstDataLine != "" {
+		parseDoneUsage(firstDataLine)
+	}
+
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+			return openai.ErrorWrapper(fmt.Errorf("failed to read native responses stream: %w", err), "stream_read_error", http.StatusInternalServerError)
+		}
+		trimmed := strings.TrimRight(line, "\r\n")
+		if strings.HasPrefix(trimmed, "event: response.done") {
+			_, _ = c.Writer.Write([]byte(line))
+			// done block should have following data line(s); parse on those lines.
+			for {
+				nextLine, err := br.ReadString('\n')
+				if err != nil {
+					break
+				}
+				_, _ = c.Writer.Write([]byte(nextLine))
+				nextTrimmed := strings.TrimRight(nextLine, "\r\n")
+				if strings.HasPrefix(nextTrimmed, "data:") {
+					parseDoneUsage(strings.TrimSpace(strings.TrimPrefix(nextTrimmed, "data:")))
+				}
+				if nextTrimmed == "" {
+					break
+				}
+			}
+			flusher.Flush()
+			continue
+		}
+		_, _ = c.Writer.Write([]byte(line))
+		if strings.TrimSpace(line) == "" {
+			flusher.Flush()
+		}
+	}
+
+	usageSource := "exact"
+	if finalUsage == nil || finalUsage.TotalTokens == 0 {
+		usageSource = "fallback"
+		billing.ReturnPreConsumedQuota(ctx, preConsumedQuota, meta.TokenId)
+		logResponse(ctx, meta, preConsumedQuota, nil, usageSource, startTime, "completed")
+		return nil
+	}
+	logResponse(ctx, meta, preConsumedQuota, finalUsage, usageSource, startTime, "completed")
+	go PostConsumeQuota(ctx, finalUsage, meta, nil, inputPrice, outputPrice, groupRatio, preConsumedQuota, false)
+	return nil
 }
 
 func retryResponsesAsChat(ctx context.Context, c *gin.Context, adaptor adaptoriface.Adaptor, meta *relaymeta.Meta, chatBody []byte) (*http.Response, error) {
