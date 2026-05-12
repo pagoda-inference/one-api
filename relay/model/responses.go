@@ -232,6 +232,20 @@ func ConvertResponsesToChatRequest(req *ResponsesRequest) *GeneralOpenAIRequest 
 			switch msgItem := item.(type) {
 			case map[string]any:
 				msgType, _ := msgItem["type"].(string)
+				// Responses input array may omit `type` and use message-like objects directly.
+				// Treat objects with role/content as message items for compatibility.
+				if msgType == "" {
+					if role, hasRole := msgItem["role"].(string); hasRole {
+						content := contentToString(msgItem["content"])
+						if strings.TrimSpace(content) != "" {
+							messages = append(messages, Message{
+								Role:    role,
+								Content: content,
+							})
+						}
+						continue
+					}
+				}
 				switch msgType {
 				case "input_text", "text":
 					text, _ := msgItem["text"].(string)
@@ -241,7 +255,7 @@ func ConvertResponsesToChatRequest(req *ResponsesRequest) *GeneralOpenAIRequest 
 					})
 				case "message":
 					role, _ := msgItem["role"].(string)
-					content, _ := msgItem["content"].(string)
+					content := contentToString(msgItem["content"])
 					messages = append(messages, Message{
 						Role:    role,
 						Content: content,
@@ -320,6 +334,29 @@ func ConvertResponsesToChatRequest(req *ResponsesRequest) *GeneralOpenAIRequest 
 	}
 
 	return chatReq
+}
+
+func contentToString(v any) string {
+	switch c := v.(type) {
+	case string:
+		return c
+	case []any:
+		parts := make([]string, 0, len(c))
+		for _, item := range c {
+			if m, ok := item.(map[string]any); ok {
+				t, _ := m["type"].(string)
+				switch t {
+				case "input_text", "text":
+					if s, ok := m["text"].(string); ok && strings.TrimSpace(s) != "" {
+						parts = append(parts, s)
+					}
+				}
+			}
+		}
+		return strings.TrimSpace(strings.Join(parts, "\n"))
+	default:
+		return ""
+	}
 }
 
 // ConvertChatResponseToResponses converts a unified Chat response to OpenAI Responses format
