@@ -99,6 +99,324 @@ curl -X POST https://baotaai.bedicloud.net/v1/messages \
   }'
 ```
 
+## OpenAI Responses API
+
+**POST** `/v1/responses`
+
+OpenAI 推出的新一代统一 API，支持更强的工具调用、流式输出和结构化输出。与 `/v1/chat/completions` 共用同一套渠道分发逻辑，但请求/响应格式不同。
+
+### 功能特性
+
+- **流式 SSE 事件**：严格对齐 OpenAI 官方事件名（`response.created`、`response.output_text.delta`、`response.done` 等）
+- **工具调用**：完整支持 `tools` 和 `tool_choice`，支持流式增量参数
+- **配额安全**：预扣费 + 降级回滚 + 实际用量结算
+
+### 兼容性目标
+
+| 上游 | 支持状态 | 说明 |
+|------|---------|------|
+| OpenAI官方 | ✓ 完全兼容 | 原生透传 |
+| Anthropic 原生 | ✗ 不支持 | 请使用 `/v1/messages` |
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|:-----|:-----|:----:|:-----|
+| model | string | ✓ | 模型名称 |
+| input | string / array | ✓ | 输入内容，见下方说明 |
+| instructions | string | - | 系统指令，转换为 `messages[0].system` |
+| tools | array | - | 工具定义数组 |
+| tool_choice | string / object | - | 工具选择策略 (`auto`/`required`/`none`) |
+| temperature | float | - | 采样温度 (0-2) |
+| top_p | float | - | 核采样概率 |
+| max_output_tokens | int | - | 最大生成 Token 数 |
+| stream | bool | - | 开启流式输出 (SSE) |
+| stream_options | object | - | 流式选项，`include_usage: true` 可在最后包含用量 |
+| metadata | object | - | 元数据，透传至日志 |
+| reasoning | object | - | 推理配置（`effort`/`summary`），按上游能力决定是否传递 |
+| previous_response_id | string | - | **暂不支持**，返回错误 |
+
+#### input 格式说明
+
+```json
+// 简单文本
+"input": "你好，请介绍一下自己"
+
+// 多段数组
+"input": [
+  {"type": "input_text", "text": "这张图片里有什么？"},
+  {"type": "input_image", "image_url": "https://example.com/image.jpg"}
+]
+
+// 消息数组（兼容性格式）
+"input": [
+  {"type": "message", "role": "user", "content": "Hello"}
+]
+```
+
+#### tools 格式
+
+```json
+"tools": [
+  {
+    "type": "function",
+    "name": "get_weather",
+    "description": "获取天气信息",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "city": {"type": "string", "description": "城市名称"}
+      },
+      "required": ["city"]
+    }
+  }
+]
+```
+
+### 请求示例
+
+**非流式**
+```bash
+curl https://baotaai.bedicloud.net/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "bedi/gpt-4o",
+    "input": "解释一下量子计算的基本原理",
+    "instructions": "你是一位物理学家，用通俗易懂的语言解释",
+    "temperature": 0.7,
+    "max_output_tokens": 1000
+  }'
+```
+
+**带工具调用**
+```bash
+curl https://baotaai.bedicloud.net/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "bedi/gpt-4o",
+    "input": "北京今天天气怎么样？",
+    "tools": [
+      {
+        "type": "function",
+        "name": "get_weather",
+        "description": "获取天气信息",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {"type": "string"}
+          },
+          "required": ["city"]
+        }
+      }
+    ],
+    "tool_choice": "auto"
+  }'
+```
+
+**流式**
+```bash
+curl -N https://baotaai.bedicloud.net/v1/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d '{
+    "model": "bedi/gpt-4o",
+    "input": "讲一个关于AI的笑话",
+    "stream": true,
+    "stream_options": {"include_usage": true}
+  }'
+```
+
+### 响应结构
+
+#### 非流式响应
+
+**文本消息**
+```json
+{
+  "id": "resp_abc123xyz",
+  "object": "response",
+  "created_at": 1704067200,
+  "status": "completed",
+  "output": [
+    {
+      "id": "resp_item_0",
+      "type": "message",
+      "message": {
+        "role": "assistant",
+        "content": "量子计算是一种利用量子力学原理进行信息处理的计算方式..."
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 150,
+    "total_tokens": 200
+  }
+}
+```
+
+**工具调用**
+```json
+{
+  "id": "resp_abc123xyz",
+  "object": "response",
+  "created_at": 1704067200,
+  "status": "completed",
+  "output": [
+    {
+      "id": "resp_item_0",
+      "type": "function_call",
+      "function_call": {
+        "id": "call_abc123",
+        "type": "function_call",
+        "name": "get_weather",
+        "arguments": "{\"city\":\"北京\"}"
+      },
+      "message": {
+        "role": "assistant",
+        "content": ""
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 30,
+    "total_tokens": 80
+  }
+}
+```
+
+**错误响应**
+```json
+{
+  "id": "resp_abc123xyz",
+  "object": "response",
+  "created_at": 1704067200,
+  "status": "failed",
+  "error": {
+    "type": "invalid_request_error",
+    "message": "model is required"
+  }
+}
+```
+
+### 流式 SSE 事件
+
+流式响应使用 Server-Sent Events (SSE)，每个事件格式为：
+
+```
+event: <事件名>
+data: <JSON数据>
+
+```
+
+#### 事件类型
+
+| 事件名 | 说明 | 关键字段 |
+|--------|------|---------|
+| `response.created` | 流开始 | `id`, `object`, `status` |
+| `response.output_item.created` | 输出项创建 | `id`, `type` |
+| `response.output_text.delta` | 文本增量 | `item_id`, `delta` |
+| `response.output_text.done` | 文本输出完成 | `item_id`, `text` |
+| `response.function_call_arguments.delta` | 工具参数增量 | `item_id`, `delta` |
+| `response.function_call_arguments.done` | 工具调用完成 | `item` |
+| `response.done` | **流结束（必须发送）** | `usage`, `status` |
+
+#### 流式响应示例
+
+```
+event: response.created
+data: {"response":{"id":"resp_abc123","object":"response","status":"in_progress"}}
+
+event: response.output_item.created
+data: {"item":{"id":"resp_item_0","type":"message"}}
+
+event: response.output_text.delta
+data: {"item_id":"resp_item_0","output_index":0,"content_index":0,"delta":"量子"}
+
+event: response.output_text.delta
+data: {"item_id":"resp_item_0","output_index":0,"content_index":0,"delta":"计算"}
+
+event: response.output_text.done
+data: {"item":{"id":"resp_item_0","type":"message","text":"量子计算是一种..."}}
+
+event: response.done
+data: {"response":{"id":"resp_abc123","object":"response","status":"completed","usage":{"prompt_tokens":50,"completion_tokens":150,"total_tokens":200}}}
+```
+
+
+### 工具调用说明
+
+#### 非流式工具调用流程
+
+1. 客户端发送带 `tools` 的请求
+2. 服务器返回 `type: "function_call"` 的 output item
+3. 客户端执行工具，携带 `previous_response_id` 继续对话（**暂不支持**）
+
+#### 流式工具调用流程
+
+```
+response.created
+  └─> response.output_item.created (type: "function_call")
+        └─> response.function_call_arguments.delta (增量参数)
+              └─> ... (多个 delta 事件)
+                    └─> response.function_call_arguments.done
+                          └─> response.done
+```
+
+### 配额与计费
+
+#### 配额生命周期
+
+1. **预扣费 (Pre-consume)**：请求进入时按 `max_output_tokens` 预估用量扣减配额
+2. **降级回滚 (Rollback)**：若发生降级或错误，预扣费用返还
+3. **实际结算 (Post-consume)**：响应完成后按实际 `usage` 精算，多退少补
+
+#### 用量来源
+
+| 来源 | 说明 |
+|------|------|
+| `exact` | 上游返回实际用量，按真实 token 数结算 |
+| `fallback` | 上游未返回用量，按 `ResponsesUsageFallbackMultiplier` 系数估算 |
+
+### 与其他接口的关系
+
+| 接口 | 适用场景 | 工具调用 | 流式输出 |
+|------|---------|---------|---------|
+| `/v1/responses` | OpenAI 新 API，结构化输出强 | ✓ 完整支持 | ✓ SSE |
+| `/v1/chat/completions` | 通用对话，兼容性最好 | ✓ Function calling | ✓ SSE |
+| `/anthropic/v1/messages` | Claude 原生接口 | ✗ 不支持 | ✓ SSE |
+
+### 已知限制
+
+- `previous_response_id` 暂不支持，连续对话功能待实现
+- 多模态输入（图片）暂不支持完整透传，降级为文本描述
+- `reasoning` 配置按 `ResponsesPassReasoning` 开关控制，默认不传递
+- 部分上游（如 vLLM）不支持 Responses API，会自动降级
+
+### 故障排查
+
+**问题：请求返回 400 "input is required"**
+```
+原因：上游不支持 /v1/responses 格式
+解决：平台会自动降级，无需人工干预。若未自动降级，请检查上游版本。
+```
+
+**问题：流式响应卡住不结束**
+```
+原因：上游未发送 response.done 事件
+解决：平台实现了超时保护，超时后强制结束流并结算配额。
+```
+
+**问题：工具调用参数不完整**
+```
+原因：流式传输中增量参数未完整接收
+解决：确保客户端正确处理 response.function_call_arguments.delta 事件，
+      并在 response.function_call_arguments.done 后再解析完整参数。
+```
+
 ## 文本嵌入
 
 **POST** `/v1/embeddings`
