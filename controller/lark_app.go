@@ -967,6 +967,20 @@ func GetLarkUserDetailByOpenIDForAuth(tenantAccessToken, openID string) (string,
 	return getLarkUserDetailByOpenID(tenantAccessToken, openID)
 }
 
+// GetLarkUserDetailForAuthByAppID resolves tenant token from app_id and fetches
+// user detail using app-scoped open_id. This is required for multi-app org routing.
+func GetLarkUserDetailForAuthByAppID(appID int, openID string) (string, string, string, string, string, string, error) {
+	app, err := model.GetLarkOAuthAppById(appID)
+	if err != nil || app == nil {
+		return "", "", "", "none", "", "", fmt.Errorf("lark app not found: %d", appID)
+	}
+	tenantToken, err := getLarkTenantAccessToken(app)
+	if err != nil {
+		return "", "", "", "none", "", "", err
+	}
+	return getLarkUserDetailByOpenID(tenantToken, openID)
+}
+
 // DebugLarkDepartmentResolve handles POST /api/admin/lark-apps/debug-department
 func DebugLarkDepartmentResolve(c *gin.Context) {
 	role := c.GetInt(ctxkey.Role)

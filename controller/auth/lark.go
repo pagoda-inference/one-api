@@ -373,10 +373,18 @@ func LarkOAuth(c *gin.Context) {
 	}
 	// Fetch email and avatar from Lark Contact API; fallback to authen fields when unavailable
 	larkEmail, larkAvatar, larkDepartmentName, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
-	// Fallback to robust resolver chain (same as sync-users) when department is missing.
-	if strings.TrimSpace(larkDepartmentName) == "" && accessToken != "" && larkUser.getLarkID() != "" {
-		if _, _, deptName, _, _, _, detailErr := controller.GetLarkUserDetailByOpenIDForAuth(accessToken, larkUser.getLarkID()); detailErr == nil {
-			larkDepartmentName = strings.TrimSpace(deptName)
+	// Fallback to app-scoped tenant token resolver when department is missing.
+	if strings.TrimSpace(larkDepartmentName) == "" && larkUser.getLarkID() != "" && appId != "" {
+		if appID, convErr := strconv.Atoi(appId); convErr == nil {
+			if email, avatar, deptName, _, _, _, detailErr := controller.GetLarkUserDetailForAuthByAppID(appID, larkUser.getLarkID()); detailErr == nil {
+				if larkEmail == "" {
+					larkEmail = strings.TrimSpace(email)
+				}
+				if larkAvatar == "" {
+					larkAvatar = strings.TrimSpace(avatar)
+				}
+				larkDepartmentName = strings.TrimSpace(deptName)
+			}
 		}
 	}
 	if larkEmail == "" {
@@ -486,9 +494,17 @@ func LarkBind(c *gin.Context) {
 	}
 	// Fetch email and avatar from Lark Contact API; fallback to authen fields when unavailable
 	larkEmail, larkAvatar, larkDepartmentName, _ := getLarkUserDetail(accessToken, larkUser.getLarkID())
-	if strings.TrimSpace(larkDepartmentName) == "" && accessToken != "" && larkUser.getLarkID() != "" {
-		if _, _, deptName, _, _, _, detailErr := controller.GetLarkUserDetailByOpenIDForAuth(accessToken, larkUser.getLarkID()); detailErr == nil {
-			larkDepartmentName = strings.TrimSpace(deptName)
+	if strings.TrimSpace(larkDepartmentName) == "" && larkUser.getLarkID() != "" && appId != "" {
+		if appID, convErr := strconv.Atoi(appId); convErr == nil {
+			if email, avatar, deptName, _, _, _, detailErr := controller.GetLarkUserDetailForAuthByAppID(appID, larkUser.getLarkID()); detailErr == nil {
+				if larkEmail == "" {
+					larkEmail = strings.TrimSpace(email)
+				}
+				if larkAvatar == "" {
+					larkAvatar = strings.TrimSpace(avatar)
+				}
+				larkDepartmentName = strings.TrimSpace(deptName)
+			}
 		}
 	}
 	if larkEmail == "" {
