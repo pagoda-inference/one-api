@@ -112,7 +112,7 @@ func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
 	}
 	adaptor.Init(meta)
 
-	useNativeResponses := shouldUseNativeResponsesUpstream(meta)
+	useNativeResponses := shouldUseNativeResponsesUpstream(meta) && !config.ResponsesStrictCompat
 	var resp *http.Response
 	if useNativeResponses {
 		// Primary path: passthrough to native responses endpoint.
@@ -293,6 +293,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 	var status string
 	var responseCreatedSent bool
 	var responseID string
+	sentOutputItems := map[string]bool{}
 	requestID := c.GetString(helper.RequestIdKey)
 
 	// Create context for cancellation
@@ -442,8 +443,21 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 				continue
 			}
 
-			// Track usage from done event
-			if event.Event == "response.done" {
+			// Deduplicate output_item.added for the same item id within one stream.
+			if event.Event == "response.output_item.added" {
+				if itemEvent, ok := event.Data.(relaymodel.OutputItemCreatedEvent); ok {
+					itemID := strings.TrimSpace(itemEvent.Item.ID)
+					if itemID != "" {
+						if sentOutputItems[itemID] {
+							continue
+						}
+						sentOutputItems[itemID] = true
+					}
+				}
+			}
+
+			// Track usage from completion events
+			if event.Event == "response.done" || event.Event == "response.completed" {
 				if doneEvent, ok := event.Data.(relaymodel.ResponseDoneEvent); ok {
 					finalUsage = doneEvent.Response.Usage
 				}
@@ -469,7 +483,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 		}
 	}
 
-	// Ensure response.done is always sent
+	// Ensure response.completed is always sent
 	if finalUsage == nil {
 		// Use fallback usage if no usage from upstream
 		if accumulatedText != "" {
@@ -491,7 +505,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 	}
 
 	doneEvent := &relaymodel.ResponsesStreamEvent{
-		Event: "response.done",
+		Event: "response.completed",
 		Data: relaymodel.ResponseDoneEvent{
 			Response: struct {
 				ID     string            `json:"id"`
@@ -680,7 +694,7 @@ func handleNativeResponsesStream(c *gin.Context, resp *http.Response, br *bufio.
 			TotalTokens:      int(tt),
 		}
 	}
-	if strings.HasPrefix(firstEventLine, "event: response.done") && firstDataLine != "" {
+	if (strings.HasPrefix(firstEventLine, "event: response.done") || strings.HasPrefix(firstEventLine, "event: response.completed")) && firstDataLine != "" {
 		parseDoneUsage(firstDataLine)
 	}
 
@@ -694,7 +708,7 @@ func handleNativeResponsesStream(c *gin.Context, resp *http.Response, br *bufio.
 			return openai.ErrorWrapper(fmt.Errorf("failed to read native responses stream: %w", err), "stream_read_error", http.StatusInternalServerError)
 		}
 		trimmed := strings.TrimRight(line, "\r\n")
-		if strings.HasPrefix(trimmed, "event: response.done") {
+		if strings.HasPrefix(trimmed, "event: response.done") || strings.HasPrefix(trimmed, "event: response.completed") {
 			_, _ = c.Writer.Write([]byte(line))
 			// done block should have following data line(s); parse on those lines.
 			for {
