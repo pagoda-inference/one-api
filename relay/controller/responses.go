@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +29,29 @@ import (
 	relaymodel "github.com/pagoda-inference/one-api/relay/model"
 	"github.com/pagoda-inference/one-api/relay/relaymode"
 )
+
+var fallbackToolIDRegex = regexp.MustCompile(`^call_\d+_(\d+)$`)
+var functionStyleToolIDRegex = regexp.MustCompile(`^functions\.[^:]+:(\d+)$`)
+
+func parseToolPosFromItemID(itemID string) (int, bool) {
+	id := strings.TrimSpace(itemID)
+	if id == "" {
+		return 0, false
+	}
+	if m := fallbackToolIDRegex.FindStringSubmatch(id); len(m) == 2 {
+		n, err := strconv.Atoi(m[1])
+		if err == nil {
+			return n, true
+		}
+	}
+	if m := functionStyleToolIDRegex.FindStringSubmatch(id); len(m) == 2 {
+		n, err := strconv.Atoi(m[1])
+		if err == nil {
+			return n, true
+		}
+	}
+	return 0, false
+}
 
 // RelayResponsesHelper handles the actual relay logic for OpenAI Responses API
 func RelayResponsesHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode {
@@ -294,6 +319,7 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 	var responseCreatedSent bool
 	var responseID string
 	sentOutputItems := map[string]bool{}
+	canonicalToolIDByPos := map[int]string{}
 	requestID := c.GetString(helper.RequestIdKey)
 
 	// Create context for cancellation
@@ -441,6 +467,41 @@ func handleResponsesStream(c *gin.Context, resp *http.Response, meta *relaymeta.
 			// Skip response.created (already sent above)
 			if event.Event == "response.created" {
 				continue
+			}
+
+			// Canonicalize tool call item IDs to avoid mixed IDs like:
+			// "functions.get_weather:0" and "call_0_0" in the same stream.
+			if event.Event == "response.output_item.added" {
+				if itemEvent, ok := event.Data.(relaymodel.OutputItemCreatedEvent); ok {
+					itemID := strings.TrimSpace(itemEvent.Item.ID)
+					if pos, ok := parseToolPosFromItemID(itemID); ok {
+						if strings.HasPrefix(itemID, "call_") {
+							if canonical := canonicalToolIDByPos[pos]; canonical != "" && canonical != itemID {
+								itemEvent.Item.ID = canonical
+								if itemEvent.Item.FunctionCall != nil {
+									itemEvent.Item.FunctionCall.ID = canonical
+								}
+								event.Data = itemEvent
+								itemID = canonical
+							}
+						} else {
+							if canonicalToolIDByPos[pos] == "" {
+								canonicalToolIDByPos[pos] = itemID
+							}
+						}
+					}
+				}
+			}
+			if event.Event == "response.function_call_arguments.delta" {
+				if deltaEvent, ok := event.Data.(relaymodel.FunctionCallArgumentsDeltaEvent); ok {
+					itemID := strings.TrimSpace(deltaEvent.ItemID)
+					if pos, ok := parseToolPosFromItemID(itemID); ok && strings.HasPrefix(itemID, "call_") {
+						if canonical := canonicalToolIDByPos[pos]; canonical != "" && canonical != itemID {
+							deltaEvent.ItemID = canonical
+							event.Data = deltaEvent
+						}
+					}
+				}
 			}
 
 			// Deduplicate output_item.added for the same item id within one stream.

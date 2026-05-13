@@ -26,6 +26,22 @@ func anyToString(v any) string {
 	}
 }
 
+func stableToolCallID(choiceIndex int, tc relaymodel.Tool, toolPos int) string {
+	id := strings.TrimSpace(tc.Id)
+	if id != "" {
+		return id
+	}
+	return fmt.Sprintf("call_%d_%d", choiceIndex, toolPos)
+}
+
+func stableToolName(tc relaymodel.Tool) string {
+	name := strings.TrimSpace(tc.Function.Name)
+	if name != "" {
+		return name
+	}
+	return "function_call"
+}
+
 // ConvertResponsesRequest converts an OpenAI Responses request to a format suitable for upstream
 func ConvertResponsesRequest(req *relaymodel.ResponsesRequest) (*relaymodel.GeneralOpenAIRequest, error) {
 	chatReq := relaymodel.ConvertResponsesToChatRequest(req)
@@ -89,11 +105,12 @@ func ConvertChatStreamResponseToResponsesEvent(chatResp *relaymodel.ChatCompleti
 	// Handle tool call delta
 	if len(choice.Delta.ToolCalls) > 0 {
 		tc := choice.Delta.ToolCalls[0]
+		toolID := stableToolCallID(choice.Index, tc, 0)
 		if argsText := anyToString(tc.Function.Arguments); argsText != "" {
 			event := &relaymodel.ResponsesStreamEvent{
 				Event: "response.function_call_arguments.delta",
 				Data: relaymodel.FunctionCallArgumentsDeltaEvent{
-					ItemID: tc.Id,
+					ItemID: toolID,
 					Delta:  argsText,
 				},
 			}
@@ -128,20 +145,22 @@ func BuildResponsesStreamEvent(chatResp *relaymodel.ChatCompletionsStreamRespons
 		// Tool call delta
 		if len(choice.Delta.ToolCalls) > 0 {
 			tc := choice.Delta.ToolCalls[0]
-			// First, output_item_created event
+			toolID := stableToolCallID(choice.Index, tc, 0)
+			// First, output_item_added event (OpenAI Responses event naming).
 			itemCreatedEvent := &relaymodel.ResponsesStreamEvent{
-				Event: "response.output_item.created",
+				Event: "response.output_item.added",
 				Data: relaymodel.OutputItemCreatedEvent{
 					Item: struct {
-						ID           string `json:"id"`
-						Type         string `json:"type"`
+						ID           string                   `json:"id"`
+						Type         string                   `json:"type"`
 						FunctionCall *relaymodel.FunctionCall `json:"function_call,omitempty"`
 					}{
-						ID:   tc.Id,
+						ID:   toolID,
 						Type: "function_call",
 						FunctionCall: &relaymodel.FunctionCall{
-							ID:   tc.Id,
+							ID:   toolID,
 							Type: "function_call",
+							Name: stableToolName(tc),
 						},
 					},
 				},
@@ -153,7 +172,7 @@ func BuildResponsesStreamEvent(chatResp *relaymodel.ChatCompletionsStreamRespons
 				argsDeltaEvent := &relaymodel.ResponsesStreamEvent{
 					Event: "response.function_call_arguments.delta",
 					Data: relaymodel.FunctionCallArgumentsDeltaEvent{
-						ItemID: tc.Id,
+						ItemID: toolID,
 						Delta:  argsText,
 					},
 				}
