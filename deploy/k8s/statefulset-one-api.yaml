@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: one-api
+  namespace: baota
+spec:
+  serviceName: one-api-headless
+  replicas: 1
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: OnDelete
+  selector:
+    matchLabels:
+      app: one-api
+  template:
+    metadata:
+      labels:
+        app: one-api
+    spec:
+      containers:
+      - env:
+        - name: SQL_DSN
+          valueFrom:
+            secretKeyRef:
+              key: SQL_DSN
+              name: one-api-secret
+              optional: false
+        - name: REDIS_CONN_STRING
+          valueFrom:
+            secretKeyRef:
+              key: REDIS_CONN_STRING
+              name: one-api-secret
+              optional: false
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: SESSION_SECRET
+              name: one-api-secret
+              optional: false
+        - name: LarkClientSecret
+          valueFrom:
+            secretKeyRef:
+              key: LarkClientSecret
+              name: one-api-secret
+              optional: false
+        - name: TIKTOKEN_CACHE_DIR
+          value: /data/tiktoken_cache
+        - name: DEBUG
+          value: "true"
+        envFrom:
+        - configMapRef:
+            name: one-api-config
+        image: 10.1.112.238:8443/baota/one-api:latest
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /api/status
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: one-api
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 20
+          httpGet:
+            path: /api/status
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /data
+          name: data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: one-api-data
+  volumeClaimTemplates: []

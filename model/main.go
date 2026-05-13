@@ -241,6 +241,10 @@ func migrateDB() error {
 	if err = DB.AutoMigrate(&UserOrgMembership{}); err != nil {
 		return err
 	}
+	// Video generation tasks
+	if err = DB.AutoMigrate(&VideoGenerationTask{}); err != nil {
+		return err
+	}
 	return nil
 }
 

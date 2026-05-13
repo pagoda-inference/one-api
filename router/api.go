@@ -53,6 +53,16 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/dashboard", middleware.UserAuth(), controller.GetUserDashboardV2)
 		apiRouter.GET("/usage/detail", middleware.UserAuth(), controller.GetUsageDetail)
 
+		// Video generation task APIs (token-auth, OpenAI-style key)
+		videoTaskRoute := apiRouter.Group("/v1/contents/generations/tasks")
+		videoTaskRoute.Use(middleware.TokenAuth(), middleware.TokenRateLimitMiddleware(), middleware.TenantRateLimitMiddleware())
+		{
+			videoTaskRoute.POST("", controller.CreateVideoGenerationTask)
+			videoTaskRoute.GET("/:id", controller.GetVideoGenerationTask)
+			videoTaskRoute.GET("", controller.ListVideoGenerationTasks)
+			videoTaskRoute.DELETE("/:id", controller.DeleteVideoGenerationTask)
+		}
+
 		userRoute := apiRouter.Group("/user")
 		{
 			userRoute.POST("/register", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.Register)

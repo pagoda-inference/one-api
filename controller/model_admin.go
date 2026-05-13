@@ -87,7 +87,7 @@ func CreateModel(c *gin.Context) {
 		Id:                   req.Id,
 		Name:                 req.Name,
 		Provider:             req.Provider,
-		ModelType:            req.ModelType,
+		ModelType:            strings.ToLower(strings.TrimSpace(req.ModelType)),
 		Description:          req.Description,
 		ContextLen:           req.ContextLen,
 		InputPrice:           req.InputPrice,
@@ -184,7 +184,7 @@ func UpdateModel(c *gin.Context) {
 		m.Provider = req.Provider
 	}
 	if req.ModelType != "" {
-		m.ModelType = req.ModelType
+		m.ModelType = strings.ToLower(strings.TrimSpace(req.ModelType))
 	}
 	if req.Description != "" {
 		m.Description = req.Description
@@ -378,7 +378,9 @@ func UploadModelLogo(c *gin.Context) {
 func GetModelTypes(c *gin.Context) {
 	types := []gin.H{
 		{"value": "chat", "label": "对话模型"},
-		{"value": "vlm", "label": "视觉模型"},
+		{"value": "image", "label": "图像模型"},
+		{"value": "audio", "label": "音频模型"},
+		{"value": "video", "label": "视频模型"},
 		{"value": "embedding", "label": "Embedding"},
 		{"value": "reranker", "label": "Reranker"},
 		{"value": "ocr", "label": "OCR"},

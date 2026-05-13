@@ -56,6 +56,8 @@ var ChannelBaseURLs = []string{
 	"",                                          // 50
 
 	"https://generativelanguage.googleapis.com/v1beta/openai/", // 51
+	"https://ark.cn-beijing.volces.com",                        // 52
+	"",                                                         // 53
 }
 
 // BaseURLByType returns a safe base URL for a channel type.

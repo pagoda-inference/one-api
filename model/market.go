@@ -118,7 +118,6 @@ const (
 	ModelTypeImage     = "image"
 	ModelTypeAudio     = "audio"
 	ModelTypeVideo     = "video"
-	ModelTypeVLM       = "vlm"
 	ModelTypeReranker  = "reranker"
 	ModelTypeOCR       = "ocr"
 	ModelTypeOther     = "other"
@@ -156,12 +155,14 @@ func (m *ModelInfo) Create() error {
 	if m.VisibleScope == "" {
 		m.VisibleScope = "team"
 	}
+	m.ModelType = strings.ToLower(strings.TrimSpace(m.ModelType))
 	return DB.Create(m).Error
 }
 
 // Update updates a model info record
 func (m *ModelInfo) Update() error {
 	m.UpdatedAt = helper.GetTimestamp()
+	m.ModelType = strings.ToLower(strings.TrimSpace(m.ModelType))
 	return DB.Save(m).Error
 }
 
@@ -216,7 +217,7 @@ func GetAllModels(modelType string, limit int, offset int) ([]*ModelInfo, error)
 	var models []*ModelInfo
 	query := DB
 	if modelType != "" {
-		query = query.Where("model_type = ?", modelType)
+		query = query.Where("model_type = ?", strings.ToLower(strings.TrimSpace(modelType)))
 	}
 	if limit <= 0 {
 		limit = 100
@@ -230,7 +231,7 @@ func GetActiveModels(modelType string, limit int, offset int) ([]*ModelInfo, err
 	var models []*ModelInfo
 	query := DB.Where("status = ?", ModelStatusActive)
 	if modelType != "" {
-		query = query.Where("model_type = ?", modelType)
+		query = query.Where("model_type = ?", strings.ToLower(strings.TrimSpace(modelType)))
 	}
 	if limit <= 0 {
 		limit = 100
@@ -248,7 +249,7 @@ func SearchModels(keyword string, modelType string, limit int, offset int) ([]*M
 			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
 	}
 	if modelType != "" {
-		query = query.Where("model_type = ?", modelType)
+		query = query.Where("model_type = ?", strings.ToLower(strings.TrimSpace(modelType)))
 	}
 	if limit <= 0 {
 		limit = 100
@@ -269,7 +270,7 @@ func GetVisibleModelsForTenants(tenantIds []int, departmentIds []int, keyword st
 			"%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
 	}
 	if modelType != "" {
-		query = query.Where("model_type = ?", modelType)
+		query = query.Where("model_type = ?", strings.ToLower(strings.TrimSpace(modelType)))
 	}
 
 	// Visibility filter by scope:
@@ -320,7 +321,7 @@ func CountActiveModels(modelType string) (int64, error) {
 	var count int64
 	query := DB.Model(&ModelInfo{}).Where("status = ?", ModelStatusActive)
 	if modelType != "" {
-		query = query.Where("model_type = ?", modelType)
+		query = query.Where("model_type = ?", strings.ToLower(strings.TrimSpace(modelType)))
 	}
 	err := query.Count(&count).Error
 	return count, err
@@ -331,7 +332,7 @@ func CountAllModels(modelType string) (int64, error) {
 	var count int64
 	query := DB.Model(&ModelInfo{})
 	if modelType != "" {
-		query = query.Where("model_type = ?", modelType)
+		query = query.Where("model_type = ?", strings.ToLower(strings.TrimSpace(modelType)))
 	}
 	err := query.Count(&count).Error
 	return count, err
@@ -629,111 +630,6 @@ func GetUserTrials(userId int, tenantId int) ([]*ModelTrial, error) {
 
 // InitializeDefaultModels initializes default models if none exist
 func InitializeDefaultModels() error {
-	var count int64
-	DB.Model(&ModelInfo{}).Count(&count)
-	if count > 0 {
-		return nil
-	}
-
-	// ModelGroup is deprecated - groups are now represented by channels.group field
-	// No need to initialize model_groups table
-
-	defaultModels := []ModelInfo{
-		// OpenAI models (Group 1)
-		{Id: "gpt-4o", Name: "GPT-4o", Provider: "OpenAI", ModelType: ModelTypeChat, Description: "OpenAI最强多模态模型", ContextLen: 128000, InputPrice: 0.015, OutputPrice: 0.06, Capabilities: `["chat","function_call","vision"]`, Status: ModelStatusActive, SortOrder: 1, GroupId: 1, IsTrial: true, TrialQuota: 1000000, SLA: "standard"},
-		{Id: "gpt-4o-mini", Name: "GPT-4o Mini", Provider: "OpenAI", ModelType: ModelTypeChat, Description: "快速高效的GPT-4o", ContextLen: 128000, InputPrice: 0.00015, OutputPrice: 0.0006, Capabilities: `["chat","function_call","vision"]`, Status: ModelStatusActive, SortOrder: 2, GroupId: 1, IsTrial: true, TrialQuota: 5000000, SLA: "standard"},
-		{Id: "gpt-4-turbo", Name: "GPT-4 Turbo", Provider: "OpenAI", ModelType: ModelTypeChat, Description: "上一代GPT-4", ContextLen: 128000, InputPrice: 0.01, OutputPrice: 0.03, Capabilities: `["chat","function_call","vision"]`, Status: ModelStatusActive, SortOrder: 3, GroupId: 1, SLA: "standard"},
-		{Id: "gpt-3.5-turbo", Name: "GPT-3.5 Turbo", Provider: "OpenAI", ModelType: ModelTypeChat, Description: "快速经济实惠", ContextLen: 16385, InputPrice: 0.0005, OutputPrice: 0.0015, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 4, GroupId: 1, IsTrial: true, TrialQuota: 10000000, SLA: "standard"},
-		{Id: "text-embedding-3-small", Name: "Embedding 3 Small", Provider: "OpenAI", ModelType: ModelTypeEmbedding, Description: "小型嵌入模型", ContextLen: 8191, InputPrice: 0.00002, OutputPrice: 0, Capabilities: `["embedding"]`, Status: ModelStatusActive, SortOrder: 10, GroupId: 1},
-
-		// Anthropic models (Group 2)
-		{Id: "claude-3-5-sonnet-20241022", Name: "Claude 3.5 Sonnet", Provider: "Anthropic", ModelType: ModelTypeChat, Description: "Anthropic最智能模型", ContextLen: 200000, InputPrice: 0.003, OutputPrice: 0.015, Capabilities: `["chat","vision","tool_use"]`, Status: ModelStatusActive, SortOrder: 5, GroupId: 2, IsTrial: true, TrialQuota: 500000, SLA: "standard"},
-		{Id: "claude-3-5-haiku-20241022", Name: "Claude 3.5 Haiku", Provider: "Anthropic", ModelType: ModelTypeChat, Description: "快速高效的Claude", ContextLen: 200000, InputPrice: 0.0008, OutputPrice: 0.004, Capabilities: `["chat","vision"]`, Status: ModelStatusActive, SortOrder: 6, GroupId: 2, IsTrial: true, TrialQuota: 2000000, SLA: "standard"},
-		{Id: "claude-3-opus-20240229", Name: "Claude 3 Opus", Provider: "Anthropic", ModelType: ModelTypeChat, Description: "复杂任务最强大模型", ContextLen: 200000, InputPrice: 0.015, OutputPrice: 0.075, Capabilities: `["chat","vision","tool_use"]`, Status: ModelStatusActive, SortOrder: 7, GroupId: 2, SLA: "premium"},
-
-		// Google models (Group 3)
-		{Id: "gemini-1.5-pro", Name: "Gemini 1.5 Pro", Provider: "Google", ModelType: ModelTypeChat, Description: "Google最强多模态模型", ContextLen: 2000000, InputPrice: 0.00125, OutputPrice: 0.005, Capabilities: `["chat","vision","audio"]`, Status: ModelStatusActive, SortOrder: 8, GroupId: 3, IsTrial: true, TrialQuota: 1000000, SLA: "standard"},
-		{Id: "gemini-1.5-flash", Name: "Gemini 1.5 Flash", Provider: "Google", ModelType: ModelTypeChat, Description: "快速多用途Google模型", ContextLen: 1000000, InputPrice: 0.000075, OutputPrice: 0.0003, Capabilities: `["chat","vision","audio"]`, Status: ModelStatusActive, SortOrder: 9, GroupId: 3, IsTrial: true, TrialQuota: 10000000, SLA: "standard"},
-		{Id: "gemini-2.0-flash-exp", Name: "Gemini 2.0 Flash Exp", Provider: "Google", ModelType: ModelTypeChat, Description: "最新实验性Gemini模型", ContextLen: 1000000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","vision","audio"]`, Status: ModelStatusActive, SortOrder: 10, GroupId: 3, SLA: "enterprise"},
-
-		// 百度文心 (Group 4)
-		{Id: "ernie-4.0-8k", Name: "文心一言 4.0", Provider: "Baidu", ModelType: ModelTypeChat, Description: "百度文心一言4.0旗舰版", ContextLen: 8000, InputPrice: 0.12, OutputPrice: 0.12, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 20, GroupId: 4, IsTrial: true, TrialQuota: 500000, SLA: "standard"},
-		{Id: "ernie-3.5-8k", Name: "文心一言 3.5", Provider: "Baidu", ModelType: ModelTypeChat, Description: "百度文心一言3.5", ContextLen: 8000, InputPrice: 0.008, OutputPrice: 0.008, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 21, GroupId: 4, IsTrial: true, TrialQuota: 2000000, SLA: "standard"},
-		{Id: "ernie-speed-8k", Name: "文心一言 高速版", Provider: "Baidu", ModelType: ModelTypeChat, Description: "百度高速响应模型", ContextLen: 8000, InputPrice: 0.004, OutputPrice: 0.004, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 22, GroupId: 4, IsTrial: true, TrialQuota: 5000000, SLA: "standard"},
-		{Id: "ernie-lite-8k", Name: "文心一言 轻量版", Provider: "Baidu", ModelType: ModelTypeChat, Description: "百度轻量级模型", ContextLen: 8000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 23, GroupId: 4, SLA: "standard"},
-		{Id: "bge-large-zh", Name: "BGE 中文向量", Provider: "Baidu", ModelType: ModelTypeEmbedding, Description: "百度中文语义向量模型", ContextLen: 512, InputPrice: 0.0002, OutputPrice: 0, Capabilities: `["embedding"]`, Status: ModelStatusActive, SortOrder: 25, GroupId: 4},
-
-		// 阿里通义 (Group 5)
-		{Id: "qwen-max", Name: "通义千问 MAX", Provider: "Alibaba", ModelType: ModelTypeChat, Description: "阿里通义千问最强版本", ContextLen: 32000, InputPrice: 0.12, OutputPrice: 0.12, Capabilities: `["chat","function_call","vision"]`, Status: ModelStatusActive, SortOrder: 30, GroupId: 5, IsTrial: true, TrialQuota: 500000, SLA: "standard"},
-		{Id: "qwen-plus", Name: "通义千问 Plus", Provider: "Alibaba", ModelType: ModelTypeChat, Description: "阿里通义千问增强版", ContextLen: 131072, InputPrice: 0.004, OutputPrice: 0.012, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 31, GroupId: 5, IsTrial: true, TrialQuota: 2000000, SLA: "standard"},
-		{Id: "qwen-turbo", Name: "通义千问 Turbo", Provider: "Alibaba", ModelType: ModelTypeChat, Description: "阿里通义千问快速版", ContextLen: 131072, InputPrice: 0.002, OutputPrice: 0.006, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 32, GroupId: 5, IsTrial: true, TrialQuota: 5000000, SLA: "standard"},
-		{Id: "qwen-long", Name: "通义千问 长文本", Provider: "Alibaba", ModelType: ModelTypeChat, Description: "阿里超长上下文模型", ContextLen: 1000000, InputPrice: 0.01, OutputPrice: 0.03, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 33, GroupId: 5, SLA: "premium"},
-		{Id: "text-embedding-v2", Name: "文本嵌入 V2", Provider: "Alibaba", ModelType: ModelTypeEmbedding, Description: "阿里文本嵌入模型", ContextLen: 8192, InputPrice: 0.0002, OutputPrice: 0, Capabilities: `["embedding"]`, Status: ModelStatusActive, SortOrder: 35, GroupId: 5},
-
-		// 智谱AI (Group 6)
-		{Id: "glm-4-plus", Name: "GLM-4 Plus", Provider: "Zhipu", ModelType: ModelTypeChat, Description: "智谱GLM-4增强版", ContextLen: 128000, InputPrice: 0.1, OutputPrice: 0.1, Capabilities: `["chat","function_call","vision"]`, Status: ModelStatusActive, SortOrder: 40, GroupId: 6, IsTrial: true, TrialQuota: 500000, SLA: "standard"},
-		{Id: "glm-4", Name: "GLM-4", Provider: "Zhipu", ModelType: ModelTypeChat, Description: "智谱GLM-4标准版", ContextLen: 128000, InputPrice: 0.006, OutputPrice: 0.006, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 41, GroupId: 6, IsTrial: true, TrialQuota: 2000000, SLA: "standard"},
-		{Id: "glm-4-flash", Name: "GLM-4 Flash", Provider: "Zhipu", ModelType: ModelTypeChat, Description: "智谱快速响应版", ContextLen: 128000, InputPrice: 0.001, OutputPrice: 0.001, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 42, GroupId: 6, IsTrial: true, TrialQuota: 10000000, SLA: "standard"},
-		{Id: "glm-3-turbo", Name: "GLM-3 Turbo", Provider: "Zhipu", ModelType: ModelTypeChat, Description: "智谱轻量版", ContextLen: 128000, InputPrice: 0.001, OutputPrice: 0.001, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 43, GroupId: 6, SLA: "standard"},
-		{Id: "embedding-2", Name: "文本嵌入 V2", Provider: "Zhipu", ModelType: ModelTypeEmbedding, Description: "智谱文本嵌入模型", ContextLen: 512, InputPrice: 0.0001, OutputPrice: 0, Capabilities: `["embedding"]`, Status: ModelStatusActive, SortOrder: 45, GroupId: 6},
-
-		// MiniMax (Group 7)
-		{Id: "abab6.5s", Name: "ABAB 6.5S", Provider: "MiniMax", ModelType: ModelTypeChat, Description: "MiniMax对话模型", ContextLen: 245000, InputPrice: 0.01, OutputPrice: 0.01, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 50, GroupId: 7, IsTrial: true, TrialQuota: 1000000, SLA: "standard"},
-		{Id: "abab6.5g", Name: "ABAB 6.5G", Provider: "MiniMax", ModelType: ModelTypeChat, Description: "MiniMax增强版模型", ContextLen: 245000, InputPrice: 0.015, OutputPrice: 0.015, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 51, GroupId: 7, SLA: "standard"},
-		{Id: "abab5.5s", Name: "ABAB 5.5S", Provider: "MiniMax", ModelType: ModelTypeChat, Description: "MiniMax快速版", ContextLen: 245000, InputPrice: 0.005, OutputPrice: 0.005, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 52, GroupId: 7, SLA: "standard"},
-
-		// BEDI 私有GPU集群 (Group 8) - H800北广AI云平台
-		{Id: "ZhipuAI/GLM-4.7-FP8", Name: "GLM-4.7-FP8", Provider: "BEDI", ModelType: ModelTypeChat, Description: "H800北广AI云平台 - GLM-4.7-FP8", ContextLen: 128000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 60, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Minimax/MiniMax-M2.1", Name: "MiniMax-M2.1", Provider: "BEDI", ModelType: ModelTypeChat, Description: "H800北广AI云平台 - MiniMax-M2.1", ContextLen: 1000000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 61, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3.5-122B-A10B-FP8", Name: "Qwen3.5-122B-A10B-FP8", Provider: "BEDI", ModelType: ModelTypeChat, Description: "H800北广AI云平台 - Qwen3.5-122B-A10B-FP8 (beta)", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 62, GroupId: 8, IsTrial: false, SLA: "enterprise", Tags: `["beta"]`},
-
-		// BEDI 私有GPU集群 (Group 8) - 910B3移动平台宝塔环境
-		{Id: "deepseek-v3.1-int8", Name: "DeepSeek-V3.1-Int8", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B3移动平台宝塔环境 - DeepSeek-V3.1-Int8", ContextLen: 128000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 63, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-235B-A22B", Name: "Qwen3-235B-A22B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B3移动平台宝塔环境 - Qwen3-235B-A22B", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 64, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", Name: "DeepSeek-R1-Distill-Qwen-32B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B3移动平台宝塔环境 - DeepSeek-R1-Distill-Qwen-32B", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","reasoning"]`, Status: ModelStatusActive, SortOrder: 65, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-
-		// BEDI 私有GPU集群 (Group 8) - 910B4佛山AI云平台
-		{Id: "Qwen/Qwen2.5-VL-72B-Instruct", Name: "Qwen2.5-VL-72B-Instruct", Provider: "BEDI", ModelType: ModelTypeVLM, Description: "910B4佛山AI云平台 - Qwen2.5-VL-72B多模态模型", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","vision","function_call"]`, Status: ModelStatusActive, SortOrder: 70, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-VL-30B-A3B-Instruct", Name: "Qwen3-VL-30B-A3B-Instruct", Provider: "BEDI", ModelType: ModelTypeVLM, Description: "910B4佛山AI云平台 - Qwen3-VL-30B多模态模型", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","vision","function_call"]`, Status: ModelStatusActive, SortOrder: 71, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-VL-8B", Name: "Qwen3-VL-8B", Provider: "BEDI", ModelType: ModelTypeVLM, Description: "910B4佛山AI云平台 - Qwen3-VL-8B多模态模型", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","vision"]`, Status: ModelStatusActive, SortOrder: 72, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen2.5-VL-7B", Name: "Qwen2.5-VL-7B", Provider: "BEDI", ModelType: ModelTypeVLM, Description: "910B4佛山AI云平台 - Qwen2.5-VL-7B多模态模型", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","vision"]`, Status: ModelStatusActive, SortOrder: 73, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-8B", Name: "Qwen3-8B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - Qwen3-8B", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 74, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-14B", Name: "Qwen3-14B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - Qwen3-14B", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 75, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-32B", Name: "Qwen3-32B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - Qwen3-32B", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 76, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/QwQ-32B", Name: "QwQ-32B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - QwQ-32B推理模型", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","reasoning"]`, Status: ModelStatusActive, SortOrder: 77, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen2.5-7B-Instruct", Name: "Qwen2.5-7B-Instruct", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - Qwen2.5-7B-Instruct", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 78, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen2.5-72B-Instruct", Name: "Qwen2.5-72B-Instruct", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - Qwen2.5-72B-Instruct", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","function_call"]`, Status: ModelStatusActive, SortOrder: 79, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", Name: "DeepSeek-R1-Distill-Qwen-7B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - DeepSeek-R1-Distill-Qwen-7B", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","reasoning"]`, Status: ModelStatusActive, SortOrder: 80, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B", Name: "DeepSeek-R1-Distill-Qwen-14B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - DeepSeek-R1-Distill-Qwen-14B", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","reasoning"]`, Status: ModelStatusActive, SortOrder: 81, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", Name: "DeepSeek-R1-Distill-Qwen-32B", Provider: "BEDI", ModelType: ModelTypeChat, Description: "910B4佛山AI云平台 - DeepSeek-R1-Distill-Qwen-32B", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat","reasoning"]`, Status: ModelStatusActive, SortOrder: 82, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-
-		// BEDI Embedding models (910B4佛山AI云平台)
-		{Id: "BAAI/bge-m3", Name: "BGE-M3", Provider: "BEDI", ModelType: ModelTypeEmbedding, Description: "910B4佛山AI云平台 - BGE-M3 embedding模型", ContextLen: 8192, InputPrice: 0, OutputPrice: 0, Capabilities: `["embedding"]`, Status: ModelStatusActive, SortOrder: 83, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-Embedding-0.6B", Name: "Qwen3-Embedding-0.6B", Provider: "BEDI", ModelType: ModelTypeEmbedding, Description: "910B4佛山AI云平台 - Qwen3-Embedding-0.6B", ContextLen: 8192, InputPrice: 0, OutputPrice: 0, Capabilities: `["embedding"]`, Status: ModelStatusActive, SortOrder: 84, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-Embedding-8B", Name: "Qwen3-Embedding-8B", Provider: "BEDI", ModelType: ModelTypeEmbedding, Description: "910B4佛山AI云平台 - Qwen3-Embedding-8B", ContextLen: 8192, InputPrice: 0, OutputPrice: 0, Capabilities: `["embedding"]`, Status: ModelStatusActive, SortOrder: 85, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-
-		// BEDI Reranker models (910B4佛山AI云平台)
-		{Id: "BAAI/bge-reranker", Name: "BGE-Reranker", Provider: "BEDI", ModelType: ModelTypeReranker, Description: "910B4佛山AI云平台 - BGE-Reranker重排序模型", ContextLen: 512, InputPrice: 0, OutputPrice: 0, Capabilities: `["reranker"]`, Status: ModelStatusActive, SortOrder: 86, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-Reranker-0.6B", Name: "Qwen3-Reranker-0.6B", Provider: "BEDI", ModelType: ModelTypeReranker, Description: "910B4佛山AI云平台 - Qwen3-Reranker-0.6B", ContextLen: 512, InputPrice: 0, OutputPrice: 0, Capabilities: `["reranker"]`, Status: ModelStatusActive, SortOrder: 87, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-		{Id: "Qwen/Qwen3-Reranker-8B", Name: "Qwen3-Reranker-8B", Provider: "BEDI", ModelType: ModelTypeReranker, Description: "910B4佛山AI云平台 - Qwen3-Reranker-8B", ContextLen: 512, InputPrice: 0, OutputPrice: 0, Capabilities: `["reranker"]`, Status: ModelStatusActive, SortOrder: 88, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-
-		// BEDI OCR模型 (910B4佛山AI云平台)
-		{Id: "OCRFlux/OCRFlux-3B", Name: "OCRFlux-3B", Provider: "BEDI", ModelType: ModelTypeOCR, Description: "910B4佛山AI云平台 - OCRFlux-3B文档识别模型", ContextLen: 4096, InputPrice: 0, OutputPrice: 0, Capabilities: `["ocr"]`, Status: ModelStatusActive, SortOrder: 89, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-
-		// BEDI Other模型 (910B4佛山AI云平台)
-		{Id: "MinerU/MinerU", Name: "MinerU", Provider: "BEDI", ModelType: ModelTypeOther, Description: "910B4佛山AI云平台 - MinerU文档解析模型", ContextLen: 4096, InputPrice: 0, OutputPrice: 0, Capabilities: `["document_parsing"]`, Status: ModelStatusActive, SortOrder: 90, GroupId: 8, IsTrial: false, SLA: "enterprise"},
-
-		// 其他内部部署 vLLM (Group 99)
-		{Id: "internal-glm-4", Name: "GLM-4 (其他内网)", Provider: "Internal", ModelType: ModelTypeChat, Description: "其他内部GLM-4 vLLM部署", ContextLen: 128000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 100, GroupId: 99, SLA: "enterprise"},
-		{Id: "internal-qwen-2.5", Name: "Qwen-2.5 (其他内网)", Provider: "Internal", ModelType: ModelTypeChat, Description: "其他内部Qwen-2.5 vLLM部署", ContextLen: 32000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 101, GroupId: 99, SLA: "enterprise"},
-		{Id: "internal-llama-3.1", Name: "Llama-3.1 (其他内网)", Provider: "Internal", ModelType: ModelTypeChat, Description: "其他内部Llama-3.1 vLLM部署", ContextLen: 128000, InputPrice: 0, OutputPrice: 0, Capabilities: `["chat"]`, Status: ModelStatusActive, SortOrder: 102, GroupId: 99, SLA: "enterprise"},
-	}
-
-	for i := range defaultModels {
-		if err := defaultModels[i].Create(); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
+

@@ -868,6 +868,8 @@ const OpsDashboard: React.FC = () => {
                 { value: 50, label: t('ops.openai_compatible') },
                 { value: 14, label: t('ops.anthropic') },
                 { value: 8, label: t('ops.custom') },
+                { value: 52, label: t('ops.ark_video') },
+                { value: 53, label: t('ops.custom_video') },
               ]}
               placeholder={t('ops.select_channel_type')}
             />

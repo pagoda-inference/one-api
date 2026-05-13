@@ -145,10 +145,18 @@ func getRequestBody(c *gin.Context, meta *meta.Meta, textRequest *relaymodel.Gen
 		if err := json.Unmarshal(body, &reqBody); err != nil {
 			return nil, err
 		}
-		// input → inputs conversion
-		if input, ok := reqBody["input"]; ok {
-			reqBody["inputs"] = input
-			delete(reqBody, "input")
+		// Only convert input -> inputs for non-OpenAI embedding endpoints.
+		// /v1/embeddings should keep OpenAI schema ("input"), while plain
+		// /embeddings backends (e.g. TGI-style) often expect "inputs".
+		base := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(meta.BaseURL)), "/")
+		shouldConvertToInputs := strings.HasSuffix(base, "/embeddings") && !strings.HasSuffix(base, "/v1/embeddings")
+		if shouldConvertToInputs {
+			if _, hasInputs := reqBody["inputs"]; !hasInputs {
+				if input, ok := reqBody["input"]; ok {
+					reqBody["inputs"] = input
+					delete(reqBody, "input")
+				}
+			}
 		}
 		// model name mapping
 		if modelName, ok := reqBody["model"].(string); ok {

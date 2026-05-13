@@ -69,7 +69,7 @@ with open("audio.mp3", "rb") as f:
     )
 print(response['text'])`
 
-    default: // chat, vlm, ocr, video, other
+    default: // chat, ocr, video, other
       return `import openai
 openai.api_key = "your-api-key"
 openai.api_base = "${apiBase}"
@@ -194,7 +194,8 @@ const ModelMarket: React.FC = () => {
       case 'embedding': return <FileTextOutlined />
       case 'image': return <PictureOutlined />
       case 'audio': return <AudioOutlined />
-      case 'vlm': return <ExperimentOutlined />
+      case 'video': return <ExperimentOutlined />
+      case 'ocr': return <FileTextOutlined />
       default: return <RobotOutlined />
     }
   }
@@ -277,7 +278,7 @@ const ModelMarket: React.FC = () => {
   const typeOptions = [
     { value: '', label: t('modelMarket.all_types') },
     { value: 'chat', label: t('modelMarket.chat'), icon: <RobotOutlined /> },
-    { value: 'vlm', label: t('modelMarket.vlm'), icon: <ExperimentOutlined /> },
+    { value: 'video', label: t('modelMarket.video'), icon: <ExperimentOutlined /> },
     { value: 'reranker', label: t('modelMarket.reranker'), icon: <SyncOutlined /> },
     { value: 'embedding', label: t('modelMarket.embedding'), icon: <FileTextOutlined /> },
     { value: 'ocr', label: 'OCR', icon: <FileTextOutlined /> },

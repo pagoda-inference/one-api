@@ -248,9 +248,11 @@ const ModelManagement: React.FC = () => {
   const getTypeLabel = (type: string) => {
     const typeMap: Record<string, string> = {
       'chat': t('modelManagement.type_chat'),
-      'vlm': t('modelManagement.type_vlm'),
       'embedding': t('modelManagement.type_embedding'),
       'reranker': t('modelManagement.type_reranker'),
+      'image': t('modelManagement.type_image'),
+      'audio': t('modelManagement.type_audio'),
+      'video': t('modelManagement.type_video'),
       'ocr': t('modelManagement.type_ocr'),
       'other': t('modelManagement.type_other')
     }
