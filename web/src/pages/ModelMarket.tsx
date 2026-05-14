@@ -111,6 +111,7 @@ const ModelMarket: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
   const [seriesFilter, setSeriesFilter] = useState<string | null>(null)
+  const [seriesOptions, setSeriesOptions] = useState<string[]>([])
   const [capabilityFilter, setCapabilityFilter] = useState<string[]>([])
   const [contextFilter, setContextFilter] = useState<string>('')
   const [trialOnly, setTrialOnly] = useState(false)
@@ -158,6 +159,15 @@ const ModelMarket: React.FC = () => {
       if (groupFilter) {
         allModels = allModels.filter((m: Model) => m.provider.toLowerCase() === groupFilter.toLowerCase())
       }
+      const modelsBeforeSeries = [...allModels]
+      const computedSeriesOptions = Array.from(new Set(modelsBeforeSeries.map((m) => inferSeries(m))))
+        .sort((a, b) => {
+          if (a === '其他') return 1
+          if (b === '其他') return -1
+          return a.localeCompare(b, 'zh-Hans-CN')
+        })
+      setSeriesOptions(computedSeriesOptions)
+
       if (seriesFilter) {
         allModels = allModels.filter((m: Model) => inferSeries(m) === seriesFilter)
       }
@@ -343,8 +353,6 @@ const ModelMarket: React.FC = () => {
       }
     })
   )
-  const seriesOptions = Array.from(new Set(models.map((m) => inferSeries(m)))).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
-
   const formatPrice = (price: number) => {
     if (price === 0) return t('modelMarket.free')
     return `¥${price.toFixed(4)}/1K`
