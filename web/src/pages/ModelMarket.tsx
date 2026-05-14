@@ -69,7 +69,26 @@ with open("audio.mp3", "rb") as f:
     )
 print(response['text'])`
 
-    default: // chat, ocr, video, other
+    case 'video':
+      return `curl -X POST https://baotaai.bedicloud.net/api/v1/contents/generations/tasks \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${modelId}",
+    "content": [
+      {
+        "type": "text",
+        "text": "写实风格，一只猫咪在玩耍"
+      }
+    ],
+    "ratio": "1:1",
+    "resolution": "480p",
+    "duration": 1,
+    "fps": 16,
+    "seed": 42
+  }'`
+
+    default: // chat, ocr, other
       return `import openai
 openai.api_key = "your-api-key"
 openai.api_base = "${apiBase}"
