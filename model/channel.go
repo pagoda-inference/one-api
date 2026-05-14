@@ -50,16 +50,16 @@ func (c *Channel) GetWeight() int {
 }
 
 type ChannelConfig struct {
-	Region             string `json:"region,omitempty"`
-	SK                 string `json:"sk,omitempty"`
-	AK                 string `json:"ak,omitempty"`
-	UserID             string `json:"user_id,omitempty"`
-	APIVersion         string `json:"api_version,omitempty"`
-	LibraryID          string `json:"library_id,omitempty"`
-	Plugin             string `json:"plugin,omitempty"`
-	VertexAIProjectID  string `json:"vertex_ai_project_id,omitempty"`
-	VertexAIADC        string `json:"vertex_ai_adc,omitempty"`
-	HideUpstreamModel  bool   `json:"hide_upstream_model,omitempty"`
+	Region            string `json:"region,omitempty"`
+	SK                string `json:"sk,omitempty"`
+	AK                string `json:"ak,omitempty"`
+	UserID            string `json:"user_id,omitempty"`
+	APIVersion        string `json:"api_version,omitempty"`
+	LibraryID         string `json:"library_id,omitempty"`
+	Plugin            string `json:"plugin,omitempty"`
+	VertexAIProjectID string `json:"vertex_ai_project_id,omitempty"`
+	VertexAIADC       string `json:"vertex_ai_adc,omitempty"`
+	HideUpstreamModel bool   `json:"hide_upstream_model,omitempty"`
 }
 
 func GetAllChannels(startIdx int, num int, scope string) ([]*Channel, error) {
@@ -110,6 +110,9 @@ func BatchInsertChannels(channels []Channel) error {
 			return err
 		}
 	}
+	if err = SyncAllModelStatusByChannelAvailability(); err != nil {
+		logger.SysError("failed to sync model status by channel availability: " + err.Error())
+	}
 	return nil
 }
 
@@ -158,6 +161,11 @@ func (channel *Channel) Update() error {
 	}
 	DB.Model(channel).First(channel, "id = ?", channel.Id)
 	err = channel.UpdateAbilities()
+	if err == nil {
+		if syncErr := SyncModelStatusByChannelId(channel.Id); syncErr != nil {
+			logger.SysError("failed to sync model status for updated channel: " + syncErr.Error())
+		}
+	}
 	return err
 }
 
@@ -188,6 +196,11 @@ func (channel *Channel) Delete() error {
 		return err
 	}
 	err = channel.DeleteAbilities()
+	if err == nil {
+		if syncErr := SyncAllModelStatusByChannelAvailability(); syncErr != nil {
+			logger.SysError("failed to sync model status after channel delete: " + syncErr.Error())
+		}
+	}
 	return err
 }
 
@@ -211,6 +224,9 @@ func UpdateChannelStatusById(id int, status int) {
 	err = DB.Model(&Channel{}).Where("id = ?", id).Update("status", status).Error
 	if err != nil {
 		logger.SysError("failed to update channel status: " + err.Error())
+	}
+	if err := SyncModelStatusByChannelId(id); err != nil {
+		logger.SysError("failed to sync model status after channel status update: " + err.Error())
 	}
 }
 

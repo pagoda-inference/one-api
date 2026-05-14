@@ -220,6 +220,9 @@ func InitChannelCache() {
 	channelSyncLock.Lock()
 	group2model2channels = newGroup2model2channels
 	channelSyncLock.Unlock()
+	if err := SyncAllModelStatusByChannelAvailability(); err != nil {
+		logger.SysError("failed to sync model status by channel availability: " + err.Error())
+	}
 	logger.SysLog("channels synced from database")
 }
 

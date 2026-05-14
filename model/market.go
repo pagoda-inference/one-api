@@ -628,8 +628,66 @@ func GetUserTrials(userId int, tenantId int) ([]*ModelTrial, error) {
 	return trials, err
 }
 
+// SyncAllModelStatusByChannelAvailability reconciles model_info.status using channel/ability availability.
+// Rule:
+// - models with at least one enabled channel -> active
+// - models with zero enabled channels      -> maintenance
+// Only active/maintenance statuses are auto-managed. Deprecated models are untouched.
+func SyncAllModelStatusByChannelAvailability() error {
+	return syncModelStatusByChannelAvailability(nil)
+}
+
+// SyncModelStatusByChannelId reconciles statuses for models affected by a specific channel.
+func SyncModelStatusByChannelId(channelId int) error {
+	var modelIDs []string
+	if err := DB.Model(&Ability{}).
+		Where("channel_id = ?", channelId).
+		Distinct("model").
+		Pluck("model", &modelIDs).Error; err != nil {
+		return err
+	}
+	if len(modelIDs) == 0 {
+		return nil
+	}
+	return syncModelStatusByChannelAvailability(modelIDs)
+}
+
+func syncModelStatusByChannelAvailability(modelIDs []string) error {
+	availableModels := DB.Table("abilities AS a").
+		Select("a.model").
+		Joins("JOIN channels c ON c.id = a.channel_id").
+		Where("a.enabled = ? AND c.status = ?", true, ChannelStatusEnabled).
+		Group("a.model")
+
+	scope := DB.Model(&ModelInfo{})
+	if len(modelIDs) > 0 {
+		scope = scope.Where("id IN ?", modelIDs)
+		availableModels = availableModels.Where("a.model IN ?", modelIDs)
+	}
+
+	now := helper.GetTimestamp()
+	if err := scope.
+		Where("status = ? AND id IN (?)", ModelStatusMaintenance, availableModels).
+		Updates(map[string]any{
+			"status":     ModelStatusActive,
+			"updated_at": now,
+		}).Error; err != nil {
+		return err
+	}
+
+	if err := scope.
+		Where("status = ? AND id NOT IN (?)", ModelStatusActive, availableModels).
+		Updates(map[string]any{
+			"status":     ModelStatusMaintenance,
+			"updated_at": now,
+		}).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // InitializeDefaultModels initializes default models if none exist
 func InitializeDefaultModels() error {
 	return nil
 }
-
