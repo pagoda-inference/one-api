@@ -110,6 +110,7 @@ const ModelMarket: React.FC = () => {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [groupFilter, setGroupFilter] = useState<string | null>(null)
+  const [seriesFilter, setSeriesFilter] = useState<string | null>(null)
   const [capabilityFilter, setCapabilityFilter] = useState<string[]>([])
   const [contextFilter, setContextFilter] = useState<string>('')
   const [trialOnly, setTrialOnly] = useState(false)
@@ -121,7 +122,27 @@ const ModelMarket: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('all')
   useEffect(() => {
     loadData()
-  }, [typeFilter, groupFilter, capabilityFilter, contextFilter, trialOnly])
+  }, [typeFilter, groupFilter, seriesFilter, capabilityFilter, contextFilter, trialOnly])
+
+  const inferSeries = (m: Model): string => {
+    if (m.series && m.series.trim()) return m.series.trim()
+    const source = `${m.id || ''} ${m.name || ''}`.toLowerCase()
+    const mapping: Array<[string, string]> = [
+      ['glm', 'GLM'],
+      ['qwen', 'Qwen'],
+      ['deepseek', 'DeepSeek'],
+      ['wan', 'Wan'],
+      ['hunyuan', 'Hunyuan'],
+      ['doubao', 'Doubao'],
+      ['kimi', 'Kimi'],
+      ['minimax', 'MiniMax'],
+      ['ernie', 'ERNIE'],
+    ]
+    for (const [k, v] of mapping) {
+      if (source.includes(k)) return v
+    }
+    return '其他'
+  }
 
   const loadData = async () => {
     try {
@@ -137,13 +158,23 @@ const ModelMarket: React.FC = () => {
       if (groupFilter) {
         allModels = allModels.filter((m: Model) => m.provider.toLowerCase() === groupFilter.toLowerCase())
       }
+      if (seriesFilter) {
+        allModels = allModels.filter((m: Model) => inferSeries(m) === seriesFilter)
+      }
 
       // Apply capability filter (AND logic - must have all selected capabilities)
       if (capabilityFilter.length > 0) {
         allModels = allModels.filter((m: Model) => {
           try {
             const caps = JSON.parse(m.capabilities || '[]') as string[]
-            return capabilityFilter.every(cap => caps.includes(cap))
+            if (!Array.isArray(caps)) return false
+            const normalizedCaps = caps
+              .filter((c): c is string => typeof c === 'string')
+              .map((c) => {
+                const v = c.trim()
+                return capabilitySynonyms[v.toLowerCase()] || capabilitySynonyms[v] || v
+              })
+            return capabilityFilter.every(cap => normalizedCaps.includes(cap))
           } catch {
             return false
           }
@@ -279,6 +310,40 @@ const ModelMarket: React.FC = () => {
       return null
     }
   }
+
+  // Capability filters should be a controlled set (similar to SiliconFlow),
+  // not every capability value from backend. Type-like tags (e.g. embedding/reranker)
+  // are filtered via model type, so they are excluded here.
+  const capabilityFilterOrder = ['视觉', 'MoE', '推理', 'Tools', 'FIM', 'Math', 'Coder']
+  const capabilitySynonyms: Record<string, string> = {
+    vision: '视觉',
+    reasoning: '推理',
+    '推理模型': '推理',
+    tool: 'Tools',
+    tools: 'Tools',
+    coding: 'Coder',
+    coder: 'Coder',
+    math: 'Math',
+  }
+
+  const capabilityOptions = capabilityFilterOrder.filter((cap) =>
+    models.some((m) => {
+      try {
+        const caps = JSON.parse(m.capabilities || '[]') as string[]
+        if (!Array.isArray(caps)) return false
+        return caps.some((raw) => {
+          if (typeof raw !== 'string') return false
+          const v = raw.trim()
+          if (!v) return false
+          const normalized = capabilitySynonyms[v.toLowerCase()] || capabilitySynonyms[v] || v
+          return normalized === cap
+        })
+      } catch {
+        return false
+      }
+    })
+  )
+  const seriesOptions = Array.from(new Set(models.map((m) => inferSeries(m)))).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
 
   const formatPrice = (price: number) => {
     if (price === 0) return t('modelMarket.free')
@@ -723,35 +788,66 @@ const ModelMarket: React.FC = () => {
         {/* Capability Filter Tags */}
         <div style={{ marginBottom: 10 }}>
           <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginRight: 8 }}>{t('modelMarket.filter_by_capability')}:</span>
-          {[
-            { value: 'vision', label: t('modelMarket.cap_vision') },
-            { value: 'MoE', label: 'MoE' },
-            { value: '推理模型', label: t('modelMarket.cap_reasoning') },
-            { value: 'Tools', label: t('modelMarket.cap_tools') },
-            { value: '嵌入', label: t('modelMarket.embedding') },
-            { value: '重排序', label: t('modelMarket.reranker') },
-          ].map(opt => (
+          {capabilityOptions.map((cap) => (
             <Tag
-              key={opt.value}
+              key={cap}
               className="filter-tag"
               style={{
                 cursor: 'pointer',
                 borderRadius: 16,
                 padding: '2px 12px',
-                border: capabilityFilter.includes(opt.value) ? '1px solid #722ed1' : '1px solid var(--border-color)',
-                background: capabilityFilter.includes(opt.value) ? '#722ed115' : 'transparent',
-                color: capabilityFilter.includes(opt.value) ? '#722ed1' : 'var(--text-secondary)',
+                border: capabilityFilter.includes(cap) ? '1px solid #722ed1' : '1px solid var(--border-color)',
+                background: capabilityFilter.includes(cap) ? '#722ed115' : 'transparent',
+                color: capabilityFilter.includes(cap) ? '#722ed1' : 'var(--text-secondary)',
                 fontSize: 12
               }}
               onClick={() => {
-                if (capabilityFilter.includes(opt.value)) {
-                  setCapabilityFilter(capabilityFilter.filter(c => c !== opt.value))
+                if (capabilityFilter.includes(cap)) {
+                  setCapabilityFilter(capabilityFilter.filter(c => c !== cap))
                 } else {
-                  setCapabilityFilter([...capabilityFilter, opt.value])
+                  setCapabilityFilter([...capabilityFilter, cap])
                 }
               }}
             >
-              {opt.label}
+              {cap}
+            </Tag>
+          ))}
+        </div>
+
+        {/* Series Filter Tags */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 12, marginRight: 8 }}>系列:</span>
+          <Tag
+            className="filter-tag"
+            style={{
+              cursor: 'pointer',
+              borderRadius: 16,
+              padding: '2px 12px',
+              border: !seriesFilter ? '1px solid #13c2c2' : '1px solid var(--border-color)',
+              background: !seriesFilter ? '#13c2c215' : 'transparent',
+              color: !seriesFilter ? '#13c2c2' : 'var(--text-secondary)',
+              fontSize: 12
+            }}
+            onClick={() => setSeriesFilter(null)}
+          >
+            全部系列
+          </Tag>
+          {seriesOptions.map((s) => (
+            <Tag
+              key={s}
+              className="filter-tag"
+              style={{
+                cursor: 'pointer',
+                borderRadius: 16,
+                padding: '2px 12px',
+                border: seriesFilter === s ? '1px solid #13c2c2' : '1px solid var(--border-color)',
+                background: seriesFilter === s ? '#13c2c215' : 'transparent',
+                color: seriesFilter === s ? '#13c2c2' : 'var(--text-secondary)',
+                fontSize: 12
+              }}
+              onClick={() => setSeriesFilter(s)}
+            >
+              {s}
             </Tag>
           ))}
         </div>

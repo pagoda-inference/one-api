@@ -223,6 +223,7 @@ func formatModelInfo(m *model.ModelInfo) gin.H {
 		"id":                     m.Id,
 		"name":                   m.Name,
 		"provider":               m.Provider,
+		"series":                 m.Series,
 		"model_type":             m.ModelType,
 		"description":            m.Description,
 		"context_len":            m.ContextLen,
