@@ -60,10 +60,12 @@ func StreamHandler(c *gin.Context, resp *http.Response, relayMode int, originMod
 				// but for empty choice and no usage, we should not pass it to client, this is for azure
 				continue // just ignore empty choice
 			}
-			// If hideUpstreamModel is enabled, replace the model name
+			// If hideUpstreamModel is enabled, rewrite only "model" field while preserving other fields.
 			if hideUpstreamModel && originModelName != "" {
-				streamResponse.Model = originModelName
-				modifiedData := dataPrefix + toJson(streamResponse)
+				modifiedData := data
+				if rewritten := rewriteModelFieldJSON([]byte(data[dataPrefixLength:]), originModelName); len(rewritten) > 0 {
+					modifiedData = dataPrefix + string(rewritten)
+				}
 				render.StringData(c, modifiedData)
 			} else {
 				render.StringData(c, data)
@@ -131,13 +133,11 @@ func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName st
 			}, nil
 		}
 
-		// If hideUpstreamModel is enabled, replace the model name
+		// If hideUpstreamModel is enabled, rewrite only "model" field while preserving other fields.
 		outputBody := responseBody
 		if hideUpstreamModel && originModelName != "" {
-			textResponse.Model = originModelName
-			outputBody, err = json.Marshal(textResponse)
-			if err != nil {
-				return ErrorWrapper(err, "marshal_response_body_failed", http.StatusInternalServerError), nil
+			if rewritten := rewriteModelFieldJSON(responseBody, originModelName); len(rewritten) > 0 {
+				outputBody = rewritten
 			}
 			// Delete Content-Length since body size changed after model name replacement
 			delete(resp.Header, "Content-Length")
@@ -214,6 +214,25 @@ func Handler(c *gin.Context, resp *http.Response, promptTokens int, modelName st
 		return ErrorWrapper(err, "write_response_body_failed", http.StatusInternalServerError), nil
 	}
 	return nil, nil
+}
+
+func rewriteModelFieldJSON(body []byte, modelName string) []byte {
+	if len(body) == 0 || modelName == "" {
+		return nil
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil
+	}
+	if _, exists := raw["model"]; !exists {
+		return nil
+	}
+	raw["model"] = modelName
+	rewritten, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	return rewritten
 }
 
 // EmbeddingHandler handles embedding responses, especially for TGI backends

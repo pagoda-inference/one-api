@@ -15,6 +15,7 @@ type ModelInfo struct {
 	Id                   string  `json:"id" gorm:"primaryKey;size:64"`
 	Name                 string  `json:"name" gorm:"size:128"`      // 显示名称
 	Provider             string  `json:"provider" gorm:"size:64"`   // 提供商
+	Series               string  `json:"series" gorm:"size:64"`     // 系列，如 GLM/Qwen/DeepSeek
 	ModelType            string  `json:"model_type" gorm:"size:32"` // chat/embedding/image/audio
 	Description          string  `json:"description" gorm:"type:text"`
 	ContextLen           int     `json:"context_len" gorm:"default:4096"`                  // 上下文长度

@@ -19,6 +19,7 @@ type ModelRequest struct {
 	Id                   string  `json:"id"`
 	Name                 string  `json:"name"`
 	Provider             string  `json:"provider"`
+	Series               string  `json:"series"`
 	ModelType            string  `json:"model_type"`
 	Description          string  `json:"description"`
 	ContextLen           int     `json:"context_len"`
@@ -87,6 +88,7 @@ func CreateModel(c *gin.Context) {
 		Id:                   req.Id,
 		Name:                 req.Name,
 		Provider:             req.Provider,
+		Series:               req.Series,
 		ModelType:            strings.ToLower(strings.TrimSpace(req.ModelType)),
 		Description:          req.Description,
 		ContextLen:           req.ContextLen,
@@ -182,6 +184,9 @@ func UpdateModel(c *gin.Context) {
 	}
 	if req.Provider != "" {
 		m.Provider = req.Provider
+	}
+	if req.Series != "" {
+		m.Series = req.Series
 	}
 	if req.ModelType != "" {
 		m.ModelType = strings.ToLower(strings.TrimSpace(req.ModelType))

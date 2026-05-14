@@ -41,11 +41,48 @@ func getAndValidateTextRequest(c *gin.Context, relayMode int) (*relaymodel.Gener
 	if relayMode == relaymode.Embeddings && textRequest.Model == "" {
 		textRequest.Model = c.Param("model")
 	}
+	normalizeOpenAIExtraBody(textRequest)
 	err = validator.ValidateTextRequest(textRequest, relayMode)
 	if err != nil {
 		return nil, err
 	}
 	return textRequest, nil
+}
+
+// normalizeOpenAIExtraBody flattens OpenAI SDK `extra_body` into top-level request fields.
+// This keeps compatibility with SDK styles that send custom params via `extra_body`.
+func normalizeOpenAIExtraBody(req *relaymodel.GeneralOpenAIRequest) {
+	if req == nil || len(req.ExtraFields) == 0 {
+		return
+	}
+	raw, ok := req.ExtraFields["extra_body"]
+	if !ok {
+		return
+	}
+	extraBody, ok := raw.(map[string]any)
+	if !ok || len(extraBody) == 0 {
+		return
+	}
+
+	if req.ExtraFields == nil {
+		req.ExtraFields = make(map[string]any)
+	}
+	for k, v := range extraBody {
+		switch k {
+		case "reasoning_effort":
+			if req.ReasoningEffort == nil {
+				if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+					val := s
+					req.ReasoningEffort = &val
+					continue
+				}
+			}
+		}
+		if _, exists := req.ExtraFields[k]; !exists {
+			req.ExtraFields[k] = v
+		}
+	}
+	delete(req.ExtraFields, "extra_body")
 }
 
 func GetPromptTokens(textRequest *relaymodel.GeneralOpenAIRequest, relayMode int) int {

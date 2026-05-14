@@ -70,6 +70,7 @@ export interface Model {
   id: string
   name: string
   provider: string
+  series?: string
   model_type: string
   description: string
   context_len: number
@@ -636,6 +637,7 @@ export interface ModelItem {
   id: string
   name: string
   provider: string
+  series?: string
   model_type: string
   description: string
   context_len: number

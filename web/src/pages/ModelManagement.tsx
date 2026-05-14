@@ -280,6 +280,13 @@ const ModelManagement: React.FC = () => {
       width: 100,
     },
     {
+      title: t('modelManagement.series'),
+      dataIndex: 'series',
+      key: 'series',
+      width: 100,
+      render: (v: string) => v || '-',
+    },
+    {
       title: t('modelManagement.type'),
       dataIndex: 'model_type',
       key: 'model_type',
@@ -406,6 +413,12 @@ const ModelManagement: React.FC = () => {
               />
             </Form.Item>
 
+            <Form.Item name="series" label={t('modelManagement.series')} style={{ flex: 1 }}>
+              <Input placeholder={t('modelManagement.series_placeholder')} />
+            </Form.Item>
+          </Row>
+
+          <Row gutter={16}>
             <Form.Item name="model_type" label={t('modelManagement.model_type')} style={{ flex: 1 }}>
               <Select options={modelTypes} placeholder={t('modelManagement.select_model_type')} />
             </Form.Item>
