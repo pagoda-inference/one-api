@@ -74,6 +74,8 @@ curl -X GET https://baotaai.bedicloud.net/api/v1/contents/generations/tasks/cgt-
 
 状态值：`queued`、`running`、`succeeded`、`failed`
 
+注意：视频文件（video_url）只保留3个小时，之后将被删除，链接失效。
+
 #### **3. 列出所有任务**
 
 **请求：**
