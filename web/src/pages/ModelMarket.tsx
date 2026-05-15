@@ -1070,7 +1070,11 @@ const ModelMarket: React.FC = () => {
               <Button
                 type="default"
                 onClick={() => {
-                  window.location.href = `/experience?model=${selectedModel.id}`
+                  if ((selectedModel.model_type || '').toLowerCase() === 'video') {
+                    window.location.href = `/experience/video?model=${encodeURIComponent(selectedModel.id)}`
+                  } else {
+                    window.location.href = `/experience?model=${selectedModel.id}`
+                  }
                 }}
                 style={{
                   marginBottom: 16,

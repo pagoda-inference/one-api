@@ -6,7 +6,7 @@ import {
   BellOutlined, LogoutOutlined, UserOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, ApiOutlined, DatabaseOutlined,
   CloudServerOutlined, MoonOutlined, SunOutlined, ExperimentOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined, VideoCameraOutlined
 } from '@ant-design/icons'
 import React, { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -33,6 +33,7 @@ import NotificationManage from './pages/NotificationManage'
 import BatchInference from './pages/BatchInference'
 import ChatPlayground from './pages/ChatPlayground'
 import PlaygroundConfig from './pages/PlaygroundConfig'
+import VideoPlayground from './pages/VideoPlayground'
 import { logout, User, getUnreadNotificationCount, getNotifications, markNotificationAsRead, getUserInfo } from './services/api'
 
 const { Content } = Layout
@@ -228,6 +229,7 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     key: 'experience',
     children: [
       { key: '/experience', icon: <ExperimentOutlined />, label: t('menu.text_chat') },
+      { key: '/experience/video', icon: <VideoCameraOutlined />, label: t('menu.video_generation') },
       ...(isAdmin ? [{ key: '/ops/playground-config', icon: <SettingOutlined />, label: t('menu.playground_config') }] : [])
     ]
   }
@@ -527,6 +529,7 @@ const App: React.FC = () => {
         <Route path="/ops/notifications" element={<ProtectedPage><NotificationManage /></ProtectedPage>} />
         <Route path="/batch" element={<ProtectedPage><BatchInference /></ProtectedPage>} />
         <Route path="/experience" element={<ProtectedPage><ChatPlayground /></ProtectedPage>} />
+        <Route path="/experience/video" element={<ProtectedPage><VideoPlayground /></ProtectedPage>} />
         <Route path="/ops/playground-config" element={<ProtectedPage><PlaygroundConfig /></ProtectedPage>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
