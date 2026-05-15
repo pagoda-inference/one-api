@@ -59,6 +59,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			videoTaskRoute.POST("", controller.CreateVideoGenerationTask)
 			videoTaskRoute.GET("/:id", controller.GetVideoGenerationTask)
+			videoTaskRoute.GET("/:id/content", controller.ProxyVideoGenerationTaskContent)
 			videoTaskRoute.GET("", controller.ListVideoGenerationTasks)
 			videoTaskRoute.DELETE("/:id", controller.DeleteVideoGenerationTask)
 		}
@@ -116,8 +117,9 @@ func SetApiRouter(router *gin.Engine) {
 				marketRoute.GET("/groups/:id/models", controller.GetMarketModelsByGroup)
 				marketRoute.GET("/stats", controller.GetMarketStats)
 				marketRoute.GET("/calculate", controller.CalculatePrice)
-				marketRoute.GET("/trials", controller.GetUserTrials)
-				marketRoute.GET("/playground/models", controller.GetPlaygroundModels)
+			marketRoute.GET("/trials", controller.GetUserTrials)
+			marketRoute.GET("/playground/models", controller.GetPlaygroundModels)
+			marketRoute.GET("/video/tasks/:id/content", controller.ProxyVideoGenerationTaskContent)
 			}
 		}
 

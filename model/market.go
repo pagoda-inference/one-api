@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pagoda-inference/one-api/common/logger"
 	"gorm.io/gorm"
 
 	"github.com/pagoda-inference/one-api/common/helper"
@@ -645,8 +646,10 @@ func SyncModelStatusByChannelId(channelId int) error {
 		Where("channel_id = ?", channelId).
 		Distinct("model").
 		Pluck("model", &modelIDs).Error; err != nil {
+		logger.SysError(fmt.Sprintf("model status sync: query abilities failed, channel_id=%d, err=%v", channelId, err))
 		return err
 	}
+	logger.SysLog(fmt.Sprintf("model status sync: trigger by channel_id=%d, ability_models=%v", channelId, modelIDs))
 	if len(modelIDs) == 0 {
 		return nil
 	}
@@ -667,23 +670,29 @@ func syncModelStatusByChannelAvailability(modelIDs []string) error {
 	}
 
 	now := helper.GetTimestamp()
-	if err := scope.
+	activeResult := scope.
 		Where("status = ? AND id IN (?)", ModelStatusMaintenance, availableModels).
 		Updates(map[string]any{
 			"status":     ModelStatusActive,
 			"updated_at": now,
-		}).Error; err != nil {
-		return err
+		})
+	if activeResult.Error != nil {
+		logger.SysError(fmt.Sprintf("model status sync: maintenance->active failed, model_ids=%v, err=%v", modelIDs, activeResult.Error))
+		return activeResult.Error
 	}
+	logger.SysLog(fmt.Sprintf("model status sync: maintenance->active rows=%d, model_ids=%v", activeResult.RowsAffected, modelIDs))
 
-	if err := scope.
+	maintenanceResult := scope.
 		Where("status = ? AND id NOT IN (?)", ModelStatusActive, availableModels).
 		Updates(map[string]any{
 			"status":     ModelStatusMaintenance,
 			"updated_at": now,
-		}).Error; err != nil {
-		return err
+		})
+	if maintenanceResult.Error != nil {
+		logger.SysError(fmt.Sprintf("model status sync: active->maintenance failed, model_ids=%v, err=%v", modelIDs, maintenanceResult.Error))
+		return maintenanceResult.Error
 	}
+	logger.SysLog(fmt.Sprintf("model status sync: active->maintenance rows=%d, model_ids=%v", maintenanceResult.RowsAffected, modelIDs))
 
 	return nil
 }

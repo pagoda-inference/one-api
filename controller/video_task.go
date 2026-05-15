@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 
@@ -506,4 +508,86 @@ func DeleteVideoGenerationTask(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ProxyVideoGenerationTaskContent proxies generated video bytes through same-origin endpoint.
+// This avoids browser mixed-content/CORS issues when upstream video_url is internal http.
+func ProxyVideoGenerationTaskContent(c *gin.Context) {
+	userId := c.GetInt(ctxkey.Id)
+	taskID := c.Param("id")
+	task, err := model.GetVideoTaskByTaskIdAndUser(taskID, userId)
+	if err != nil {
+		if model.IsNotFound(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"message": "Task not found"}})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": err.Error()}})
+		return
+	}
+
+	videoURL := strings.TrimSpace(task.VideoURL)
+	if videoURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"message": "video not ready"}})
+		return
+	}
+	u, parseErr := url.Parse(videoURL)
+	if parseErr != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"message": "invalid video url"}})
+		return
+	}
+
+	req, reqErr := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, videoURL, nil)
+	if reqErr != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": gin.H{"message": reqErr.Error()}})
+		return
+	}
+	if rg := c.GetHeader("Range"); rg != "" {
+		req.Header.Set("Range", rg)
+	}
+
+	resp, doErr := http.DefaultClient.Do(req)
+	if doErr != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": gin.H{"message": doErr.Error()}})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		c.Data(resp.StatusCode, "application/json", body)
+		return
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
+	c.Header("Content-Type", contentType)
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		c.Header("Content-Length", cl)
+	}
+	if ar := resp.Header.Get("Accept-Ranges"); ar != "" {
+		c.Header("Accept-Ranges", ar)
+	}
+	if cr := resp.Header.Get("Content-Range"); cr != "" {
+		c.Header("Content-Range", cr)
+	}
+	c.Header("Cache-Control", "private, max-age=300")
+
+	if c.Query("download") == "1" {
+		ext := path.Ext(u.Path)
+		if ext == "" {
+			exts, _ := mime.ExtensionsByType(contentType)
+			if len(exts) > 0 {
+				ext = exts[0]
+			} else {
+				ext = ".mp4"
+			}
+		}
+		filename := fmt.Sprintf("%s%s", task.TaskId, ext)
+		c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	}
+
+	c.Status(resp.StatusCode)
+	_, _ = io.Copy(c.Writer, resp.Body)
 }
