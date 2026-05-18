@@ -1464,6 +1464,14 @@ func relayHelper(c *gin.Context, relayMode int) *model.ErrorWithStatusCode {
 		fallthrough
 	case relaymode.AudioTranscription:
 		err = controller.RelayAudioHelper(c, relayMode)
+	case relaymode.AudioPredict:
+		err = controller.RelayAudioPredictHelper(c)
+	case relaymode.FileParse:
+		err = controller.RelayFileParseSubmitHelper(c)
+	case relaymode.FileParseTask:
+		err = controller.RelayFileParseTaskHelper(c, false)
+	case relaymode.FileParseTaskResult:
+		err = controller.RelayFileParseTaskHelper(c, true)
 	case relaymode.Proxy:
 		err = controller.RelayProxyHelper(c, relayMode)
 	case relaymode.Rerank:

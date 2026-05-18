@@ -24,6 +24,14 @@ func GetByPath(path string) int {
 		relayMode = AudioTranscription
 	} else if strings.HasPrefix(path, "/v1/audio/translations") {
 		relayMode = AudioTranslation
+	} else if strings.HasPrefix(path, "/v1/audio/predict") {
+		relayMode = AudioPredict
+	} else if strings.HasPrefix(path, "/v1/file_parse/tasks/") && strings.HasSuffix(path, "/result") {
+		relayMode = FileParseTaskResult
+	} else if strings.HasPrefix(path, "/v1/file_parse/tasks/") {
+		relayMode = FileParseTask
+	} else if strings.HasPrefix(path, "/v1/file_parse") {
+		relayMode = FileParse
 	} else if strings.HasPrefix(path, "/v1/rerank") {
 		relayMode = Rerank
 	} else if strings.HasPrefix(path, "/v1/oneapi/proxy") {

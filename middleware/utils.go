@@ -21,6 +21,18 @@ func abortWithMessage(c *gin.Context, statusCode int, message string) {
 }
 
 func getRequestModel(c *gin.Context) (string, error) {
+	if strings.HasPrefix(c.Request.URL.Path, "/v1/file_parse") {
+		modelName := strings.TrimSpace(c.PostForm("model"))
+		if modelName != "" {
+			return modelName, nil
+		}
+	}
+	if strings.HasPrefix(c.Request.URL.Path, "/v1/audio/predict") {
+		modelName := strings.TrimSpace(c.PostForm("model"))
+		if modelName != "" {
+			return modelName, nil
+		}
+	}
 	var modelRequest ModelRequest
 	err := common.UnmarshalBodyReusable(c, &modelRequest)
 	if err != nil {

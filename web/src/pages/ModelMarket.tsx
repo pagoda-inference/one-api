@@ -20,8 +20,15 @@ const getModelExample = (modelId: string, modelType: string): string => {
   if (modelId.toLowerCase().includes('mineru')) {
     return `curl -X POST ${apiBase}/file_parse \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
-  -F "files=@/path/to/document.pdf" \\
+  -F "file=@/path/to/document.pdf" \\
   -F "model=${modelId}"`
+  }
+  if (modelId.toLowerCase().includes('audio_predict')) {
+    return `curl -X POST ${apiBase}/audio/predict \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -F "model=${modelId}" \\
+  -F "mmse_file=@/path/to/mmse_audio.wav" \\
+  -F "dspt_file=@/path/to/dspt_audio.wav"`
   }
 
   switch (modelType) {
