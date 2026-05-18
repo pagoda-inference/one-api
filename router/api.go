@@ -52,6 +52,7 @@ func SetApiRouter(router *gin.Engine) {
 		// Dashboard v2 (enhanced)
 		apiRouter.GET("/dashboard", middleware.UserAuth(), controller.GetUserDashboardV2)
 		apiRouter.GET("/usage/detail", middleware.UserAuth(), controller.GetUsageDetail)
+		apiRouter.GET("/leaderboard", middleware.UserAuth(), controller.GetLeaderboard)
 
 		// Video generation task APIs (token-auth, OpenAI-style key)
 		videoTaskRoute := apiRouter.Group("/v1/contents/generations/tasks")
@@ -235,6 +236,7 @@ func SetApiRouter(router *gin.Engine) {
 		rootAdminRoute := apiRouter.Group("/admin")
 		rootAdminRoute.Use(middleware.RootAdminTokenAuth())
 		{
+			rootAdminRoute.DELETE("/leaderboard/:id", controller.DeleteLeaderboardItem)
 			rootAdminRoute.GET("/tenants", controller.GetAllTenantsForAdmin)
 			rootAdminRoute.DELETE("/tenants/:id", controller.DeleteTenant)
 			rootAdminRoute.POST("/lark-apps/debug-department", controller.DebugLarkDepartmentResolve)

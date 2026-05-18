@@ -34,6 +34,7 @@ import BatchInference from './pages/BatchInference'
 import ChatPlayground from './pages/ChatPlayground'
 import PlaygroundConfig from './pages/PlaygroundConfig'
 import VideoPlayground from './pages/VideoPlayground'
+import Leaderboard from './pages/Leaderboard'
 import { logout, User, getUnreadNotificationCount, getNotifications, markNotificationAsRead, getUserInfo } from './services/api'
 
 const { Content } = Layout
@@ -237,7 +238,8 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Model group - batch only for non-admin users
   const modelGroupChildren = [
     { key: '/market', icon: <ShopOutlined />, label: t('menu.model_market') },
-    ...(isAdmin ? [] : [{ key: '/batch', icon: <ThunderboltOutlined />, label: t('menu.batch_inference') }])
+    ...(isAdmin ? [] : [{ key: '/batch', icon: <ThunderboltOutlined />, label: t('menu.batch_inference') }]),
+    { key: '/leaderboard', icon: <DatabaseOutlined />, label: t('menu.leaderboard') },
   ]
   const modelGroup = {
     type: 'group' as const,
@@ -528,6 +530,7 @@ const App: React.FC = () => {
         <Route path="/profile" element={<ProtectedPage><Profile /></ProtectedPage>} />
         <Route path="/ops/notifications" element={<ProtectedPage><NotificationManage /></ProtectedPage>} />
         <Route path="/batch" element={<ProtectedPage><BatchInference /></ProtectedPage>} />
+        <Route path="/leaderboard" element={<ProtectedPage><Leaderboard /></ProtectedPage>} />
         <Route path="/experience" element={<ProtectedPage><ChatPlayground /></ProtectedPage>} />
         <Route path="/experience/video" element={<ProtectedPage><VideoPlayground /></ProtectedPage>} />
         <Route path="/ops/playground-config" element={<ProtectedPage><PlaygroundConfig /></ProtectedPage>} />
