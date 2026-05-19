@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	defaultFileParseBackend   = "vlm-http-client"
-	defaultFileParseServerURL = "http://svc-online-deploy-51.tenant-4227768156425592832:30000"
+	defaultFileParseBackend = "vlm-auto-engine"
 )
 
 type fileParseTaskRouteInfo struct {
@@ -95,10 +94,6 @@ func RelayFileParseSubmitHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode 
 		return openai.ErrorWrapper(fmt.Errorf("model is required"), "invalid_text_request", http.StatusBadRequest)
 	}
 
-	serverURL := strings.TrimSpace(c.PostForm("server_url"))
-	if serverURL == "" {
-		serverURL = defaultFileParseServerURL
-	}
 	backend := strings.TrimSpace(c.PostForm("backend"))
 	if backend == "" {
 		backend = defaultFileParseBackend
@@ -115,7 +110,6 @@ func RelayFileParseSubmitHelper(c *gin.Context) *relaymodel.ErrorWithStatusCode 
 		return openai.ErrorWrapper(err, "copy_file_failed", http.StatusInternalServerError)
 	}
 	_ = writer.WriteField("model", modelName)
-	_ = writer.WriteField("server_url", serverURL)
 	_ = writer.WriteField("backend", backend)
 	if err = writer.Close(); err != nil {
 		return openai.ErrorWrapper(err, "close_multipart_writer_failed", http.StatusInternalServerError)
