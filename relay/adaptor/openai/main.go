@@ -29,6 +29,9 @@ func StreamHandler(c *gin.Context, resp *http.Response, relayMode int, originMod
 	responseText := ""
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Split(bufio.ScanLines)
+	// Some upstreams can emit very large single-line SSE data chunks (e.g. usage/details at tail).
+	// Increase scanner token size to avoid "token too long" truncation on long stream responses.
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	var usage *model.Usage
 
 	common.SetEventStreamHeaders(c)

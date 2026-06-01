@@ -38,6 +38,10 @@ data:
   GLOBAL_API_RATE_LIMIT: "480"
   GLOBAL_WEB_RATE_LIMIT: "240"
 
+  # Relay timeout controls
+  RELAY_TIMEOUT: "0"
+  RESPONSE_HEADER_TIMEOUT: "3000"
+
   # MinIO / S3 Object Storage
   MINIO_ENABLED: "true"
   MINIO_ENDPOINT: "10.99.149.154:9000"
