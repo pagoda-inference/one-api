@@ -9,7 +9,9 @@ const api = axios.create({
 // Add auth token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
-  if (token) {
+  // Only send Bearer token for real API keys (sk-xxx)
+  // OAuth session users rely on session cookie (withCredentials: true)
+  if (token && token.startsWith('sk-')) {
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
