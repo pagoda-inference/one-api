@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"fmt"
 	"os"
 	"strconv"
 
@@ -63,14 +62,14 @@ func main() {
 
 	// Initialize options
 	model.InitOptionMap()
-	logger.SysLog(fmt.Sprintf("using theme %s", config.Theme))
+	logger.SysLogf("using theme %s", config.Theme)
 	if common.RedisEnabled {
 		// for compatibility with old versions
 		config.MemoryCacheEnabled = true
 	}
 	if config.MemoryCacheEnabled {
 		logger.SysLog("memory cache enabled")
-		logger.SysLog(fmt.Sprintf("sync frequency: %d seconds", config.SyncFrequency))
+		logger.SysLogf("sync frequency: %d seconds", config.SyncFrequency)
 		model.InitChannelCache()
 	}
 	if config.MemoryCacheEnabled {
@@ -80,13 +79,13 @@ func main() {
 	if os.Getenv("CHANNEL_TEST_FREQUENCY") != "" {
 		frequency, err := strconv.Atoi(os.Getenv("CHANNEL_TEST_FREQUENCY"))
 		if err != nil {
-			logger.FatalLog("failed to parse CHANNEL_TEST_FREQUENCY: " + err.Error())
+			logger.FatalLogf("failed to parse CHANNEL_TEST_FREQUENCY: %s", err.Error())
 		}
 		go controller.AutomaticallyTestChannels(frequency)
 	}
 	if os.Getenv("BATCH_UPDATE_ENABLED") == "true" {
 		config.BatchUpdateEnabled = true
-		logger.SysLog("batch update enabled with interval " + strconv.Itoa(config.BatchUpdateInterval) + "s")
+		logger.SysLogf("batch update enabled with interval %ds", config.BatchUpdateInterval)
 		model.InitBatchUpdater()
 	}
 	if config.EnableMetric {
@@ -98,32 +97,32 @@ func main() {
 	// Start health checker for proactive channel monitoring
 	monitor.StartHealthChecker()
 	if config.HealthCheckInterval > 0 {
-		logger.SysLog(fmt.Sprintf("health checker enabled with interval: %d seconds", config.HealthCheckInterval))
+		logger.SysLogf("health checker enabled with interval: %d seconds", config.HealthCheckInterval)
 	}
 
 	// Initialize request queue for backpressure control
 	middleware.InitRequestQueue()
-	logger.SysLog(fmt.Sprintf("request queue enabled: max_concurrent=%d, timeout=%ds",
-		config.MaxConcurrentRequests, config.RequestQueueTimeout))
+	logger.SysLogf("request queue enabled: max_concurrent=%d, timeout=%ds",
+		config.MaxConcurrentRequests, config.RequestQueueTimeout)
 
 	// Start payment cleanup worker
 	controller.StartPaymentCleanupWorker()
 	// Start log cleanup worker
 	controller.StartLogCleanupWorker()
 	if config.PaymentEnabled {
-		logger.SysLog(fmt.Sprintf("payment enabled: exchange_rate=%.2f", config.PaymentExchangeRate))
+		logger.SysLogf("payment enabled: exchange_rate=%.2f", config.PaymentExchangeRate)
 	}
 
 	// Initialize default models for marketplace
 	if err := model.InitializeDefaultModels(); err != nil {
-		logger.SysErrorf("failed to initialize default models: " + err.Error())
+		logger.SysErrorf("failed to initialize default models: %s", err.Error())
 	} else {
 		logger.SysLog("model marketplace initialized with default models")
 	}
 
 	// Initialize default providers
 	if err := model.InitializeDefaultProviders(); err != nil {
-		logger.SysErrorf("failed to initialize default providers: " + err.Error())
+		logger.SysErrorf("failed to initialize default providers: %s", err.Error())
 	} else {
 		logger.SysLog("providers initialized with default providers")
 	}

@@ -1,7 +1,6 @@
 package openai
 
 import (
-	"encoding/json"
 	"testing"
 
 	relaymodel "github.com/pagoda-inference/one-api/relay/model"
@@ -205,7 +204,7 @@ func TestConvertResponsesToChatRequest(t *testing.T) {
 	if chatReq.Messages[1].Content != "hello world" {
 		t.Errorf("ConvertResponsesToChatRequest() second message content = %v, want hello world", chatReq.Messages[1].Content)
 	}
-	if chatReq.Temperature != 0.7 {
+	if chatReq.Temperature == nil || *chatReq.Temperature != 0.7 {
 		t.Errorf("ConvertResponsesToChatRequest() temperature = %v, want 0.7", chatReq.Temperature)
 	}
 }
@@ -213,7 +212,7 @@ func TestConvertResponsesToChatRequest(t *testing.T) {
 func TestBuildResponsesStreamEvent(t *testing.T) {
 	// Test with a mock chat stream response
 	chatResp := &ChatCompletionsStreamResponse{
-		ID:      "chatcmpl_123",
+		Id:      "chatcmpl_123",
 		Object:  "chat.completion.chunk",
 		Created: 1234567890,
 		Model:   "gpt-4o",
