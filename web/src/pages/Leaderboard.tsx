@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Col, Empty, Row, message, Popconfirm, Space, Table, Tabs, Typography } from 'antd'
+import { Button, Card, Col, Row, message, Popconfirm, Space, Table, Tabs, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '../contexts/ThemeContext'
 import api from '../services/api'
@@ -30,7 +30,7 @@ interface LeaderboardRow {
   [key: string]: any
 }
 
-const rankDomains = ['general', 'general_mm', 'medical', 'skin', 'weighted']
+const rankDomains = ['general', 'agent']
 const OVERALL_KEY = '__overall__'
 
 const formatModelName = (name?: string) => {
@@ -97,20 +97,11 @@ const Leaderboard: React.FC = () => {
   const load = async (d = domain) => {
     setLoading(true)
     try {
-      if (d === 'general_mm') {
-        const generalRows = await fetchDomainRows('general')
-        setRows(generalRows.filter((item: LeaderboardRow) => modelTypeOf(item) !== 'text'))
-      } else if (d === 'weighted') {
-        const [generalRows, medicalRows] = await Promise.all([fetchDomainRows('general'), fetchDomainRows('medical')])
-        if (generalRows.length === 0 || medicalRows.length === 0) {
-          setRows([])
-        } else {
-          const weightedRows = await fetchDomainRows('weighted')
-          setRows(weightedRows)
-        }
-      } else {
-        setRows(await fetchDomainRows(d))
+      let data = await fetchDomainRows(d)
+      if (d === 'general') {
+        data = data.filter((item: LeaderboardRow) => modelTypeOf(item) === 'text')
       }
+      setRows(data)
     } catch {
       message.error(t('leaderboard.load_failed'))
     } finally {
@@ -313,7 +304,7 @@ const Leaderboard: React.FC = () => {
               items={rankDomains.map((d) => ({ key: d, label: t(`leaderboard.domain_${d}`) }))}
             />
             <div style={{ marginTop: 6, color: appTheme.textPrimary, fontWeight: 700, fontSize: 18 }}>
-              {t('leaderboard.subtitle')}
+              {t(`leaderboard.subtitle_${domain}`)}
             </div>
             <Tabs
               activeKey={metric}
@@ -333,9 +324,7 @@ const Leaderboard: React.FC = () => {
           pagination={{ pageSize: 20 }}
           scroll={{ x: 1200 }}
           locale={{
-            emptyText: domain !== 'general' && domain !== 'general_mm'
-              ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('leaderboard.no_domain_data')} />
-              : t('common.no_data'),
+            emptyText: t('common.no_data'),
           }}
         />
       </Card>

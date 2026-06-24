@@ -139,9 +139,7 @@
   },
   "leaderboard": {
     "title": "模型评测排行榜",
-    "subtitle": "通用能力排行榜·纯文本模型",
-    "platform_desc": "支持通用能力（7维度）、医疗专科能力和皮肤多模态评测",
-    "no_domain_data": "该榜单暂无数据",
+    "platform_desc": "支持通用纯文本能力榜与通用智能体能力榜",
     "load_failed": "加载排行榜失败",
     "rank": "排名",
     "model": "模型",
@@ -152,10 +150,9 @@
     "pure_text": "纯文本",
     "metric_overall": "综合排名",
     "domain_general": "通用·纯文本榜",
-    "domain_general_mm": "通用·多模态榜",
-    "domain_medical": "医疗排行榜",
-    "domain_skin": "皮肤多模态榜",
-    "domain_weighted": "通用+医疗加权榜"
+    "domain_agent": "通用·智能体榜",
+    "subtitle_general": "通用能力排行榜 · 纯文本模型",
+    "subtitle_agent": "通用智能体能力排行榜"
   },
   "login": {
     "title": "BEDI 宝塔",

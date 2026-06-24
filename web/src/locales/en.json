@@ -139,9 +139,7 @@
   },
   "leaderboard": {
     "title": "Model Evaluation Leaderboard",
-    "subtitle": "General Capability Leaderboard·Pure Text Models",
-    "platform_desc": "Supports general capability (7 dimensions), medical specialty, and derm multimodal evaluation",
-    "no_domain_data": "No data for this leaderboard yet",
+    "platform_desc": "Supports general pure-text and general agent leaderboards",
     "load_failed": "Failed to load leaderboard",
     "rank": "Rank",
     "model": "Model",
@@ -152,10 +150,9 @@
     "pure_text": "Pure Text",
     "metric_overall": "Overall Rank",
     "domain_general": "General · Pure Text",
-    "domain_general_mm": "General · Multimodal",
-    "domain_medical": "Medical Leaderboard",
-    "domain_skin": "Derm Multimodal Leaderboard",
-    "domain_weighted": "General + Medical Weighted"
+    "domain_agent": "General · Agent",
+    "subtitle_general": "General Capability Leaderboard · Pure Text Models",
+    "subtitle_agent": "General Agent Capability Leaderboard"
   },
   "login": {
     "title": "BEDI Baota",
