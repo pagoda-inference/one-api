@@ -670,8 +670,13 @@ func syncModelStatusByChannelAvailability(modelIDs []string) error {
 	}
 
 	now := helper.GetTimestamp()
+	// 保护窗口：最近 5 分钟内手动修改的模型状态不会被自动同步覆盖
+	// 这样管理员手动设置的状态（如维护中）不会被渠道变化自动恢复
+	protectWindow := int64(300) // 5分钟
+
+	// 维护中 → 上线：只处理很久没更新的模型（跳过最近手动修改的）
 	activeResult := scope.
-		Where("status = ? AND id IN (?)", ModelStatusMaintenance, availableModels).
+		Where("status = ? AND id IN (?) AND updated_at < ?", ModelStatusMaintenance, availableModels, now-protectWindow).
 		Updates(map[string]any{
 			"status":     ModelStatusActive,
 			"updated_at": now,
@@ -680,10 +685,11 @@ func syncModelStatusByChannelAvailability(modelIDs []string) error {
 		logger.SysError(fmt.Sprintf("model status sync: maintenance->active failed, model_ids=%v, err=%v", modelIDs, activeResult.Error))
 		return activeResult.Error
 	}
-	logger.SysLog(fmt.Sprintf("model status sync: maintenance->active rows=%d, model_ids=%v", activeResult.RowsAffected, modelIDs))
+	logger.SysLog(fmt.Sprintf("model status sync: maintenance->active rows=%d, model_ids=%v (protected window=%ds)", activeResult.RowsAffected, modelIDs, protectWindow))
 
+	// 上线 → 维护中：只处理很久没更新的模型（跳过最近手动修改的）
 	maintenanceResult := scope.
-		Where("status = ? AND id NOT IN (?)", ModelStatusActive, availableModels).
+		Where("status = ? AND id NOT IN (?) AND updated_at < ?", ModelStatusActive, availableModels, now-protectWindow).
 		Updates(map[string]any{
 			"status":     ModelStatusMaintenance,
 			"updated_at": now,
@@ -692,7 +698,7 @@ func syncModelStatusByChannelAvailability(modelIDs []string) error {
 		logger.SysError(fmt.Sprintf("model status sync: active->maintenance failed, model_ids=%v, err=%v", modelIDs, maintenanceResult.Error))
 		return maintenanceResult.Error
 	}
-	logger.SysLog(fmt.Sprintf("model status sync: active->maintenance rows=%d, model_ids=%v", maintenanceResult.RowsAffected, modelIDs))
+	logger.SysLog(fmt.Sprintf("model status sync: active->maintenance rows=%d, model_ids=%v (protected window=%ds)", maintenanceResult.RowsAffected, modelIDs, protectWindow))
 
 	return nil
 }
