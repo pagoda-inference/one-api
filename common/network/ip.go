@@ -3,9 +3,10 @@ package network
 import (
 	"context"
 	"fmt"
-	"github.com/pagoda-inference/one-api/common/logger"
 	"net"
 	"strings"
+
+	"github.com/pagoda-inference/one-api/common/logger"
 )
 
 func splitSubnets(subnets string) []string {
@@ -49,4 +50,22 @@ func IsIpInSubnets(ctx context.Context, ip string, subnets string) bool {
 		}
 	}
 	return false
+}
+
+// GetClientIPFromXFF extracts the first valid IP address from an
+// X-Forwarded-For header value. The header may contain a comma-separated
+// list of IPs ordered "client, proxy1, proxy2, ..."; the leftmost entry is
+// the original client IP (cip). Returns an empty string when the header is
+// empty or its first entry is not a valid IP, so callers can fall back to
+// other means (e.g. gin.Context.ClientIP).
+func GetClientIPFromXFF(xff string) string {
+	if xff == "" {
+		return ""
+	}
+	parts := strings.SplitN(xff, ",", 2)
+	ip := strings.TrimSpace(parts[0])
+	if net.ParseIP(ip) == nil {
+		return ""
+	}
+	return ip
 }
