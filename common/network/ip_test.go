@@ -18,28 +18,22 @@ func TestIsIpInSubnet(t *testing.T) {
 	})
 }
 
-func TestGetClientIPFromXFF(t *testing.T) {
-	Convey("TestGetClientIPFromXFF", t, func() {
-		Convey("single IPv4", func() {
-			So(GetClientIPFromXFF("1.2.3.4"), ShouldEqual, "1.2.3.4")
+func TestGetIPFromRemoteAddr(t *testing.T) {
+	Convey("TestGetIPFromRemoteAddr", t, func() {
+		Convey("IPv4 with port", func() {
+			So(GetIPFromRemoteAddr("1.2.3.4:12345"), ShouldEqual, "1.2.3.4")
 		})
-		Convey("comma-separated list takes the first", func() {
-			So(GetClientIPFromXFF("1.2.3.4, 5.6.7.8"), ShouldEqual, "1.2.3.4")
+		Convey("IPv6 with port", func() {
+			So(GetIPFromRemoteAddr("[::1]:12345"), ShouldEqual, "::1")
 		})
-		Convey("leading/trailing spaces are trimmed", func() {
-			So(GetClientIPFromXFF("  1.2.3.4  , 5.6.7.8"), ShouldEqual, "1.2.3.4")
+		Convey("plain IPv4 without port", func() {
+			So(GetIPFromRemoteAddr("1.2.3.4"), ShouldEqual, "1.2.3.4")
 		})
-		Convey("IPv6 is supported", func() {
-			So(GetClientIPFromXFF("::1"), ShouldEqual, "::1")
+		Convey("empty string returns empty", func() {
+			So(GetIPFromRemoteAddr(""), ShouldEqual, "")
 		})
-		Convey("empty header returns empty string", func() {
-			So(GetClientIPFromXFF(""), ShouldEqual, "")
-		})
-		Convey("invalid IP returns empty string", func() {
-			So(GetClientIPFromXFF("not-an-ip"), ShouldEqual, "")
-		})
-		Convey("malformed first entry returns empty string", func() {
-			So(GetClientIPFromXFF("not-an-ip, 1.2.3.4"), ShouldEqual, "")
+		Convey("invalid value returns empty", func() {
+			So(GetIPFromRemoteAddr("invalid"), ShouldEqual, "")
 		})
 	})
 }

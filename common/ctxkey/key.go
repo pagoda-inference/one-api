@@ -22,6 +22,5 @@ const (
 	KeyRequestBody        = "key_request_body"
 	SystemPrompt          = "system_prompt"
 	UserId                = "user_id"
-	ClientIP              = "client_ip"
 	OriginalAuthorization = "original_authorization"
 )

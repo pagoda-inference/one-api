@@ -52,20 +52,19 @@ func IsIpInSubnets(ctx context.Context, ip string, subnets string) bool {
 	return false
 }
 
-// GetClientIPFromXFF extracts the first valid IP address from an
-// X-Forwarded-For header value. The header may contain a comma-separated
-// list of IPs ordered "client, proxy1, proxy2, ..."; the leftmost entry is
-// the original client IP (cip). Returns an empty string when the header is
-// empty or its first entry is not a valid IP, so callers can fall back to
-// other means (e.g. gin.Context.ClientIP).
-func GetClientIPFromXFF(xff string) string {
-	if xff == "" {
+// GetIPFromRemoteAddr extracts the host IP from an address in "host:port"
+// format (e.g. http.Request.RemoteAddr). Returns the IP string if valid,
+// or an empty string if the address cannot be parsed or is not a valid IP.
+func GetIPFromRemoteAddr(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		if net.ParseIP(remoteAddr) != nil {
+			return remoteAddr
+		}
 		return ""
 	}
-	parts := strings.SplitN(xff, ",", 2)
-	ip := strings.TrimSpace(parts[0])
-	if net.ParseIP(ip) == nil {
+	if net.ParseIP(host) == nil {
 		return ""
 	}
-	return ip
+	return host
 }

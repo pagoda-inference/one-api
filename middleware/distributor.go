@@ -10,7 +10,6 @@ import (
 	"github.com/pagoda-inference/one-api/common"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
 	"github.com/pagoda-inference/one-api/common/logger"
-	"github.com/pagoda-inference/one-api/common/network"
 	"github.com/pagoda-inference/one-api/model"
 	"github.com/pagoda-inference/one-api/relay/channeltype"
 )
@@ -78,20 +77,16 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	c.Set(ctxkey.ModelMapping, channel.GetModelMapping())
 	c.Set(ctxkey.OriginalModel, modelName) // for retry
 	// For the passthrough model, preserve the original client Authorization
-	// header (api-key) and client IP (cip) before the channel key overwrites
-	// the Authorization header. These are forwarded to the upstream service
-	// so it can use the real client identity for load balancing. The original
-	// Authorization is captured only once (the first call); retries reuse the
-	// stored value because the header has already been replaced by then.
+	// header (api-key) before the channel key overwrites it. This is
+	// forwarded to the upstream service so it can use the real client
+	// api-key for load balancing. The client IP is handled separately in
+	// setupPassthroughHeaders via the standard X-Forwarded-For format.
+	// Authorization is captured only once (the first call); retries reuse
+	// the stored value because the header has already been replaced by then.
 	if modelName == common.PassthroughModel {
 		if _, exists := c.Get(ctxkey.OriginalAuthorization); !exists {
 			c.Set(ctxkey.OriginalAuthorization, c.Request.Header.Get("Authorization"))
 		}
-		cip := network.GetClientIPFromXFF(c.GetHeader("X-Forwarded-For"))
-		if cip == "" {
-			cip = c.ClientIP()
-		}
-		c.Set(ctxkey.ClientIP, cip)
 	}
 	c.Request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", channel.Key))
 	c.Set("channel_api_key", channel.Key) // store for relay

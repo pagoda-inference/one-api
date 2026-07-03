@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +11,7 @@ import (
 	"github.com/pagoda-inference/one-api/common/client"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
 	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/common/network"
 	"github.com/pagoda-inference/one-api/relay/meta"
 )
 
@@ -62,15 +62,19 @@ func DoRequest(c *gin.Context, req *http.Request) (*http.Response, error) {
 }
 
 // setupPassthroughHeaders forwards the original client Authorization header
-// (api-key) and the client IP (cip) to the upstream request. This only takes
+// (api-key) and the client IP to the upstream request. This only takes
 // effect for common.PassthroughModel requests; for every other model the
 // request headers built by the adaptor are left untouched.
 //
-// The original Authorization and cip are captured by the middleware (see
+// The original Authorization is captured by the middleware (see
 // middleware.SetupContextForSelectedChannel) before the channel key overwrites
-// the incoming Authorization header. Here we restore them on the upstream
-// request so the upstream service receives the real client api-key and IP,
-// which it uses as load balancing identifiers.
+// the incoming Authorization header. Here we restore it on the upstream
+// request so the upstream service receives the real client api-key.
+//
+// The client IP is forwarded using the standard X-Forwarded-For format
+// (RFC 7239): the existing proxy chain is preserved and the immediate
+// sender's IP is appended. The upstream can extract the original client IP
+// (cip) as the leftmost entry for load balancing.
 func setupPassthroughHeaders(c *gin.Context, req *http.Request, meta *meta.Meta) {
 	if meta.OriginModelName != common.PassthroughModel {
 		return
@@ -83,12 +87,17 @@ func setupPassthroughHeaders(c *gin.Context, req *http.Request, meta *meta.Meta)
 			req.Header.Set("Authorization", auth)
 		}
 	}
-	// Forward the client IP (cip) extracted from X-Forwarded-For. Validate
-	// it is a real IP address to avoid forwarding malformed or malicious
-	// values to the upstream.
-	if raw, exists := c.Get(ctxkey.ClientIP); exists {
-		if ip, ok := raw.(string); ok && ip != "" && net.ParseIP(ip) != nil {
-			req.Header.Set("X-Forwarded-For", ip)
-		}
+	// Forward the client IP using the standard X-Forwarded-For format:
+	// preserve the existing proxy chain and append the immediate sender's
+	// IP so the upstream can identify the real client (leftmost entry).
+	originalXFF := c.Request.Header.Get("X-Forwarded-For")
+	immediateIP := network.GetIPFromRemoteAddr(c.Request.RemoteAddr)
+	switch {
+	case originalXFF != "" && immediateIP != "":
+		req.Header.Set("X-Forwarded-For", originalXFF+", "+immediateIP)
+	case originalXFF != "":
+		req.Header.Set("X-Forwarded-For", originalXFF)
+	case immediateIP != "":
+		req.Header.Set("X-Forwarded-For", immediateIP)
 	}
 }
