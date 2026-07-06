@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common"
@@ -36,9 +37,10 @@ func DoRequestHelper(a Adaptor, c *gin.Context, meta *meta.Meta, requestBody io.
 	if err != nil {
 		return nil, fmt.Errorf("setup request header failed: %w", err)
 	}
-	// For passthrough models, override the channel key with the original
-	// client Authorization and forward the client IP so the upstream can
-	// perform load balancing based on the real client identity.
+	// For passthrough models, forward the client api-key as a separate
+	// "user-api-key" header and the client IP via X-Forwarded-For so the
+	// upstream can identify the real client for load balancing. The
+	// upstream Authorization stays as the channel key.
 	setupPassthroughHeaders(c, req, meta)
 	logger.Debugf(c.Request.Context(), "DoRequest URL: %s, Auth: %s", fullRequestURL, req.Header.Get("Authorization"))
 	resp, err := DoRequest(c, req)
@@ -61,15 +63,17 @@ func DoRequest(c *gin.Context, req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-// setupPassthroughHeaders forwards the original client Authorization header
-// (api-key) and the client IP to the upstream request. This only takes
-// effect for common.PassthroughModel requests; for every other model the
-// request headers built by the adaptor are left untouched.
+// setupPassthroughHeaders forwards the client api-key and client IP to the
+// upstream request. This only takes effect for common.PassthroughModel
+// requests; for every other model the request headers built by the adaptor
+// are left untouched.
 //
-// The original Authorization is captured by the middleware (see
-// middleware.SetupContextForSelectedChannel) before the channel key overwrites
-// the incoming Authorization header. Here we restore it on the upstream
-// request so the upstream service receives the real client api-key.
+// The upstream Authorization header retains the channel api-key set by the
+// adaptor (i.e. normal channel authentication). The client's original
+// api-key—captured by the middleware before the channel key overwrites the
+// incoming Authorization—is extracted from the "Bearer <key>" format and
+// forwarded as a separate "user-api-key" header so the upstream can identify
+// the real client.
 //
 // The client IP is forwarded using the standard X-Forwarded-For format
 // (RFC 7239): the existing proxy chain is preserved and the immediate
@@ -79,12 +83,19 @@ func setupPassthroughHeaders(c *gin.Context, req *http.Request, meta *meta.Meta)
 	if meta.OriginModelName != common.PassthroughModel {
 		return
 	}
-	// Forward the original client Authorization (api-key) verbatim. Only
-	// overwrite when a non-empty value was captured; otherwise the channel
-	// key set by the adaptor remains in place.
+	// Extract the client api-key from the original Authorization header
+	// (captured by middleware before the channel key overwrote it) and
+	// forward it as a separate "user-api-key" header. The upstream
+	// Authorization remains the channel key set by the adaptor.
 	if raw, exists := c.Get(ctxkey.OriginalAuthorization); exists {
 		if auth, ok := raw.(string); ok && auth != "" {
-			req.Header.Set("Authorization", auth)
+			clientKey := extractBearerToken(auth)
+			if clientKey != "" {
+				req.Header.Set("user-api-key", clientKey)
+				logger.Debugf(c.Request.Context(), "passthrough: forwarded user-api-key for model %s", meta.OriginModelName)
+			} else {
+				logger.Debugf(c.Request.Context(), "passthrough: could not extract api-key from Authorization header for model %s", meta.OriginModelName)
+			}
 		}
 	}
 	// Forward the client IP using the standard X-Forwarded-For format:
@@ -100,4 +111,15 @@ func setupPassthroughHeaders(c *gin.Context, req *http.Request, meta *meta.Meta)
 	case immediateIP != "":
 		req.Header.Set("X-Forwarded-For", immediateIP)
 	}
+}
+
+// extractBearerToken extracts the api-key from an "Authorization: Bearer <key>"
+// header value. Returns an empty string if the header is missing the "Bearer "
+// prefix or the token portion is empty.
+func extractBearerToken(authHeader string) string {
+	const bearerPrefix = "Bearer "
+	if !strings.HasPrefix(authHeader, bearerPrefix) {
+		return ""
+	}
+	return strings.TrimSpace(authHeader[len(bearerPrefix):])
 }
