@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/pagoda-inference/one-api/common"
 	"github.com/pagoda-inference/one-api/common/client"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
 	"github.com/pagoda-inference/one-api/relay/meta"
@@ -42,6 +41,10 @@ func TestExtractBearerToken(t *testing.T) {
 // TestSetupPassthroughHeaders verifies that for the passthrough model the
 // client api-key is forwarded as "user-api-key" and the client IP via standard
 // X-Forwarded-For, while the upstream Authorization stays as the channel key.
+func passthroughModel() string {
+	return "bedi/deepseek-v4-flash"
+}
+
 func TestSetupPassthroughHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -57,7 +60,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 	}{
 		{
 			name:         "passthrough model: channel key stays, user-api-key set, XFF appended",
-			model:        common.PassthroughModel,
+			model:        passthroughModel(),
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -77,7 +80,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "empty original auth: no user-api-key",
-			model:        common.PassthroughModel,
+			model:        passthroughModel(),
 			originalAuth: "",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -87,7 +90,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "non-bearer auth: no user-api-key extracted",
-			model:        common.PassthroughModel,
+			model:        passthroughModel(),
 			originalAuth: "Basic dXNlcjpwYXNz",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -97,7 +100,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "bearer with empty token: no user-api-key",
-			model:        common.PassthroughModel,
+			model:        passthroughModel(),
 			originalAuth: "Bearer ",
 			incomingXFF:  "",
 			remoteAddr:   "1.2.3.4:12345",
@@ -107,7 +110,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "multi-hop XFF chain preserved and appended",
-			model:        common.PassthroughModel,
+			model:        passthroughModel(),
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "1.2.3.4, 10.0.0.1",
 			remoteAddr:   "10.0.0.2:12345",
@@ -117,7 +120,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "ipv6 remote addr",
-			model:        common.PassthroughModel,
+			model:        passthroughModel(),
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "",
 			remoteAddr:   "[::1]:12345",
@@ -224,7 +227,7 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 	}{
 		{
 			name:         "passthrough model: upstream receives channel key + user-api-key + XFF",
-			model:        common.PassthroughModel,
+			model:        passthroughModel(),
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",

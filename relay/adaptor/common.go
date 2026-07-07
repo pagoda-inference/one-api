@@ -80,7 +80,7 @@ func DoRequest(c *gin.Context, req *http.Request) (*http.Response, error) {
 // sender's IP is appended. The upstream can extract the original client IP
 // (cip) as the leftmost entry for load balancing.
 func setupPassthroughHeaders(c *gin.Context, req *http.Request, meta *meta.Meta) {
-	if meta.OriginModelName != common.PassthroughModel {
+	if !common.IsPassthroughModel(meta.OriginModelName) {
 		return
 	}
 	// Extract the client api-key from the original Authorization header

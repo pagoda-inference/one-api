@@ -83,7 +83,7 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	// setupPassthroughHeaders via the standard X-Forwarded-For format.
 	// Authorization is captured only once (the first call); retries reuse
 	// the stored value because the header has already been replaced by then.
-	if modelName == common.PassthroughModel {
+	if common.IsPassthroughModel(modelName) {
 		if _, exists := c.Get(ctxkey.OriginalAuthorization); !exists {
 			c.Set(ctxkey.OriginalAuthorization, c.Request.Header.Get("Authorization"))
 		}
