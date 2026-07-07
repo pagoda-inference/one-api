@@ -12,7 +12,6 @@ import (
 	"github.com/pagoda-inference/one-api/common/client"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
 	"github.com/pagoda-inference/one-api/common/logger"
-	"github.com/pagoda-inference/one-api/common/network"
 	"github.com/pagoda-inference/one-api/relay/meta"
 )
 
@@ -99,17 +98,12 @@ func setupPassthroughHeaders(c *gin.Context, req *http.Request, meta *meta.Meta)
 		}
 	}
 	// Forward the client IP using the standard X-Forwarded-For format.
-	// If the upstream proxy (e.g. Nginx) has already set X-Forwarded-For,
-	// use it as-is to avoid appending a local 127.0.0.1. Otherwise fall
-	// back to the immediate RemoteAddr, which is the best we have.
-	originalXFF := c.Request.Header.Get("X-Forwarded-For")
-	if originalXFF != "" {
-		req.Header.Set("X-Forwarded-For", originalXFF)
-	} else {
-		immediateIP := network.GetIPFromRemoteAddr(c.Request.RemoteAddr)
-		if immediateIP != "" {
-			req.Header.Set("X-Forwarded-For", immediateIP)
-		}
+	// Trust the reverse proxy (Nginx) to supply the correct client IP in
+	// the X-Forwarded-For header. Gin's ClientIP() returns the real client
+	// IP when TrustedPlatform (or TrustedProxies) is configured in main.go.
+	clientIP := c.ClientIP()
+	if clientIP != "" {
+		req.Header.Set("X-Forwarded-For", clientIP)
 	}
 }
 
