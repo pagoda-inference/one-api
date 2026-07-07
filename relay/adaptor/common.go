@@ -98,18 +98,18 @@ func setupPassthroughHeaders(c *gin.Context, req *http.Request, meta *meta.Meta)
 			}
 		}
 	}
-	// Forward the client IP using the standard X-Forwarded-For format:
-	// preserve the existing proxy chain and append the immediate sender's
-	// IP so the upstream can identify the real client (leftmost entry).
+	// Forward the client IP using the standard X-Forwarded-For format.
+	// If the upstream proxy (e.g. Nginx) has already set X-Forwarded-For,
+	// use it as-is to avoid appending a local 127.0.0.1. Otherwise fall
+	// back to the immediate RemoteAddr, which is the best we have.
 	originalXFF := c.Request.Header.Get("X-Forwarded-For")
-	immediateIP := network.GetIPFromRemoteAddr(c.Request.RemoteAddr)
-	switch {
-	case originalXFF != "" && immediateIP != "":
-		req.Header.Set("X-Forwarded-For", originalXFF+", "+immediateIP)
-	case originalXFF != "":
+	if originalXFF != "" {
 		req.Header.Set("X-Forwarded-For", originalXFF)
-	case immediateIP != "":
-		req.Header.Set("X-Forwarded-For", immediateIP)
+	} else {
+		immediateIP := network.GetIPFromRemoteAddr(c.Request.RemoteAddr)
+		if immediateIP != "" {
+			req.Header.Set("X-Forwarded-For", immediateIP)
+		}
 	}
 }
 
