@@ -37,3 +37,32 @@ func TestGetIPFromRemoteAddr(t *testing.T) {
 		})
 	})
 }
+
+func TestIsLoopbackIP(t *testing.T) {
+	Convey("TestIsLoopbackIP", t, func() {
+		Convey("127.0.0.1 is loopback", func() {
+			So(IsLoopbackIP("127.0.0.1"), ShouldBeTrue)
+		})
+		Convey("::1 is loopback", func() {
+			So(IsLoopbackIP("::1"), ShouldBeTrue)
+		})
+		Convey("127.255.255.255 is loopback (entire 127.0.0.0/8)", func() {
+			So(IsLoopbackIP("127.255.255.255"), ShouldBeTrue)
+		})
+		Convey("external IPv4 is not loopback", func() {
+			So(IsLoopbackIP("1.2.3.4"), ShouldBeFalse)
+		})
+		Convey("private IPv4 is not loopback", func() {
+			So(IsLoopbackIP("10.0.0.1"), ShouldBeFalse)
+		})
+		Convey("whitespace is trimmed", func() {
+			So(IsLoopbackIP("  127.0.0.1  "), ShouldBeTrue)
+		})
+		Convey("empty string is not loopback", func() {
+			So(IsLoopbackIP(""), ShouldBeFalse)
+		})
+		Convey("invalid string is not loopback", func() {
+			So(IsLoopbackIP("not-an-ip"), ShouldBeFalse)
+		})
+	})
+}

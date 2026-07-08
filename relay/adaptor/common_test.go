@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/pagoda-inference/one-api/common"
 	"github.com/pagoda-inference/one-api/common/client"
 	"github.com/pagoda-inference/one-api/common/ctxkey"
 	"github.com/pagoda-inference/one-api/relay/meta"
@@ -38,11 +39,13 @@ func TestExtractBearerToken(t *testing.T) {
 	}
 }
 
-// TestSetupPassthroughHeaders verifies that for the passthrough model the
-// client api-key is forwarded as "user-api-key" and the client IP via standard
-// X-Forwarded-For, while the upstream Authorization stays as the channel key.
-func passthroughModel() string {
-	return "bedi/deepseek-v4-flash"
+// TestSetupPassthroughHeaders verifies that for the passthrough upstream
+// (http://10.1.105.193:81) the client api-key is forwarded as "user-api-key"
+// and the client IP via standard X-Forwarded-For, while the upstream
+// Authorization stays as the channel key. For other upstreams no passthrough
+// headers are added.
+func passthroughBaseURL() string {
+	return common.PassthroughUpstreamBaseURL
 }
 
 func TestSetupPassthroughHeaders(t *testing.T) {
@@ -50,7 +53,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		model        string
+		baseURL      string
 		originalAuth string
 		incomingXFF  string
 		remoteAddr   string
@@ -59,8 +62,8 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		wantXFF      string
 	}{
 		{
-			name:         "passthrough model: channel key stays, user-api-key set, XFF appended",
-			model:        passthroughModel(),
+			name:         "passthrough upstream: channel key stays, user-api-key set, XFF appended",
+			baseURL:      passthroughBaseURL(),
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -69,8 +72,18 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 			wantXFF:      "1.2.3.4, 10.0.0.1",
 		},
 		{
-			name:         "non-passthrough model: no user-api-key, no XFF manipulation",
-			model:        "gpt-4o",
+			name:         "passthrough upstream with trailing slash still matches",
+			baseURL:      passthroughBaseURL() + "/",
+			originalAuth: "Bearer sk-client-key",
+			incomingXFF:  "1.2.3.4",
+			remoteAddr:   "10.0.0.1:12345",
+			wantAuth:     "Bearer sk-channel-key",
+			wantUserKey:  "sk-client-key",
+			wantXFF:      "1.2.3.4, 10.0.0.1",
+		},
+		{
+			name:         "non-passthrough upstream: no user-api-key, no XFF manipulation",
+			baseURL:      "https://api.openai.com",
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -80,7 +93,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "empty original auth: no user-api-key",
-			model:        passthroughModel(),
+			baseURL:      passthroughBaseURL(),
 			originalAuth: "",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -90,7 +103,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "non-bearer auth: no user-api-key extracted",
-			model:        passthroughModel(),
+			baseURL:      passthroughBaseURL(),
 			originalAuth: "Basic dXNlcjpwYXNz",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -100,7 +113,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "bearer with empty token: no user-api-key",
-			model:        passthroughModel(),
+			baseURL:      passthroughBaseURL(),
 			originalAuth: "Bearer ",
 			incomingXFF:  "",
 			remoteAddr:   "1.2.3.4:12345",
@@ -110,7 +123,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		},
 		{
 			name:         "multi-hop XFF chain preserved and appended",
-			model:        passthroughModel(),
+			baseURL:      passthroughBaseURL(),
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "1.2.3.4, 10.0.0.1",
 			remoteAddr:   "10.0.0.2:12345",
@@ -119,14 +132,54 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 			wantXFF:      "1.2.3.4, 10.0.0.1, 10.0.0.2",
 		},
 		{
-			name:         "ipv6 remote addr",
-			model:        passthroughModel(),
+			name:         "ipv6 loopback remote addr filtered out",
+			baseURL:      passthroughBaseURL(),
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "",
 			remoteAddr:   "[::1]:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "sk-client-key",
-			wantXFF:      "::1",
+			wantXFF:      "",
+		},
+		{
+			name:         "loopback 127.0.0.1 in XFF chain filtered out",
+			baseURL:      passthroughBaseURL(),
+			originalAuth: "Bearer sk-client-key",
+			incomingXFF:  "1.2.3.4, 127.0.0.1",
+			remoteAddr:   "10.0.0.1:12345",
+			wantAuth:     "Bearer sk-channel-key",
+			wantUserKey:  "sk-client-key",
+			wantXFF:      "1.2.3.4, 10.0.0.1",
+		},
+		{
+			name:         "sender is loopback (internal Nginx): chain preserved, sender not appended",
+			baseURL:      passthroughBaseURL(),
+			originalAuth: "Bearer sk-client-key",
+			incomingXFF:  "1.2.3.4",
+			remoteAddr:   "127.0.0.1:12345",
+			wantAuth:     "Bearer sk-channel-key",
+			wantUserKey:  "sk-client-key",
+			wantXFF:      "1.2.3.4",
+		},
+		{
+			name:         "all loopback XFF chain results in empty XFF",
+			baseURL:      passthroughBaseURL(),
+			originalAuth: "Bearer sk-client-key",
+			incomingXFF:  "127.0.0.1, ::1",
+			remoteAddr:   "127.0.0.1:12345",
+			wantAuth:     "Bearer sk-channel-key",
+			wantUserKey:  "sk-client-key",
+			wantXFF:      "",
+		},
+		{
+			name:         "multiple loopback entries interspersed with real IPs",
+			baseURL:      passthroughBaseURL(),
+			originalAuth: "Bearer sk-client-key",
+			incomingXFF:  "1.2.3.4, 127.0.0.1, ::1, 10.0.0.1",
+			remoteAddr:   "10.0.0.2:12345",
+			wantAuth:     "Bearer sk-channel-key",
+			wantUserKey:  "sk-client-key",
+			wantXFF:      "1.2.3.4, 10.0.0.1, 10.0.0.2",
 		},
 	}
 
@@ -141,7 +194,7 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "https://upstream/v1/chat/completions", nil)
 			req.Header.Set("Authorization", "Bearer sk-channel-key")
 
-			m := &meta.Meta{OriginModelName: tt.model}
+			m := &meta.Meta{BaseURL: tt.baseURL}
 			setupPassthroughHeaders(c, req, m)
 
 			if got := req.Header.Get("Authorization"); got != tt.wantAuth {
@@ -152,6 +205,37 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 			}
 			if got := req.Header.Get("X-Forwarded-For"); got != tt.wantXFF {
 				t.Errorf("X-Forwarded-For = %q, want %q", got, tt.wantXFF)
+			}
+		})
+	}
+}
+
+// TestBuildForwardedXFF verifies that the X-Forwarded-For chain is built
+// correctly: existing entries are preserved, the sender IP (from RemoteAddr)
+// is appended, and loopback addresses (127.0.0.0/8, ::1) are filtered out.
+func TestBuildForwardedXFF(t *testing.T) {
+	tests := []struct {
+		name       string
+		existingXFF string
+		remoteAddr string
+		want       string
+	}{
+		{"empty xff, external sender", "", "1.2.3.4:12345", "1.2.3.4"},
+		{"empty xff, loopback sender dropped", "", "127.0.0.1:12345", ""},
+		{"external chain, external sender appended", "1.2.3.4", "10.0.0.1:12345", "1.2.3.4, 10.0.0.1"},
+		{"loopback in chain filtered, sender appended", "1.2.3.4, 127.0.0.1", "10.0.0.1:12345", "1.2.3.4, 10.0.0.1"},
+		{"chain preserved, loopback sender not appended", "1.2.3.4", "127.0.0.1:12345", "1.2.3.4"},
+		{"all loopback chain and sender", "127.0.0.1, ::1", "127.0.0.1:12345", ""},
+		{"mixed loopback and real IPs", "1.2.3.4, 127.0.0.1, ::1, 10.0.0.1", "10.0.0.2:12345", "1.2.3.4, 10.0.0.1, 10.0.0.2"},
+		{"whitespace trimmed in chain", "  1.2.3.4  ,  127.0.0.1  ", "10.0.0.1:12345", "1.2.3.4, 10.0.0.1"},
+		{"loopback variant 127.255.255.255 filtered", "1.2.3.4, 127.255.255.255", "10.0.0.1:12345", "1.2.3.4, 10.0.0.1"},
+		{"ipv6 loopback sender dropped", "1.2.3.4", "[::1]:12345", "1.2.3.4"},
+		{"invalid remote addr ignored", "1.2.3.4", "invalid", "1.2.3.4"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := buildForwardedXFF(tt.existingXFF, tt.remoteAddr); got != tt.want {
+				t.Errorf("buildForwardedXFF(%q, %q) = %q, want %q", tt.existingXFF, tt.remoteAddr, got, tt.want)
 			}
 		})
 	}
@@ -189,7 +273,9 @@ func (a *stubAdaptor) GetChannelName() string { return "stub" }
 // TestDoRequestHelperPassthroughIntegration is an integration test that spins
 // up a fake upstream server and verifies that DoRequestHelper forwards the
 // client api-key as "user-api-key" while keeping the channel key in
-// Authorization for the passthrough model.
+// Authorization when the channel base URL is the passthrough upstream.
+// The stub adaptor always sends the HTTP request to the test server, while
+// meta.BaseURL controls whether the passthrough logic is triggered.
 func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	if client.HTTPClient == nil {
@@ -217,7 +303,7 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		model        string
+		baseURL      string
 		originalAuth string
 		incomingXFF  string
 		remoteAddr   string
@@ -226,8 +312,8 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 		wantXFF      string
 	}{
 		{
-			name:         "passthrough model: upstream receives channel key + user-api-key + XFF",
-			model:        passthroughModel(),
+			name:         "passthrough upstream: upstream receives channel key + user-api-key + XFF",
+			baseURL:      passthroughBaseURL(),
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -236,8 +322,8 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 			wantXFF:      "1.2.3.4, 10.0.0.1",
 		},
 		{
-			name:         "other model: upstream receives channel key only, no user-api-key",
-			model:        "gpt-4o",
+			name:         "other upstream: upstream receives channel key only, no user-api-key",
+			baseURL:      "https://api.openai.com",
 			originalAuth: "Bearer sk-client-key",
 			incomingXFF:  "1.2.3.4",
 			remoteAddr:   "10.0.0.1:12345",
@@ -255,7 +341,7 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 			c.Request.RemoteAddr = tt.remoteAddr
 			c.Set(ctxkey.OriginalAuthorization, tt.originalAuth)
 
-			m := &meta.Meta{OriginModelName: tt.model}
+			m := &meta.Meta{BaseURL: tt.baseURL}
 			a := &stubAdaptor{upstreamURL: srv.URL}
 
 			resp, err := DoRequestHelper(a, c, m, strings.NewReader(""))

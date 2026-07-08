@@ -68,3 +68,11 @@ func GetIPFromRemoteAddr(remoteAddr string) string {
 	}
 	return host
 }
+
+// IsLoopbackIP reports whether the given IP string is a loopback address
+// (127.0.0.0/8 for IPv4, ::1 for IPv6). It trims surrounding whitespace before
+// parsing. Returns false for empty or unparseable strings.
+func IsLoopbackIP(ip string) bool {
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	return parsed != nil && parsed.IsLoopback()
+}

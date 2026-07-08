@@ -135,15 +135,6 @@ func main() {
 
 	// Initialize HTTP server
 	server := gin.New()
-	// Trust X-Forwarded-For from reverse proxies within these subnets.
-	// Nginx runs on the same host/network as one-api, typically within
-	// private IP ranges. SetTrustedProxies ensures Gin's ClientIP()
-	// reads X-Forwarded-For for requests from trusted proxies, while
-	// falling back to RemoteAddr when no proxy is present.
-	server.SetTrustedProxies([]string{"0.0.0.0/0"})
-	// WARNING: "0.0.0.0/0" trusts ALL proxies. If possible, restrict
-	// to your actual proxy subnets, e.g.:
-	//   server.SetTrustedProxies([]string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1/32"})
 	server.Use(gin.Recovery())
 	// This will cause SSE not to work!!!
 	//server.Use(gzip.Gzip(gzip.DefaultCompression))
