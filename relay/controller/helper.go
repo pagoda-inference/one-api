@@ -111,6 +111,10 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.M
 	var quota int64
 	promptTokens := usage.PromptTokens
 	completionTokens := usage.CompletionTokens
+	cachedTokens := 0
+	if usage.PromptTokensDetails != nil {
+		cachedTokens = usage.PromptTokensDetails.CachedTokens
+	}
 
 	// inputPrice and outputPrice are in yuan per 1000 tokens
 	inputQuota := float64(promptTokens) * inputPrice / 1000
@@ -132,6 +136,7 @@ func postConsumeQuota(ctx context.Context, usage *relaymodel.Usage, meta *meta.M
 		ChannelId:         meta.ChannelId,
 		PromptTokens:      promptTokens,
 		CompletionTokens:  completionTokens,
+		CachedTokens:      cachedTokens,
 		ModelName:         meta.OriginModelName,
 		TokenName:         meta.TokenName,
 		Quota:             int(quota),
