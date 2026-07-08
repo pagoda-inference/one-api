@@ -3,12 +3,16 @@ package adaptor
 import (
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/pagoda-inference/one-api/common/client"
-	"github.com/pagoda-inference/one-api/common/logger"
-	"github.com/pagoda-inference/one-api/relay/meta"
 	"io"
 	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/pagoda-inference/one-api/common"
+	"github.com/pagoda-inference/one-api/common/client"
+	"github.com/pagoda-inference/one-api/common/ctxkey"
+	"github.com/pagoda-inference/one-api/common/logger"
+	"github.com/pagoda-inference/one-api/relay/meta"
 )
 
 func SetupCommonRequestHeader(c *gin.Context, req *http.Request, meta *meta.Meta) {
@@ -32,6 +36,11 @@ func DoRequestHelper(a Adaptor, c *gin.Context, meta *meta.Meta, requestBody io.
 	if err != nil {
 		return nil, fmt.Errorf("setup request header failed: %w", err)
 	}
+	// For the passthrough upstream (http://10.1.105.193:81), forward the
+	// client api-key as a separate "user-api-key" header so the upstream
+	// can identify the real client for load balancing. The upstream
+	// Authorization stays as the channel key.
+	setupPassthroughHeaders(c, req, meta)
 	logger.Debugf(c.Request.Context(), "DoRequest URL: %s, Auth: %s", fullRequestURL, req.Header.Get("Authorization"))
 	resp, err := DoRequest(c, req)
 	if err != nil {
@@ -51,4 +60,49 @@ func DoRequest(c *gin.Context, req *http.Request) (*http.Response, error) {
 	_ = req.Body.Close()
 	_ = c.Request.Body.Close()
 	return resp, nil
+}
+
+// setupPassthroughHeaders forwards the client api-key to the upstream
+// request. This only takes effect when the request is routed to the
+// passthrough upstream (common.PassthroughUpstreamBaseURL,
+// http://10.1.105.193:81); for every other upstream the request headers built
+// by the adaptor are left untouched. The decision is based on the upstream
+// channel base URL (meta.BaseURL), not the model name.
+//
+// The upstream Authorization header retains the channel api-key set by the
+// adaptor (i.e. normal channel authentication). The client's original
+// api-key—captured by the middleware before the channel key overwrites the
+// incoming Authorization—is extracted from the "Bearer <key>" format and
+// forwarded as a separate "user-api-key" header so the upstream can identify
+// the real client for load balancing.
+func setupPassthroughHeaders(c *gin.Context, req *http.Request, meta *meta.Meta) {
+	if !common.IsPassthroughUpstream(meta.BaseURL) {
+		return
+	}
+	// Extract the client api-key from the original Authorization header
+	// (captured by middleware before the channel key overwrote it) and
+	// forward it as a separate "user-api-key" header. The upstream
+	// Authorization remains the channel key set by the adaptor.
+	if raw, exists := c.Get(ctxkey.OriginalAuthorization); exists {
+		if auth, ok := raw.(string); ok && auth != "" {
+			clientKey := extractBearerToken(auth)
+			if clientKey != "" {
+				req.Header.Set("user-api-key", clientKey)
+				logger.Debugf(c.Request.Context(), "passthrough: forwarded user-api-key for upstream %s", meta.BaseURL)
+			} else {
+				logger.Debugf(c.Request.Context(), "passthrough: could not extract api-key from Authorization header for upstream %s", meta.BaseURL)
+			}
+		}
+	}
+}
+
+// extractBearerToken extracts the api-key from an "Authorization: Bearer <key>"
+// header value. Returns an empty string if the header is missing the "Bearer "
+// prefix or the token portion is empty.
+func extractBearerToken(authHeader string) string {
+	const bearerPrefix = "Bearer "
+	if !strings.HasPrefix(authHeader, bearerPrefix) {
+		return ""
+	}
+	return strings.TrimSpace(authHeader[len(bearerPrefix):])
 }
