@@ -79,13 +79,11 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	// For the passthrough upstream (common.PassthroughUpstreamBaseURL),
 	// preserve the original client Authorization header (api-key) before the
 	// channel key overwrites it. This is forwarded to the upstream service so
-	// it can use the real client api-key for load balancing. The client IP is
-	// handled separately in setupPassthroughHeaders via the standard
-	// X-Forwarded-For format. Authorization is captured only once (the first
-	// call); retries reuse the stored value because the header has already
-	// been replaced by then. The decision is based on the upstream channel
-	// base URL, not the model name, so any model routed to the passthrough
-	// upstream gets the treatment.
+	// it can use the real client api-key for load balancing. Authorization is
+	// captured only once (the first call); retries reuse the stored value
+	// because the header has already been replaced by then. The decision is
+	// based on the upstream channel base URL, not the model name, so any model
+	// routed to the passthrough upstream gets the treatment.
 	if common.IsPassthroughUpstream(channel.GetBaseURL()) {
 		if _, exists := c.Get(ctxkey.OriginalAuthorization); !exists {
 			c.Set(ctxkey.OriginalAuthorization, c.Request.Header.Get("Authorization"))

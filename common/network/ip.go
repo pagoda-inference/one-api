@@ -3,10 +3,9 @@ package network
 import (
 	"context"
 	"fmt"
+	"github.com/pagoda-inference/one-api/common/logger"
 	"net"
 	"strings"
-
-	"github.com/pagoda-inference/one-api/common/logger"
 )
 
 func splitSubnets(subnets string) []string {
@@ -50,29 +49,4 @@ func IsIpInSubnets(ctx context.Context, ip string, subnets string) bool {
 		}
 	}
 	return false
-}
-
-// GetIPFromRemoteAddr extracts the host IP from an address in "host:port"
-// format (e.g. http.Request.RemoteAddr). Returns the IP string if valid,
-// or an empty string if the address cannot be parsed or is not a valid IP.
-func GetIPFromRemoteAddr(remoteAddr string) string {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		if net.ParseIP(remoteAddr) != nil {
-			return remoteAddr
-		}
-		return ""
-	}
-	if net.ParseIP(host) == nil {
-		return ""
-	}
-	return host
-}
-
-// IsLoopbackIP reports whether the given IP string is a loopback address
-// (127.0.0.0/8 for IPv4, ::1 for IPv6). It trims surrounding whitespace before
-// parsing. Returns false for empty or unparseable strings.
-func IsLoopbackIP(ip string) bool {
-	parsed := net.ParseIP(strings.TrimSpace(ip))
-	return parsed != nil && parsed.IsLoopback()
 }

@@ -41,9 +41,8 @@ func TestExtractBearerToken(t *testing.T) {
 
 // TestSetupPassthroughHeaders verifies that for the passthrough upstream
 // (http://10.1.105.193:81) the client api-key is forwarded as "user-api-key"
-// and the client IP via standard X-Forwarded-For, while the upstream
-// Authorization stays as the channel key. For other upstreams no passthrough
-// headers are added.
+// while the upstream Authorization stays as the channel key. For other
+// upstreams no passthrough headers are added.
 func passthroughBaseURL() string {
 	return common.PassthroughUpstreamBaseURL
 }
@@ -55,131 +54,50 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		name         string
 		baseURL      string
 		originalAuth string
-		incomingXFF  string
-		remoteAddr   string
 		wantAuth     string
 		wantUserKey  string
-		wantXFF      string
 	}{
 		{
-			name:         "passthrough upstream: channel key stays, user-api-key set, XFF appended",
+			name:         "passthrough upstream: channel key stays, user-api-key set",
 			baseURL:      passthroughBaseURL(),
 			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4",
-			remoteAddr:   "10.0.0.1:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "sk-client-key",
-			wantXFF:      "1.2.3.4, 10.0.0.1",
 		},
 		{
 			name:         "passthrough upstream with trailing slash still matches",
 			baseURL:      passthroughBaseURL() + "/",
 			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4",
-			remoteAddr:   "10.0.0.1:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "sk-client-key",
-			wantXFF:      "1.2.3.4, 10.0.0.1",
 		},
 		{
-			name:         "non-passthrough upstream: no user-api-key, no XFF manipulation",
+			name:         "non-passthrough upstream: no user-api-key",
 			baseURL:      "https://api.openai.com",
 			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4",
-			remoteAddr:   "10.0.0.1:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "",
-			wantXFF:      "",
 		},
 		{
 			name:         "empty original auth: no user-api-key",
 			baseURL:      passthroughBaseURL(),
 			originalAuth: "",
-			incomingXFF:  "1.2.3.4",
-			remoteAddr:   "10.0.0.1:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "",
-			wantXFF:      "1.2.3.4, 10.0.0.1",
 		},
 		{
 			name:         "non-bearer auth: no user-api-key extracted",
 			baseURL:      passthroughBaseURL(),
 			originalAuth: "Basic dXNlcjpwYXNz",
-			incomingXFF:  "1.2.3.4",
-			remoteAddr:   "10.0.0.1:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "",
-			wantXFF:      "1.2.3.4, 10.0.0.1",
 		},
 		{
 			name:         "bearer with empty token: no user-api-key",
 			baseURL:      passthroughBaseURL(),
 			originalAuth: "Bearer ",
-			incomingXFF:  "",
-			remoteAddr:   "1.2.3.4:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "",
-			wantXFF:      "1.2.3.4",
-		},
-		{
-			name:         "multi-hop XFF chain preserved and appended",
-			baseURL:      passthroughBaseURL(),
-			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4, 10.0.0.1",
-			remoteAddr:   "10.0.0.2:12345",
-			wantAuth:     "Bearer sk-channel-key",
-			wantUserKey:  "sk-client-key",
-			wantXFF:      "1.2.3.4, 10.0.0.1, 10.0.0.2",
-		},
-		{
-			name:         "ipv6 loopback remote addr filtered out",
-			baseURL:      passthroughBaseURL(),
-			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "",
-			remoteAddr:   "[::1]:12345",
-			wantAuth:     "Bearer sk-channel-key",
-			wantUserKey:  "sk-client-key",
-			wantXFF:      "",
-		},
-		{
-			name:         "loopback 127.0.0.1 in XFF chain filtered out",
-			baseURL:      passthroughBaseURL(),
-			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4, 127.0.0.1",
-			remoteAddr:   "10.0.0.1:12345",
-			wantAuth:     "Bearer sk-channel-key",
-			wantUserKey:  "sk-client-key",
-			wantXFF:      "1.2.3.4, 10.0.0.1",
-		},
-		{
-			name:         "sender is loopback (internal Nginx): chain preserved, sender not appended",
-			baseURL:      passthroughBaseURL(),
-			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4",
-			remoteAddr:   "127.0.0.1:12345",
-			wantAuth:     "Bearer sk-channel-key",
-			wantUserKey:  "sk-client-key",
-			wantXFF:      "1.2.3.4",
-		},
-		{
-			name:         "all loopback XFF chain results in empty XFF",
-			baseURL:      passthroughBaseURL(),
-			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "127.0.0.1, ::1",
-			remoteAddr:   "127.0.0.1:12345",
-			wantAuth:     "Bearer sk-channel-key",
-			wantUserKey:  "sk-client-key",
-			wantXFF:      "",
-		},
-		{
-			name:         "multiple loopback entries interspersed with real IPs",
-			baseURL:      passthroughBaseURL(),
-			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4, 127.0.0.1, ::1, 10.0.0.1",
-			remoteAddr:   "10.0.0.2:12345",
-			wantAuth:     "Bearer sk-channel-key",
-			wantUserKey:  "sk-client-key",
-			wantXFF:      "1.2.3.4, 10.0.0.1, 10.0.0.2",
 		},
 	}
 
@@ -187,8 +105,6 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-			c.Request.Header.Set("X-Forwarded-For", tt.incomingXFF)
-			c.Request.RemoteAddr = tt.remoteAddr
 			c.Set(ctxkey.OriginalAuthorization, tt.originalAuth)
 
 			req := httptest.NewRequest(http.MethodPost, "https://upstream/v1/chat/completions", nil)
@@ -202,40 +118,6 @@ func TestSetupPassthroughHeaders(t *testing.T) {
 			}
 			if got := req.Header.Get("user-api-key"); got != tt.wantUserKey {
 				t.Errorf("user-api-key = %q, want %q", got, tt.wantUserKey)
-			}
-			if got := req.Header.Get("X-Forwarded-For"); got != tt.wantXFF {
-				t.Errorf("X-Forwarded-For = %q, want %q", got, tt.wantXFF)
-			}
-		})
-	}
-}
-
-// TestBuildForwardedXFF verifies that the X-Forwarded-For chain is built
-// correctly: existing entries are preserved, the sender IP (from RemoteAddr)
-// is appended, and loopback addresses (127.0.0.0/8, ::1) are filtered out.
-func TestBuildForwardedXFF(t *testing.T) {
-	tests := []struct {
-		name       string
-		existingXFF string
-		remoteAddr string
-		want       string
-	}{
-		{"empty xff, external sender", "", "1.2.3.4:12345", "1.2.3.4"},
-		{"empty xff, loopback sender dropped", "", "127.0.0.1:12345", ""},
-		{"external chain, external sender appended", "1.2.3.4", "10.0.0.1:12345", "1.2.3.4, 10.0.0.1"},
-		{"loopback in chain filtered, sender appended", "1.2.3.4, 127.0.0.1", "10.0.0.1:12345", "1.2.3.4, 10.0.0.1"},
-		{"chain preserved, loopback sender not appended", "1.2.3.4", "127.0.0.1:12345", "1.2.3.4"},
-		{"all loopback chain and sender", "127.0.0.1, ::1", "127.0.0.1:12345", ""},
-		{"mixed loopback and real IPs", "1.2.3.4, 127.0.0.1, ::1, 10.0.0.1", "10.0.0.2:12345", "1.2.3.4, 10.0.0.1, 10.0.0.2"},
-		{"whitespace trimmed in chain", "  1.2.3.4  ,  127.0.0.1  ", "10.0.0.1:12345", "1.2.3.4, 10.0.0.1"},
-		{"loopback variant 127.255.255.255 filtered", "1.2.3.4, 127.255.255.255", "10.0.0.1:12345", "1.2.3.4, 10.0.0.1"},
-		{"ipv6 loopback sender dropped", "1.2.3.4", "[::1]:12345", "1.2.3.4"},
-		{"invalid remote addr ignored", "1.2.3.4", "invalid", "1.2.3.4"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := buildForwardedXFF(tt.existingXFF, tt.remoteAddr); got != tt.want {
-				t.Errorf("buildForwardedXFF(%q, %q) = %q, want %q", tt.existingXFF, tt.remoteAddr, got, tt.want)
 			}
 		})
 	}
@@ -285,7 +167,6 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 	type upstreamHeaders struct {
 		auth    string
 		userKey string
-		xff     string
 	}
 	headerCh := make(chan upstreamHeaders, 1)
 
@@ -293,7 +174,6 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 		headerCh <- upstreamHeaders{
 			auth:    r.Header.Get("Authorization"),
 			userKey: r.Header.Get("user-api-key"),
-			xff:     r.Header.Get("X-Forwarded-For"),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -305,31 +185,22 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 		name         string
 		baseURL      string
 		originalAuth string
-		incomingXFF  string
-		remoteAddr   string
 		wantAuth     string
 		wantUserKey  string
-		wantXFF      string
 	}{
 		{
-			name:         "passthrough upstream: upstream receives channel key + user-api-key + XFF",
+			name:         "passthrough upstream: upstream receives channel key + user-api-key",
 			baseURL:      passthroughBaseURL(),
 			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4",
-			remoteAddr:   "10.0.0.1:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "sk-client-key",
-			wantXFF:      "1.2.3.4, 10.0.0.1",
 		},
 		{
 			name:         "other upstream: upstream receives channel key only, no user-api-key",
 			baseURL:      "https://api.openai.com",
 			originalAuth: "Bearer sk-client-key",
-			incomingXFF:  "1.2.3.4",
-			remoteAddr:   "10.0.0.1:12345",
 			wantAuth:     "Bearer sk-channel-key",
 			wantUserKey:  "",
-			wantXFF:      "",
 		},
 	}
 
@@ -337,8 +208,6 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(""))
-			c.Request.Header.Set("X-Forwarded-For", tt.incomingXFF)
-			c.Request.RemoteAddr = tt.remoteAddr
 			c.Set(ctxkey.OriginalAuthorization, tt.originalAuth)
 
 			m := &meta.Meta{BaseURL: tt.baseURL}
@@ -356,9 +225,6 @@ func TestDoRequestHelperPassthroughIntegration(t *testing.T) {
 			}
 			if got.userKey != tt.wantUserKey {
 				t.Errorf("upstream user-api-key = %q, want %q", got.userKey, tt.wantUserKey)
-			}
-			if got.xff != tt.wantXFF {
-				t.Errorf("upstream X-Forwarded-For = %q, want %q", got.xff, tt.wantXFF)
 			}
 		})
 	}
