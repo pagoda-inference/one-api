@@ -190,6 +190,9 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 
 	userQuota, err := model.CacheGetUserQuota(ctx, meta.UserId)
 
+	// quota = -1 means unlimited, skip all quota validation and consumption
+	unlimited := userQuota == -1
+
 	var quota int64
 	switch meta.ChannelType {
 	case channeltype.Replicate:
@@ -199,7 +202,7 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		quota = int64(math.Ceil(price*imageCostRatio/1000*groupRatio)) * int64(imageRequest.N)
 	}
 
-	if userQuota-quota < 0 {
+	if !unlimited && userQuota-quota < 0 {
 		return openai.ErrorWrapper(errors.New("user quota is not enough"), "insufficient_user_quota", http.StatusForbidden)
 	}
 
@@ -214,6 +217,24 @@ func RelayImageHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		if resp != nil &&
 			resp.StatusCode != http.StatusCreated && // replicate returns 201
 			resp.StatusCode != http.StatusOK {
+			return
+		}
+
+		// unlimited users: record usage log only, skip quota settlement
+		if unlimited {
+			logger.Info(ctx, fmt.Sprintf("user %d has unlimited quota, skipping image quota settlement", meta.UserId))
+			tokenName := c.GetString(ctxkey.TokenName)
+			logContent := fmt.Sprintf("计费：输入%.6f元/1K + 输出%.6f元/1K，groupRatio=%.2f", inputPrice, outputPrice, groupRatio)
+			model.RecordConsumeLog(ctx, &model.Log{
+				UserId:           meta.UserId,
+				ChannelId:        meta.ChannelId,
+				PromptTokens:     0,
+				CompletionTokens: 0,
+				ModelName:        imageRequest.Model,
+				TokenName:        tokenName,
+				Quota:            int(quota),
+				Content:          logContent,
+			})
 			return
 		}
 

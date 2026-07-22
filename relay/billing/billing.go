@@ -50,3 +50,21 @@ func PostConsumeQuota(ctx context.Context, tokenId int, quotaDelta int64, totalQ
 		logger.Error(ctx, fmt.Sprintf("totalQuota consumed is %d, something is wrong", totalQuota))
 	}
 }
+
+// RecordConsumeLogOnly records a consume log entry without performing any quota settlement.
+// This is used for unlimited users (quota == -1) to track usage while skipping deduction.
+func RecordConsumeLogOnly(ctx context.Context, totalQuota int64, userId int, channelId int, inputPrice float64, outputPrice float64, groupRatio float64, modelName string, tokenName string) {
+	if totalQuota != 0 {
+		logContent := fmt.Sprintf("计费：输入%.6f元/1K + 输出%.6f元/1K，groupRatio=%.2f", inputPrice, outputPrice, groupRatio)
+		model.RecordConsumeLog(ctx, &model.Log{
+			UserId:           userId,
+			ChannelId:        channelId,
+			PromptTokens:     int(totalQuota),
+			CompletionTokens: 0,
+			ModelName:        modelName,
+			TokenName:        tokenName,
+			Quota:            int(totalQuota),
+			Content:          logContent,
+		})
+	}
+}

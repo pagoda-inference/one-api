@@ -122,6 +122,34 @@ func settleVideoQuota(ctx context.Context, task *model.VideoGenerationTask) {
 		return
 	}
 	finalQuota := computeVideoFinalQuota(task)
+
+	// quota = -1 means unlimited, skip all quota settlement but still record usage log
+	userQuota, err := model.CacheGetUserQuota(ctx, task.UserId)
+	if err != nil {
+		logger.SysError("error get user quota for video settlement: " + err.Error())
+	}
+	if err == nil && userQuota == -1 {
+		logger.Info(ctx, fmt.Sprintf("user %d has unlimited quota, skipping video quota settlement", task.UserId))
+		if finalQuota > 0 {
+			logContent := fmt.Sprintf("视频计费：finalQuota=%d", finalQuota)
+			model.RecordConsumeLog(ctx, &model.Log{
+				UserId:           task.UserId,
+				ChannelId:        task.ChannelId,
+				PromptTokens:     0,
+				CompletionTokens: 0,
+				ModelName:        task.Model,
+				Quota:            int(finalQuota),
+				Content:          logContent,
+			})
+		}
+		_ = model.UpdateVideoTaskByTaskId(task.TaskId, map[string]any{
+			"quota_settled": true,
+			"final_quota":   finalQuota,
+			"updated_time":  helper.GetTimestamp(),
+		})
+		return
+	}
+
 	if task.TokenId != 0 && finalQuota > 0 {
 		_ = model.PostConsumeTokenQuota(task.TokenId, finalQuota)
 	} else if task.TokenId == 0 && finalQuota > 0 {
