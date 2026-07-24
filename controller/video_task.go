@@ -21,10 +21,27 @@ import (
 	"github.com/pagoda-inference/one-api/relay/channeltype"
 )
 
-type VideoContentItem struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+// VideoContentItemImageURL mirrors the OpenAI vision `image_url` object shape
+// (relay/model.MessageContent.ImageURL), so the request body we forward to the
+// upstream Ark/visual-generation API already matches its expected schema.
+type VideoContentItemImageURL struct {
+	URL string `json:"url,omitempty"`
 }
+
+type VideoContentItem struct {
+	Type     string                    `json:"type"`
+	Text     string                    `json:"text,omitempty"`
+	ImageURL *VideoContentItemImageURL `json:"image_url,omitempty"`
+}
+
+// Content type identifiers used in the content[] array. These match the
+// Ark visual-generation `content[].type` values for t2v / i2v inputs.
+const (
+	videoContentText      = "text"
+	videoContentImageURL  = "image_url"
+	videoKindTextToVideo  = "t2v"
+	videoKindImageToVideo = "i2v"
+)
 
 type CreateVideoTaskRequest struct {
 	Model      string             `json:"model"`
@@ -167,9 +184,30 @@ func settleVideoQuota(ctx context.Context, task *model.VideoGenerationTask) {
 	})
 }
 
+// detectVideoTaskKind inspects the content items to decide whether this is a
+// text-to-video (t2v) or image-to-video (i2v) request. A task is treated as
+// i2v when at least one content item carries an image_url; otherwise t2v.
+// Mixed inputs (text + image_url) are allowed and classify as i2v, matching
+// the upstream API which accepts a prompt plus a reference image.
+func detectVideoTaskKind(content []VideoContentItem) string {
+	for _, item := range content {
+		if strings.TrimSpace(item.Type) == videoContentImageURL && item.ImageURL != nil && strings.TrimSpace(item.ImageURL.URL) != "" {
+			return videoKindImageToVideo
+		}
+	}
+	return videoKindTextToVideo
+}
+
+func defaultVideoModelByKind(kind string) string {
+	if kind == videoKindImageToVideo {
+		return "wan2.2-i2v"
+	}
+	return "wan2.2-t2v"
+}
+
 func normalizeCreateVideoTaskRequest(req *CreateVideoTaskRequest) {
 	if req.Model == "" {
-		req.Model = "wan2.2-t2v"
+		req.Model = defaultVideoModelByKind(detectVideoTaskKind(req.Content))
 	}
 	if req.Resolution == "" {
 		req.Resolution = "720p"
@@ -196,14 +234,29 @@ func validateCreateVideoTaskRequest(req *CreateVideoTaskRequest) error {
 		return fmt.Errorf("content is required")
 	}
 	hasText := false
+	hasImage := false
 	for _, item := range req.Content {
-		if strings.TrimSpace(item.Type) == "text" && strings.TrimSpace(item.Text) != "" {
-			hasText = true
-			break
+		switch strings.TrimSpace(item.Type) {
+		case videoContentText:
+			if strings.TrimSpace(item.Text) != "" {
+				hasText = true
+			}
+		case videoContentImageURL:
+			if item.ImageURL == nil || strings.TrimSpace(item.ImageURL.URL) == "" {
+				return fmt.Errorf("content[].image_url.url is required for type image_url")
+			}
+			if _, err := url.Parse(item.ImageURL.URL); err != nil {
+				return fmt.Errorf("content[].image_url.url is invalid: %v", err)
+			}
+			hasImage = true
+		default:
+			return fmt.Errorf("unsupported content[].type: %q", item.Type)
 		}
 	}
-	if !hasText {
-		return fmt.Errorf("content[].text is required")
+	// A video task must carry either a text prompt (t2v) or a reference image (i2v);
+	// the upstream API accepts both together (image + caption) as an i2v request.
+	if !hasText && !hasImage {
+		return fmt.Errorf("content[].text or content[].image_url is required")
 	}
 	switch req.Resolution {
 	case "480p", "720p", "1080p":
@@ -344,9 +397,11 @@ func CreateVideoGenerationTask(c *gin.Context) {
 	if channel.Type == channeltype.ArkVideo {
 		provider = "ark"
 	}
-	logger.Infof(ctx, "[VideoTask] create route provider=%s channel=%d model=%s upstream_model=%s", provider, channel.Id, originModel, req.Model)
+	kind := detectVideoTaskKind(req.Content)
+	logger.Infof(ctx, "[VideoTask] create route kind=%s provider=%s channel=%d model=%s upstream_model=%s", kind, provider, channel.Id, originModel, req.Model)
 
 	bodyBytes, _ := json.Marshal(req)
+	contentBytes, _ := json.Marshal(req.Content)
 	httpReq, err := createVideoUpstreamRequest(http.MethodPost, upstreamURL, channel.Key, bodyBytes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": err.Error()}})
@@ -387,6 +442,7 @@ func CreateVideoGenerationTask(c *gin.Context) {
 		FramesPerSecond:  req.FPS,
 		RequestPayload:   string(bodyBytes),
 		ResponsePayload:  string(respBody),
+		ContentJSON:      string(contentBytes),
 		PreConsumedQuota: 0,
 		FinalQuota:       0,
 		CreatedTime:      now,
