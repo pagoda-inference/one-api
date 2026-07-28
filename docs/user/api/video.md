@@ -35,7 +35,15 @@ POST /v1/videos
 异步提交一个视频生成任务，立即返回任务 ID。任务完成后，通过 `GET /v1/videos/:id`
 轮询获取视频地址，或改用同步接口 `POST /v1/videos/sync`。
 
-**请求体**
+**请求体格式**
+
+支持两种 Content-Type，覆盖 OpenAI 风格与 vLLM-OMNI 风格客户端：
+
+1. `application/json` —— OpenAI 风格，使用 `prompt` / `image_url` / `content[]`，见下表“JSON 字段”。
+2. `multipart/form-data` —— vLLM-OMNI 风格，透传原始表单到上游，支持文件上传
+   （`input_reference`）与全套扩散参数，见“vLLM-OMNI 扩展字段”。`model` 字段从表单字段读取。
+
+**JSON 字段**
 
 支持两种写法：
 
@@ -60,6 +68,35 @@ POST /v1/videos
 
 > 文生视频（t2v）与图生视频（i2v）的判定：只要 `content`（或 `image_url`）中存在图片输入即判定为 i2v，
 > 同时存在文本与图片的混合输入也视为 i2v（上游支持“图片 + 文本描述”）。
+
+**vLLM-OMNI 扩展字段**（JSON 与 multipart 均可；multipart 时为表单字段，JSON 时为 JSON 字段）
+
+下列字段透传给支持 vLLM-OMNI 规范的上游，用于精细控制扩散生成。Ark content[] 上游会忽略它们。
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `width` / `height` | int | 模型默认 | 输出视频宽/高（像素） |
+| `seconds` | number | - | 视频时长（秒），覆盖 `duration` |
+| `num_frames` | int | 模型默认 | 生成帧数 |
+| `num_inference_steps` | int | 模型默认 | 扩散步数 |
+| `guidance_scale` | number | - | 低噪声阶段 CFG 引导强度 |
+| `guidance_scale_2` | number | - | 高噪声阶段 CFG 引导强度 |
+| `boundary_ratio` | number | - | 多阶段去噪边界比例 |
+| `flow_shift` | number | - | 调度器 flow-shift 值 |
+| `true_cfg_scale` | number | - | True CFG 强度（模型支持时） |
+| `image_reference` | string(JSON) | - | 含 `image_url` 的 JSON（i2v） |
+| `video_reference` | string(JSON) | - | 含 `video_url` 的 JSON（v2v） |
+| `audio_reference` | string(JSON) | - | 含 `audio_url` 的 JSON（s2v） |
+| `input_reference` | file | - | 参考图片/视频文件（仅 multipart），与 `image_reference`/`video_reference` 互斥 |
+| `negative_prompt` | string | - | 负向提示词 |
+| `generate_sound` | boolean | false | 生成音频（模型支持时） |
+| `sound_duration` | number | - | 生成音频时长（秒） |
+| `enable_frame_interpolation` | boolean | - | 启用帧插值 |
+| `frame_interpolation_exp` | int | - | 插值指数（1=2x，2=4x） |
+| `frame_interpolation_scale` | number | - | RIFE 推理缩放 |
+| `frame_interpolation_model_path` | string | - | 插值模型路径或 HF repo |
+| `lora` | string(JSON) | - | LoRA 配置 |
+| `extra_params` | string(JSON) | - | 模型特定额外参数 |
 
 **示例：文生视频（简洁形式）**
 
@@ -114,39 +151,49 @@ curl -s https://your-host/v1/videos \
 POST /v1/videos/sync
 ```
 
-请求体与异步接口相同，额外支持以下同步控制参数：
+请求体与异步接口相同（支持 JSON 与 multipart），额外支持以下同步控制参数（仅 JSON 路径）：
 
 | 参数 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `timeout` | int | `300` | 同步等待最大秒数，超时返回 408 |
 | `poll_interval` | int | `5` | 轮询上游的间隔秒数，最小 3 |
 
-行为：创建任务后阻塞轮询，直到任务进入 `succeeded`/`failed` 或到达 `timeout`。
-到达终态返回完整视频对象（含 `video.url`）；超时返回 408 并附带当前任务状态。
+**响应遵循 vLLM-OMNI 规范：直接返回原始视频字节流**（`Content-Type: video/mp4` 等），
+而非 JSON 对象。生成成功后，响应体即为视频二进制数据，可直接保存为文件：
+- JSON 路径：任务完成后，平台拉取 `video.url` 的字节并流式返回。
+- multipart 路径：直接透传上游返回的原始视频字节。
 
-**响应（200 OK，成功）**
+生成失败或超时时返回 JSON 错误信封（`{"error":{...}}`），状态码 `408`/`502` 等。
 
-```json
-{
-  "id": "cgt-20250327-a1b2c3d4",
-  "object": "video",
-  "model": "wan2.2-t2v",
-  "status": "succeeded",
-  "created_at": 1711536000,
-  "updated_at": 1711539600,
-  "seed": 42,
-  "resolution": "720p",
-  "ratio": "16:9",
-  "duration": 5,
-  "frames_per_second": 16,
-  "video": {
-    "url": "https://your-host/files/a1b2c3d4e5f67890.mp4"
-  },
-  "usage": {
-    "completion_tokens": 0,
-    "total_tokens": 0
-  }
-}
+**示例（sync，下载视频字节）**
+
+```bash
+curl -s https://your-host/v1/videos/sync \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $YOUR_API_KEY" \
+  -d '{
+    "model": "wan2.2-t2v",
+    "prompt": "写实风格，一只猫咪在玩耍",
+    "resolution": "720p",
+    "duration": 5
+  }' --output cat.mp4
+```
+
+> 注意：因响应体为二进制视频字节，sync 端点不再返回 JSON 任务对象。如需 JSON 元数据，
+> 请用异步 `POST /v1/videos` + `GET /v1/videos/:id` 轮询。
+
+**示例：multipart 表单（vLLM-OMNI 风格，带参考图上传）**
+
+```bash
+curl -s https://your-host/v1/videos \
+  -H "Authorization: Bearer $YOUR_API_KEY" \
+  -F "model=wan2.2-i2v" \
+  -F "prompt=让猫咪转头看向镜头" \
+  -F "width=720" \
+  -F "height=1280" \
+  -F "num_inference_steps=50" \
+  -F "guidance_scale=7.5" \
+  -F "input_reference=@/path/to/cat.png"
 ```
 
 ### 3. 查询单个任务

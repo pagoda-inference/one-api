@@ -6,6 +6,7 @@ import (
 	"github.com/pagoda-inference/one-api/common"
 	"github.com/pagoda-inference/one-api/common/helper"
 	"github.com/pagoda-inference/one-api/common/logger"
+	"net/http"
 	"strings"
 )
 
@@ -28,6 +29,16 @@ func getRequestModel(c *gin.Context) (string, error) {
 		}
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/audio/predict") {
+		modelName := strings.TrimSpace(c.PostForm("model"))
+		if modelName != "" {
+			return modelName, nil
+		}
+	}
+	// Video create (POST /v1/videos and /v1/videos/sync) supports both JSON and
+	// multipart/form-data (vLLM-OMNI wire format). For multipart, extract the
+	// model form field directly; c.PostForm uses the MultipartForm parsed by the
+	// generic ShouldBind path below, which buffers the raw body for later reuse.
+	if strings.HasPrefix(c.Request.URL.Path, "/v1/videos") && c.Request.Method == http.MethodPost {
 		modelName := strings.TrimSpace(c.PostForm("model"))
 		if modelName != "" {
 			return modelName, nil

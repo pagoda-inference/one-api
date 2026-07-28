@@ -92,6 +92,9 @@ const (
 // OpenAIVideoCreateRequest is the OpenAI-compatible create request accepted by
 // POST /v1/videos and POST /v1/videos/sync. It supports both a compact form
 // (model + prompt / model + image_url) and a full multipart form (content[]).
+// The vLLM-OMNI extension fields (width/height/num_frames/guidance_scale/...)
+// are accepted on the JSON path and forwarded to upstreams that understand them;
+// they are ignored by the Ark content[] upstream.
 type OpenAIVideoCreateRequest struct {
 	Model      string             `json:"model"`
 	Prompt     string             `json:"prompt,omitempty"`
@@ -107,6 +110,38 @@ type OpenAIVideoCreateRequest struct {
 	Timeout int `json:"timeout,omitempty"`
 	// PollInterval is the seconds between upstream polls in sync mode.
 	PollInterval int `json:"poll_interval,omitempty"`
+
+	// ---- vLLM-OMNI extension fields (JSON path) ----
+	// Output dimensions and frame controls.
+	Width  int `json:"width,omitempty"`
+	Height int `json:"height,omitempty"`
+	// Seconds overrides Duration when set (vLLM-OMNI uses "seconds").
+	Seconds           float64 `json:"seconds,omitempty"`
+	NumFrames         int     `json:"num_frames,omitempty"`
+	NumInferenceSteps int     `json:"num_inference_steps,omitempty"`
+	// Diffusion guidance controls.
+	GuidanceScale  *float64 `json:"guidance_scale,omitempty"`
+	GuidanceScale2 *float64 `json:"guidance_scale_2,omitempty"`
+	BoundaryRatio  *float64 `json:"boundary_ratio,omitempty"`
+	FlowShift      *float64 `json:"flow_shift,omitempty"`
+	TrueCFGScale   *float64 `json:"true_cfg_scale,omitempty"`
+	// Reference media for i2v/v2v/s2v (JSON form; mirrors vLLM-OMNI multipart fields).
+	ImageReference string `json:"image_reference,omitempty"`
+	VideoReference string `json:"video_reference,omitempty"`
+	AudioReference string `json:"audio_reference,omitempty"`
+	// Audio generation controls.
+	GenerateSound bool     `json:"generate_sound,omitempty"`
+	SoundDuration *float64 `json:"sound_duration,omitempty"`
+	// Negative prompt and extras.
+	NegativePrompt string `json:"negative_prompt,omitempty"`
+	User           string `json:"user,omitempty"`
+	Lora           string `json:"lora,omitempty"`
+	ExtraParams    string `json:"extra_params,omitempty"`
+	// Frame interpolation.
+	EnableFrameInterpolation    bool     `json:"enable_frame_interpolation,omitempty"`
+	FrameInterpolationExp       int      `json:"frame_interpolation_exp,omitempty"`
+	FrameInterpolationScale     *float64 `json:"frame_interpolation_scale,omitempty"`
+	FrameInterpolationModelPath string   `json:"frame_interpolation_model_path,omitempty"`
 }
 
 // toCreateVideoTaskRequest normalizes an OpenAIVideoCreateRequest into the
@@ -887,7 +922,144 @@ func RelayVideoContent(c *gin.Context) {
 	ProxyVideoGenerationTaskContent(c)
 }
 
+// isMultipartVideoRequest reports whether the incoming request uses
+// multipart/form-data, the content type required by the vLLM-OMNI video API
+// (which carries file uploads like input_reference alongside form fields).
+func isMultipartVideoRequest(c *gin.Context) bool {
+	return strings.HasPrefix(c.ContentType(), "multipart/form-data")
+}
+
+// videoModelFromMultipart returns the "model" form field from a multipart
+// request. The body and MultipartForm are already parsed/cached earlier in
+// the middleware chain (UnmarshalBodyReusable in getRequestModel buffers the
+// raw bytes into ctxkey.KeyRequestBody and populates MultipartForm), so this
+// never re-reads the network stream. The original multipart bytes are still
+// available for the later raw passthrough.
+func videoModelFromMultipart(c *gin.Context) string {
+	return strings.TrimSpace(c.PostForm("model"))
+}
+
 // ---- OpenAI-compatible /v1/videos handlers ----
+
+// relayVideoMultipart handles multipart/form-data create requests (the
+// vLLM-OMNI wire format). It forwards the original multipart body verbatim to
+// the upstream video API, preserving file parts (input_reference) and form
+// fields, then either returns the async job record (POST /v1/videos) or streams
+// the raw video bytes back (POST /v1/videos/sync). This mirrors the audio
+// transcription passthrough pattern.
+func relayVideoMultipart(c *gin.Context, m *meta.Meta, relayMode int) *relaymodel.ErrorWithStatusCode {
+	channel := videoChannelFromContext(c)
+	if channel == nil {
+		return videoErrorf(http.StatusServiceUnavailable, "no_available_channel", "no available video channel")
+	}
+	baseURL := channel.GetBaseURL()
+	upstreamURL, err := buildVideoTasksURL(baseURL)
+	if err != nil {
+		return videoErrorf(http.StatusBadRequest, "invalid_channel_base_url", "invalid channel base_url")
+	}
+	if relayMode == relaymode.VideoSync {
+		// vLLM-OMNI sync lives at the same /contents/generations/tasks path
+		// when the upstream is Ark-style; for a pure vLLM-OMNI upstream the
+		// sync route is /v1/videos/sync. We append /sync only when the base
+		// URL does not already target the tasks collection.
+		upstreamURL = strings.TrimRight(upstreamURL, "/") + "/sync"
+	}
+
+	// The original multipart body was buffered into ctxkey.KeyRequestBody by
+	// UnmarshalBodyReusable during getRequestModel, so it is retry-safe.
+	bodyBytes, err := common.GetRequestBody(c)
+	if err != nil {
+		return videoErrorf(http.StatusBadRequest, "read_body_failed", "failed to read request body: %v", err)
+	}
+	// Reset the body so controller.Relay can retry with a fresh channel.
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	httpReq, err := http.NewRequest(http.MethodPost, upstreamURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return videoErrorf(http.StatusInternalServerError, "build_upstream_request_failed", err.Error())
+	}
+	httpReq.Header.Set("Content-Type", c.GetHeader("Content-Type"))
+	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", channel.Key))
+	if v := c.GetHeader("Accept"); v != "" {
+		httpReq.Header.Set("Accept", v)
+	}
+
+	httpResp, err := client.GetHTTPClient().Do(httpReq)
+	if err != nil {
+		return videoErrorf(http.StatusBadGateway, "upstream_request_failed", err.Error())
+	}
+	defer httpResp.Body.Close()
+
+	// Sync: the upstream returns raw video bytes directly. Stream them back.
+	if relayMode == relaymode.VideoSync {
+		contentType := httpResp.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "video/mp4"
+		}
+		// Non-2xx / non-video upstream responses are errors — surface as JSON.
+		if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 || !strings.HasPrefix(contentType, "video/") && !strings.HasPrefix(contentType, "application/octet-stream") {
+			errBody, _ := io.ReadAll(httpResp.Body)
+			if httpResp.StatusCode >= 200 && httpResp.StatusCode < 300 && strings.HasPrefix(contentType, "application/json") {
+				// Upstream returned a JSON error envelope despite 2xx.
+				c.Data(httpResp.StatusCode, contentType, errBody)
+				return nil
+			}
+			return videoErrorFromUpstream(httpResp.StatusCode, errBody)
+		}
+		c.Header("Content-Type", contentType)
+		if cl := httpResp.Header.Get("Content-Length"); cl != "" {
+			c.Header("Content-Length", cl)
+		}
+		c.Status(httpResp.StatusCode)
+		_, _ = io.Copy(c.Writer, httpResp.Body)
+		return nil
+	}
+
+	// Async: the upstream returns a JSON job record. Forward it and persist.
+	respBody, _ := io.ReadAll(httpResp.Body)
+	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+		return videoErrorFromUpstream(httpResp.StatusCode, respBody)
+	}
+	upTask := parseUpstreamVideoTask(respBody)
+	if upTask == nil || strings.TrimSpace(upTask.ID) == "" {
+		// The upstream may return a non-standard envelope; forward it verbatim.
+		c.Data(httpResp.StatusCode, "application/json", respBody)
+		return nil
+	}
+	now := helper.GetTimestamp()
+	task := &model.VideoGenerationTask{
+		TaskId:           upTask.ID,
+		ProviderTaskId:   upTask.ID,
+		UserId:           m.UserId,
+		TokenId:          m.TokenId,
+		ChannelId:        channel.Id,
+		Model:            m.OriginModelName,
+		Status:           upTask.Status,
+		ProviderStatus:   upTask.Status,
+		Seed:             upTask.Seed,
+		Resolution:       upTask.Resolution,
+		Ratio:            upTask.Ratio,
+		Duration:         upTask.Duration,
+		FramesPerSecond:  upTask.FramesPerSecond,
+		RequestPayload:   string(bodyBytes),
+		ResponsePayload:  string(respBody),
+		PreConsumedQuota: 0,
+		FinalQuota:       0,
+		CreatedTime:      now,
+		UpdatedTime:      now,
+	}
+	if err := model.CreateVideoTask(task); err != nil {
+		return videoErrorf(http.StatusInternalServerError, "persist_task_failed", err.Error())
+	}
+	c.JSON(http.StatusAccepted, gin.H{
+		"id":         task.TaskId,
+		"object":     "video",
+		"model":      task.Model,
+		"status":     task.Status,
+		"created_at": task.CreatedTime,
+	})
+	return nil
+}
 
 // RelayVideoHelper handles POST /v1/videos (async) and POST /v1/videos/sync.
 // It runs under controller.Relay, so the request body is buffered (retry-safe)
@@ -898,6 +1070,20 @@ func RelayVideoContent(c *gin.Context) {
 func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatusCode {
 	ctx := c.Request.Context()
 	m := meta.GetByContext(c)
+
+	// Multipart/form-data (vLLM-OMNI wire format): forward the raw body to the
+	// upstream and either return the job record (async) or stream back the raw
+	// video bytes (sync). This path does not parse content[] and supports file
+	// uploads (input_reference) and the full vLLM-OMNI field set.
+	if isMultipartVideoRequest(c) {
+		// The model field was already extracted by getRequestModel and used by
+		// TokenAuth/Distribute to select a channel. Ensure it is mirrored onto
+		// the meta for logging/billing.
+		if m.OriginModelName == "" {
+			m.OriginModelName = videoModelFromMultipart(c)
+		}
+		return relayVideoMultipart(c, m, relayMode)
+	}
 
 	var openReq OpenAIVideoCreateRequest
 	if err := common.UnmarshalBodyReusable(c, &openReq); err != nil {
@@ -1000,10 +1186,62 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 			task = refreshed
 		}
 		if task.Status == model.VideoTaskStatusSucceeded || task.Status == model.VideoTaskStatusFailed {
+			// vLLM-OMNI sync returns the raw video bytes directly. For the JSON
+			// path we fetch the generated video_url and stream the bytes back
+			// with a video/* Content-Type; on failure we return the JSON task.
+			if task.Status == model.VideoTaskStatusSucceeded && strings.TrimSpace(task.VideoURL) != "" {
+				if bizErr := streamVideoBytes(c, task.VideoURL); bizErr != nil {
+					return bizErr
+				}
+				return nil
+			}
 			c.JSON(http.StatusOK, mapVideoTaskToOpenAIResponse(task))
 			return nil
 		}
 	}
+}
+
+// streamVideoBytes fetches the video at videoURL and streams the raw bytes to
+// the client with a video/* Content-Type, mirroring the vLLM-OMNI sync response
+// (raw video bytes rather than a JSON envelope).
+func streamVideoBytes(c *gin.Context, videoURL string) *relaymodel.ErrorWithStatusCode {
+	u, err := url.Parse(strings.TrimSpace(videoURL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return videoErrorf(http.StatusBadRequest, "invalid_video_url", "invalid video url")
+	}
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, videoURL, nil)
+	if err != nil {
+		return videoErrorf(http.StatusBadGateway, "build_video_request_failed", err.Error())
+	}
+	if rg := c.GetHeader("Range"); rg != "" {
+		req.Header.Set("Range", rg)
+	}
+	resp, err := client.GetHTTPClient().Do(req)
+	if err != nil {
+		return videoErrorf(http.StatusBadGateway, "fetch_video_failed", err.Error())
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return videoErrorFromUpstream(resp.StatusCode, body)
+	}
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
+	c.Header("Content-Type", contentType)
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		c.Header("Content-Length", cl)
+	}
+	if ar := resp.Header.Get("Accept-Ranges"); ar != "" {
+		c.Header("Accept-Ranges", ar)
+	}
+	if cr := resp.Header.Get("Content-Range"); cr != "" {
+		c.Header("Content-Range", cr)
+	}
+	c.Status(resp.StatusCode)
+	_, _ = io.Copy(c.Writer, resp.Body)
+	return nil
 }
 
 // RelayVideoRetrieve handles GET /v1/videos/:id — returns the current state of
