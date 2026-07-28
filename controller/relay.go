@@ -1476,6 +1476,8 @@ func relayHelper(c *gin.Context, relayMode int) *model.ErrorWithStatusCode {
 		err = controller.RelayProxyHelper(c, relayMode)
 	case relaymode.Rerank:
 		err = controller.RelayRerankHelper(c)
+	case relaymode.Video, relaymode.VideoSync:
+		err = controller.RelayVideoHelper(c, relayMode)
 	default:
 		err = controller.RelayTextHelper(c)
 	}

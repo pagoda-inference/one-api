@@ -118,9 +118,9 @@ func SetApiRouter(router *gin.Engine) {
 				marketRoute.GET("/groups/:id/models", controller.GetMarketModelsByGroup)
 				marketRoute.GET("/stats", controller.GetMarketStats)
 				marketRoute.GET("/calculate", controller.CalculatePrice)
-			marketRoute.GET("/trials", controller.GetUserTrials)
-			marketRoute.GET("/playground/models", controller.GetPlaygroundModels)
-			marketRoute.GET("/video/tasks/:id/content", controller.ProxyVideoGenerationTaskContent)
+				marketRoute.GET("/trials", controller.GetUserTrials)
+				marketRoute.GET("/playground/models", controller.GetPlaygroundModels)
+				marketRoute.GET("/video/tasks/:id/content", controller.ProxyVideoGenerationTaskContent)
 			}
 		}
 

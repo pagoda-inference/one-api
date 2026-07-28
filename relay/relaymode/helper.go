@@ -38,6 +38,10 @@ func GetByPath(path string) int {
 		relayMode = Proxy
 	} else if strings.HasPrefix(path, "/v1/responses") {
 		relayMode = Responses
+	} else if strings.HasPrefix(path, "/v1/videos/sync") {
+		relayMode = VideoSync
+	} else if strings.HasPrefix(path, "/v1/videos") {
+		relayMode = Video
 	}
 	return relayMode
 }
