@@ -21,6 +21,7 @@ import (
 	"github.com/pagoda-inference/one-api/common/helper"
 	"github.com/pagoda-inference/one-api/common/logger"
 	"github.com/pagoda-inference/one-api/model"
+	"github.com/pagoda-inference/one-api/relay/adaptor/openai"
 	"github.com/pagoda-inference/one-api/relay/channeltype"
 	"github.com/pagoda-inference/one-api/relay/meta"
 	relaymodel "github.com/pagoda-inference/one-api/relay/model"
@@ -491,6 +492,46 @@ func buildVideoTaskItemURL(baseURL string, taskID string) (string, error) {
 	return strings.TrimRight(tasksURL, "/") + "/" + url.PathEscape(taskID), nil
 }
 
+// buildVideoCreateUpstreamURL resolves the upstream URL for a video create
+// request (POST /v1/videos or POST /v1/videos/sync), honoring the channel type:
+//
+//   - OpenAICompatible channels forward the original request path verbatim
+//     (e.g. /v1/videos/sync -> <baseURL>/videos/sync), exactly like the
+//     chat relay does via GetFullRequestURL. This serves vLLM-OMNI upstreams
+//     which expose /videos and /videos/sync. Only engaged when requestPath is
+//     non-empty (i.e. the OpenAI /v1/videos route); the legacy Ark route
+//     passes an empty requestPath to keep the /contents/generations/tasks path.
+//   - ArkVideo / CustomVideo channels keep the Ark /contents/generations/tasks
+//     collection path (buildVideoTasksURL); sync appends /sync.
+func buildVideoCreateUpstreamURL(channel *model.Channel, requestPath string, relayMode int) (string, error) {
+	if channel.Type == channeltype.OpenAICompatible && strings.TrimSpace(requestPath) != "" {
+		// Strip any query string, then forward via the OpenAI path convention.
+		path := strings.SplitN(requestPath, "?", 2)[0]
+		return openai.GetFullRequestURL(channel.GetBaseURL(), path, channeltype.OpenAICompatible), nil
+	}
+	upstreamURL, err := buildVideoTasksURL(channel.GetBaseURL())
+	if err != nil {
+		return "", err
+	}
+	if relayMode == relaymode.VideoSync {
+		upstreamURL = strings.TrimRight(upstreamURL, "/") + "/sync"
+	}
+	return upstreamURL, nil
+}
+
+// buildVideoItemUpstreamURL resolves the upstream URL for a single-task
+// operation (GET/DELETE /v1/videos/:id), honoring the channel type:
+//
+//   - OpenAICompatible channels forward /v1/videos/<id> verbatim (vLLM-OMNI).
+//   - ArkVideo / CustomVideo channels keep the Ark /contents/generations/tasks/<id> path.
+func buildVideoItemUpstreamURL(channel *model.Channel, taskID string) (string, error) {
+	escapedID := url.PathEscape(taskID)
+	if channel.Type == channeltype.OpenAICompatible {
+		return openai.GetFullRequestURL(channel.GetBaseURL(), "/v1/videos/"+escapedID, channeltype.OpenAICompatible), nil
+	}
+	return buildVideoTaskItemURL(channel.GetBaseURL(), taskID)
+}
+
 func createVideoUpstreamRequest(method string, reqURL string, apiKey string, body []byte) (*http.Request, error) {
 	var reader io.Reader
 	if body != nil {
@@ -542,12 +583,11 @@ func selectVideoChannel(modelName string) (*model.Channel, error) {
 // core stays agnostic to how the channel was chosen. It returns the persisted
 // task, the raw upstream response body, the upstream HTTP status, and an
 // OpenAI-style error envelope when the upstream call fails.
-func createVideoTaskCore(ctx context.Context, userId, tokenId int, channel *model.Channel, originModel string, req *CreateVideoTaskRequest) (*model.VideoGenerationTask, []byte, int, *relaymodel.ErrorWithStatusCode) {
+func createVideoTaskCore(ctx context.Context, userId, tokenId int, channel *model.Channel, originModel string, req *CreateVideoTaskRequest, requestPath string, relayMode int) (*model.VideoGenerationTask, []byte, int, *relaymodel.ErrorWithStatusCode) {
 	if channel == nil {
 		return nil, nil, 0, videoErrorf(http.StatusServiceUnavailable, "no_available_channel", "no available video channel")
 	}
-	baseURL := channel.GetBaseURL()
-	upstreamURL, err := buildVideoTasksURL(baseURL)
+	upstreamURL, err := buildVideoCreateUpstreamURL(channel, requestPath, relayMode)
 	if err != nil {
 		return nil, nil, 0, videoErrorf(http.StatusBadRequest, "invalid_channel_base_url", "invalid channel base_url")
 	}
@@ -620,7 +660,7 @@ func refreshVideoTaskFromUpstream(ctx context.Context, task *model.VideoGenerati
 	if err != nil || channel == nil || channel.Status != model.ChannelStatusEnabled {
 		return task, nil
 	}
-	itemURL, urlErr := buildVideoTaskItemURL(channel.GetBaseURL(), task.ProviderTaskId)
+	itemURL, urlErr := buildVideoItemUpstreamURL(channel, task.ProviderTaskId)
 	if urlErr != nil {
 		return task, nil
 	}
@@ -700,7 +740,7 @@ func deleteVideoTaskCore(ctx context.Context, userId int, taskID string) (*model
 
 	channel, chErr := model.GetChannelById(task.ChannelId, true)
 	if chErr == nil && channel != nil && channel.Status == model.ChannelStatusEnabled {
-		itemURL, urlErr := buildVideoTaskItemURL(channel.GetBaseURL(), task.ProviderTaskId)
+		itemURL, urlErr := buildVideoItemUpstreamURL(channel, task.ProviderTaskId)
 		if urlErr == nil {
 			httpReq, reqErr := createVideoUpstreamRequest(http.MethodDelete, itemURL, channel.Key, nil)
 			if reqErr == nil {
@@ -771,7 +811,7 @@ func CreateVideoGenerationTask(c *gin.Context) {
 		}
 	}
 
-	task, respBody, httpStatus, bizErr := createVideoTaskCore(ctx, userId, tokenId, channel, originModel, &req)
+	task, respBody, httpStatus, bizErr := createVideoTaskCore(ctx, userId, tokenId, channel, originModel, &req, "", relaymode.Video)
 	if bizErr != nil {
 		// Preserve the legacy behavior: surface the raw upstream body for upstream
 		// errors, otherwise the structured error message.
@@ -952,17 +992,9 @@ func relayVideoMultipart(c *gin.Context, m *meta.Meta, relayMode int) *relaymode
 	if channel == nil {
 		return videoErrorf(http.StatusServiceUnavailable, "no_available_channel", "no available video channel")
 	}
-	baseURL := channel.GetBaseURL()
-	upstreamURL, err := buildVideoTasksURL(baseURL)
+	upstreamURL, err := buildVideoCreateUpstreamURL(channel, m.RequestURLPath, relayMode)
 	if err != nil {
 		return videoErrorf(http.StatusBadRequest, "invalid_channel_base_url", "invalid channel base_url")
-	}
-	if relayMode == relaymode.VideoSync {
-		// vLLM-OMNI sync lives at the same /contents/generations/tasks path
-		// when the upstream is Ark-style; for a pure vLLM-OMNI upstream the
-		// sync route is /v1/videos/sync. We append /sync only when the base
-		// URL does not already target the tasks collection.
-		upstreamURL = strings.TrimRight(upstreamURL, "/") + "/sync"
 	}
 
 	// The original multipart body was buffered into ctxkey.KeyRequestBody by
@@ -1116,7 +1148,7 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 	}
 
 	channel := videoChannelFromContext(c)
-	task, respBody, httpStatus, bizErr := createVideoTaskCore(ctx, m.UserId, m.TokenId, channel, originModel, req)
+	task, respBody, httpStatus, bizErr := createVideoTaskCore(ctx, m.UserId, m.TokenId, channel, originModel, req, m.RequestURLPath, relayMode)
 	if bizErr != nil {
 		// For upstream failures, surface the upstream status so controller.Relay
 		// can retry on 429/5xx with a fresh channel. For non-retryable upstream
