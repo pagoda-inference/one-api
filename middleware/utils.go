@@ -1,13 +1,16 @@
 package middleware
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/pagoda-inference/one-api/common"
 	"github.com/pagoda-inference/one-api/common/helper"
 	"github.com/pagoda-inference/one-api/common/logger"
-	"net/http"
-	"strings"
 )
 
 func abortWithMessage(c *gin.Context, statusCode int, message string) {
@@ -43,8 +46,15 @@ func getRequestModel(c *gin.Context) (string, error) {
 	// upstream — causing upstream "prompt field required" errors. Buffering
 	// first also lets TokenAuth's downstream Distribute / channel handlers
 	// reuse the bytes via c.Get(ctxkey.KeyRequestBody).
+	//
+	// GetRequestBody closes c.Request.Body after reading, so we must reset it
+	// to a fresh reader over the buffered bytes before calling PostForm;
+	// otherwise ParseMultipartForm sees an empty body, returns no fields, and
+	// the request model ends up empty — which makes Distribute skip channel
+	// selection and the handler reports "no available video channel".
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/videos") && c.Request.Method == http.MethodPost {
-		if _, err := common.GetRequestBody(c); err == nil {
+		if bodyBytes, err := common.GetRequestBody(c); err == nil {
+			c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			modelName := strings.TrimSpace(c.PostForm("model"))
 			if modelName != "" {
 				return modelName, nil
