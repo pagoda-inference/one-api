@@ -35,13 +35,20 @@ func getRequestModel(c *gin.Context) (string, error) {
 		}
 	}
 	// Video create (POST /v1/videos and /v1/videos/sync) supports both JSON and
-	// multipart/form-data (vLLM-OMNI wire format). For multipart, extract the
-	// model form field directly; c.PostForm uses the MultipartForm parsed by the
-	// generic ShouldBind path below, which buffers the raw body for later reuse.
+	// multipart/form-data (vLLM-OMNI wire format). For multipart we must read
+	// the request body into memory BEFORE calling c.PostForm: net/http's
+	// FormValue triggers ParseMultipartForm, which consumes c.Request.Body.
+	// If we let that happen first, a later GetRequestBody / UnMarshalBodyReusable
+	// will see an empty stream and the multipart body never reaches the
+	// upstream — causing upstream "prompt field required" errors. Buffering
+	// first also lets TokenAuth's downstream Distribute / channel handlers
+	// reuse the bytes via c.Get(ctxkey.KeyRequestBody).
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/videos") && c.Request.Method == http.MethodPost {
-		modelName := strings.TrimSpace(c.PostForm("model"))
-		if modelName != "" {
-			return modelName, nil
+		if _, err := common.GetRequestBody(c); err == nil {
+			modelName := strings.TrimSpace(c.PostForm("model"))
+			if modelName != "" {
+				return modelName, nil
+			}
 		}
 	}
 	var modelRequest ModelRequest
