@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path"
@@ -532,6 +533,77 @@ func buildVideoItemUpstreamURL(channel *model.Channel, taskID string) (string, e
 	return buildVideoTaskItemURL(channel.GetBaseURL(), taskID)
 }
 
+// rewriteMultipartModel rewrites the "model" form field in a multipart/form-data
+// body to the mapped upstream model name, preserving all other fields and file
+// parts (input_reference, etc.). It returns the rebuilt body and its
+// Content-Type (with a fresh boundary). If the original model equals the
+// mapped model, or parsing fails, the original body/Content-Type is returned
+// unchanged so behavior is never degraded.
+//
+// This is required for the OpenAI-compatible channel path: the client sends a
+// public model name (e.g. "bedi/wan2.2-i2v-a14b") but the upstream vLLM-OMNI
+// server expects its internal path (e.g.
+// "/data/weight/Wan2.2-I2V-A14B-Diffusers"). Channel ModelMapping carries that
+// translation, so we must rewrite the field inside the opaque multipart stream
+// before forwarding — we cannot simply forward the bytes verbatim.
+func rewriteMultipartModel(originalBody []byte, originalContentType, mappedModel string) (body []byte, contentType string, ok bool) {
+	mappedModel = strings.TrimSpace(mappedModel)
+	if mappedModel == "" {
+		return originalBody, originalContentType, false
+	}
+	mediaType, params, err := mime.ParseMediaType(originalContentType)
+	if err != nil || mediaType != "multipart/form-data" {
+		return originalBody, originalContentType, false
+	}
+	boundary, hasBoundary := params["boundary"]
+	if !hasBoundary {
+		return originalBody, originalContentType, false
+	}
+	// Parse the original multipart, rewriting the "model" field.
+	mr := multipart.NewReader(bytes.NewReader(originalBody), boundary)
+	var out bytes.Buffer
+	rw := multipart.NewWriter(&out)
+	rewrote := false
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			// Malformed multipart — bail out and forward the original bytes.
+			return originalBody, originalContentType, false
+		}
+		data, err := io.ReadAll(part)
+		if err != nil {
+			return originalBody, originalContentType, false
+		}
+		fieldName := part.FormName()
+		if fieldName == "model" {
+			if string(data) != mappedModel {
+				data = []byte(mappedModel)
+			}
+			rewrote = true
+		}
+		// Preserve file vs. plain-field distinction.
+		var wp io.Writer
+		if part.FileName() != "" {
+			wp, err = rw.CreateFormFile(fieldName, part.FileName())
+		} else {
+			wp, err = rw.CreateFormField(fieldName)
+		}
+		if err != nil {
+			return originalBody, originalContentType, false
+		}
+		if _, err := wp.Write(data); err != nil {
+			return originalBody, originalContentType, false
+		}
+	}
+	if err := rw.Close(); err != nil {
+		return originalBody, originalContentType, false
+	}
+	return out.Bytes(), rw.FormDataContentType(), rewrote
+}
+
 func createVideoUpstreamRequest(method string, reqURL string, apiKey string, body []byte) (*http.Request, error) {
 	var reader io.Reader
 	if body != nil {
@@ -1006,11 +1078,25 @@ func relayVideoMultipart(c *gin.Context, m *meta.Meta, relayMode int) *relaymode
 	// Reset the body so controller.Relay can retry with a fresh channel.
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
+	// Apply channel ModelMapping: the client sends a public model name (e.g.
+	// "bedi/wan2.2-i2v-a14b") but the upstream vLLM-OMNI server expects its
+	// internal path (e.g. "/data/weight/Wan2.2-I2V-A14B-Diffusers"). Rewrite
+	// the "model" form field inside the buffered multipart stream before
+	// forwarding. JSON path uses req.Model + mapping; multipart path requires
+	// this byte-level rewrite because we never re-serialize the body.
+	clientContentType := c.GetHeader("Content-Type")
+	if mapped, ok := m.ModelMapping[m.OriginModelName]; ok && strings.TrimSpace(mapped) != "" {
+		if rewrittenBody, rewrittenCT, didRewrite := rewriteMultipartModel(bodyBytes, clientContentType, mapped); didRewrite {
+			bodyBytes = rewrittenBody
+			clientContentType = rewrittenCT
+		}
+	}
+
 	httpReq, err := http.NewRequest(http.MethodPost, upstreamURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return videoErrorf(http.StatusInternalServerError, "build_upstream_request_failed", err.Error())
 	}
-	httpReq.Header.Set("Content-Type", c.GetHeader("Content-Type"))
+	httpReq.Header.Set("Content-Type", clientContentType)
 	httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", channel.Key))
 	if v := c.GetHeader("Accept"); v != "" {
 		httpReq.Header.Set("Accept", v)
