@@ -81,6 +81,11 @@ type VideoTaskResponse struct {
 		VideoURL string `json:"video_url"`
 	} `json:"content,omitempty"`
 	Usage *VideoTaskUsage `json:"usage,omitempty"`
+	// UpstreamExtra preserves any unknown fields the upstream returned
+	// (progress, seconds, quality, file_name, error, media_type, etc.) so the
+	// retrieve/list handlers can reserialize and return the upstream envelope
+	// verbatim rather than dropping fields the client expects.
+	UpstreamExtra map[string]json.RawMessage `json:"-"`
 }
 
 // ---- Sync defaults for /v1/videos/sync polling ----
@@ -461,6 +466,12 @@ func mapVideoTaskToOpenAIResponse(task *model.VideoGenerationTask) *openAIVideoR
 	return resp
 }
 
+// parseUpstreamVideoTask parses an upstream video task JSON envelope and
+// normalizes the status field ("completed" -> "succeeded"). The full parsed
+// body is returned so callers can pass it through to the client without
+// losing fields (progress, seconds, quality, file_name, etc.) the upstream
+// may include. Any field not in VideoTaskResponse is preserved on the JSON
+// envelope through UpstreamExtra, allowing passthrough forwarding.
 func parseUpstreamVideoTask(body []byte) *VideoTaskResponse {
 	var resp VideoTaskResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -469,7 +480,169 @@ func parseUpstreamVideoTask(body []byte) *VideoTaskResponse {
 	if resp.Status == "completed" {
 		resp.Status = "succeeded"
 	}
+	// Capture unknown fields so we can reserialize the upstream response
+	// verbatim after status normalization.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err == nil {
+		known := map[string]struct{}{
+			"id": {}, "model": {}, "status": {}, "created_at": {},
+			"updated_at": {}, "seed": {}, "resolution": {}, "ratio": {},
+			"duration": {}, "framespersecond": {},
+			"content": {}, "usage": {},
+		}
+		extras := make(map[string]json.RawMessage)
+		for k, v := range raw {
+			if _, ok := known[k]; ok {
+				continue
+			}
+			extras[k] = v
+		}
+		if len(extras) > 0 {
+			resp.UpstreamExtra = extras
+		}
+	}
 	return &resp
+}
+
+// upstreamVideoURL returns the URL of the generated video as reported by the
+// upstream, checking the fields the various providers use: content.video_url
+// (Ark-style), file_name / url / video_url (top-level on vLLM-OMNI and
+// similar). The first non-empty value wins.
+func upstreamVideoURL(r *VideoTaskResponse) string {
+	if r == nil {
+		return ""
+	}
+	if r.Content != nil && strings.TrimSpace(r.Content.VideoURL) != "" {
+		return strings.TrimSpace(r.Content.VideoURL)
+	}
+	if v, ok := r.UpstreamExtra["video_url"]; ok {
+		var s string
+		if err := json.Unmarshal(v, &s); err == nil && strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	if v, ok := r.UpstreamExtra["url"]; ok {
+		var s string
+		if err := json.Unmarshal(v, &s); err == nil && strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	if v, ok := r.UpstreamExtra["file_name"]; ok {
+		var s string
+		if err := json.Unmarshal(v, &s); err == nil && strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
+// forwardUpstreamTask serializes a parsed upstream task back to JSON for the
+// client. Status normalization ("completed"->"succeeded") is already applied
+// by parseUpstreamVideoTask. The base fields are emitted first so they win
+// over any keys of the same name in UpstreamExtra. We also add `updated_at`
+// from the task's local updated_time so the client gets a stable, monotonic
+// value even when the upstream doesn't refresh it.
+//
+// originModel overrides the upstream-returned "model" field with the
+// user-facing model name (so clients see "bedi/wan2.2-i2v-a14b" rather than
+// the upstream's internal path like "/data/weight/Wan2.2-I2V-A14B-Diffusers").
+func forwardUpstreamTask(c *gin.Context, upTask *VideoTaskResponse, updatedAt int64, originModel string) error {
+	out := make(map[string]json.RawMessage, len(upTask.UpstreamExtra)+8)
+	for k, v := range upTask.UpstreamExtra {
+		if k == "model" {
+			continue // override below
+		}
+		out[k] = v
+	}
+	if upTask.ID != "" {
+		b, _ := json.Marshal(upTask.ID)
+		out["id"] = b
+	}
+	if upTask.Model != "" {
+		b, _ := json.Marshal(upTask.Model)
+		out["model"] = b
+	}
+	if originModel != "" {
+		b, _ := json.Marshal(originModel)
+		out["model"] = b
+	}
+	if upTask.Status != "" {
+		b, _ := json.Marshal(upTask.Status)
+		out["status"] = b
+	}
+	if upTask.CreatedAt != 0 {
+		b, _ := json.Marshal(upTask.CreatedAt)
+		out["created_at"] = b
+	}
+	if updatedAt != 0 {
+		b, _ := json.Marshal(updatedAt)
+		out["updated_at"] = b
+	}
+	// Always include a `usage` zero-placeholder so clients can rely on the
+	// field being present, even when the upstream does not report it.
+	usage := upTask.Usage
+	if usage == nil {
+		usage = &VideoTaskUsage{}
+	}
+	b, _ := json.Marshal(usage)
+	out["usage"] = b
+	// For Ark-style upstreams the content block is the natural place for the
+	// video URL; preserve it.
+	if upTask.Content != nil {
+		b, _ := json.Marshal(upTask.Content)
+		out["content"] = b
+	}
+	c.JSON(http.StatusOK, out)
+	return nil
+}
+
+// forwardUpstreamTaskJSON serializes a parsed upstream task to a raw JSON
+// object (rather than writing through gin.Context), applying the same
+// overrides as forwardUpstreamTask. Used by the list endpoint, which emits
+// multiple tasks into a single response and so cannot call c.JSON per item.
+func forwardUpstreamTaskJSON(upTask *VideoTaskResponse, updatedAt int64, originModel string) (json.RawMessage, error) {
+	out := make(map[string]json.RawMessage, len(upTask.UpstreamExtra)+8)
+	for k, v := range upTask.UpstreamExtra {
+		if k == "model" {
+			continue
+		}
+		out[k] = v
+	}
+	if upTask.ID != "" {
+		b, _ := json.Marshal(upTask.ID)
+		out["id"] = b
+	}
+	if upTask.Model != "" {
+		b, _ := json.Marshal(upTask.Model)
+		out["model"] = b
+	}
+	if originModel != "" {
+		b, _ := json.Marshal(originModel)
+		out["model"] = b
+	}
+	if upTask.Status != "" {
+		b, _ := json.Marshal(upTask.Status)
+		out["status"] = b
+	}
+	if upTask.CreatedAt != 0 {
+		b, _ := json.Marshal(upTask.CreatedAt)
+		out["created_at"] = b
+	}
+	if updatedAt != 0 {
+		b, _ := json.Marshal(updatedAt)
+		out["updated_at"] = b
+	}
+	usage := upTask.Usage
+	if usage == nil {
+		usage = &VideoTaskUsage{}
+	}
+	b, _ := json.Marshal(usage)
+	out["usage"] = b
+	if upTask.Content != nil {
+		b, _ := json.Marshal(upTask.Content)
+		out["content"] = b
+	}
+	return json.Marshal(out)
 }
 
 func buildVideoTasksURL(baseURL string) (string, error) {
@@ -806,19 +979,21 @@ func refreshVideoTaskFromUpstream(ctx context.Context, task *model.VideoGenerati
 	if upTask == nil {
 		return task, nil
 	}
+	// Discover the video file URL from any of the upstream's known field names
+	// (content.video_url, top-level video_url / url / file_name). This makes
+	// the /v1/videos/:id/content proxy work for both Ark-style and
+	// vLLM-OMNI-style responses.
+	videoURL := upstreamVideoURL(upTask)
 	updates := map[string]any{
 		"status":            upTask.Status,
 		"provider_status":   upTask.Status,
 		"response_payload":  string(body),
 		"updated_time":      helper.GetTimestamp(),
-		"video_url":         "",
+		"video_url":         videoURL,
 		"resolution":        upTask.Resolution,
 		"ratio":             upTask.Ratio,
 		"duration":          upTask.Duration,
 		"frames_per_second": upTask.FramesPerSecond,
-	}
-	if upTask.Content != nil {
-		updates["video_url"] = upTask.Content.VideoURL
 	}
 	if upTask.Status == model.VideoTaskStatusSucceeded || upTask.Status == model.VideoTaskStatusFailed {
 		updates["finished_time"] = helper.GetTimestamp()
@@ -1232,6 +1407,16 @@ func relayVideoMultipart(c *gin.Context, m *meta.Meta, relayMode int) *relaymode
 	if err := model.CreateVideoTask(task); err != nil {
 		return videoErrorf(http.StatusInternalServerError, "persist_task_failed", err.Error())
 	}
+	// Forward the upstream create response verbatim (status normalization
+	// already applied), so fields the upstream includes (size, progress,
+	// seconds, quality, ...) are visible to the client immediately. The
+	// "model" field is overridden with the user-facing model name (origin
+	// model, not the upstream internal name).
+	if parsed := parseUpstreamVideoTask(respBody); parsed != nil {
+		_ = forwardUpstreamTask(c, parsed, now, m.OriginModelName)
+		return nil
+	}
+	// Upstream returned a non-standard envelope; fall back to a minimal one.
 	c.JSON(http.StatusAccepted, gin.H{
 		"id":         task.TaskId,
 		"object":     "video",
@@ -1444,8 +1629,13 @@ func streamVideoBytes(c *gin.Context, videoURL string) *relaymodel.ErrorWithStat
 	return nil
 }
 
-// RelayVideoRetrieve handles GET /v1/videos/:id — returns the current state of
-// a video task (refreshing from the upstream when possible) in OpenAI format.
+// RelayVideoRetrieve handles GET /v1/videos/:id — returns the upstream video
+// task envelope as-is, refreshing from the upstream when possible. The full
+// upstream response (progress, seconds, quality, file_name, error, ...) is
+// preserved; only `status: completed` is normalized to `succeeded` and an
+// `updated_at` is added based on the local task state. Falls back to a
+// minimal envelope built from the local task when no upstream response is
+// available.
 func RelayVideoRetrieve(c *gin.Context) {
 	userId := c.GetInt(ctxkey.Id)
 	taskID := c.Param("id")
@@ -1454,6 +1644,13 @@ func RelayVideoRetrieve(c *gin.Context) {
 		videoWriteError(c, bizErr)
 		return
 	}
+	if task != nil && strings.TrimSpace(task.ResponsePayload) != "" {
+		if upTask := parseUpstreamVideoTask([]byte(task.ResponsePayload)); upTask != nil {
+			_ = forwardUpstreamTask(c, upTask, task.UpdatedTime, task.Model)
+			return
+		}
+	}
+	// Fallback: minimal envelope when the upstream is unavailable.
 	c.JSON(http.StatusOK, mapVideoTaskToOpenAIResponse(task))
 }
 
@@ -1477,9 +1674,25 @@ func RelayVideoList(c *gin.Context) {
 		videoWriteError(c, bizErr)
 		return
 	}
-	items := make([]*openAIVideoResponseObject, 0, len(tasks))
+	items := make([]json.RawMessage, 0, len(tasks))
 	for _, t := range tasks {
-		items = append(items, mapVideoTaskToOpenAIResponse(t))
+		// Prefer the persisted upstream envelope, which preserves all fields
+		// (progress, seconds, quality, file_name, ...); fall back to the
+		// synthesized envelope when no upstream response is stored.
+		forwarded := false
+		if t != nil && strings.TrimSpace(t.ResponsePayload) != "" {
+			if upTask := parseUpstreamVideoTask([]byte(t.ResponsePayload)); upTask != nil {
+				buf, err := forwardUpstreamTaskJSON(upTask, t.UpdatedTime, t.Model)
+				if err == nil {
+					items = append(items, buf)
+					forwarded = true
+				}
+			}
+		}
+		if !forwarded {
+			b, _ := json.Marshal(mapVideoTaskToOpenAIResponse(t))
+			items = append(items, b)
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"object":    "list",
