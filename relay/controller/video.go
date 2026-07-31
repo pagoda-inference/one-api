@@ -604,6 +604,59 @@ func rewriteMultipartModel(originalBody []byte, originalContentType, mappedModel
 	return out.Bytes(), rw.FormDataContentType(), rewrote
 }
 
+// summarizeMultipartRequest extracts a UTF-8-safe JSON metadata summary of a
+// multipart/form-data video request: field values and file part names only
+// (no file bytes). The raw multipart body may contain binary content (e.g. a
+// PNG reference image starting with 0x89), which cannot be stored in a text
+// column ("invalid byte sequence for encoding UTF8"). This summary is what we
+// persist as RequestPayload for multipart requests. It always returns valid
+// JSON; on any parse error it returns a small placeholder object.
+func summarizeMultipartRequest(body []byte, contentType string) string {
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	if err != nil || mediaType != "multipart/form-data" {
+		return `{"content_type":"` + contentType + `","note":"non-multipart"}`
+	}
+	boundary, ok := params["boundary"]
+	if !ok {
+		return `{"note":"missing multipart boundary"}`
+	}
+	mr := multipart.NewReader(bytes.NewReader(body), boundary)
+	fields := make(map[string]string)
+	var files []map[string]string
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return `{"note":"multipart parse error: ` + err.Error() + `"}`
+		}
+		name := part.FormName()
+		if part.FileName() != "" {
+			files = append(files, map[string]string{"field": name, "filename": part.FileName()})
+			// Do not read file bytes — they may be binary.
+			continue
+		}
+		data, err := io.ReadAll(io.LimitReader(part, 1<<20)) // 1MiB cap per field
+		if err != nil {
+			continue
+		}
+		fields[name] = string(data)
+	}
+	summary := map[string]any{
+		"content_type": "multipart/form-data",
+		"fields":       fields,
+	}
+	if len(files) > 0 {
+		summary["files"] = files
+	}
+	b, err := json.Marshal(summary)
+	if err != nil {
+		return `{"note":"summary marshal failed"}`
+	}
+	return string(b)
+}
+
 func createVideoUpstreamRequest(method string, reqURL string, apiKey string, body []byte) (*http.Request, error) {
 	var reader io.Reader
 	if body != nil {
@@ -1111,18 +1164,24 @@ func relayVideoMultipart(c *gin.Context, m *meta.Meta, relayMode int) *relaymode
 	// Sync: the upstream returns raw video bytes directly. Stream them back.
 	if relayMode == relaymode.VideoSync {
 		contentType := httpResp.Header.Get("Content-Type")
+		// vLLM-OMNI sync must return either a video/* / application/octet-stream
+		// body (success) or a JSON error envelope. Distinguish the two by
+		// status + content-type without buffering the entire body: peek at the
+		// first bytes to detect a JSON '[' or '{' prefix.
+		if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
+			errBody, _ := io.ReadAll(httpResp.Body)
+			return videoErrorFromUpstream(httpResp.StatusCode, errBody)
+		}
 		if contentType == "" {
 			contentType = "video/mp4"
 		}
-		// Non-2xx / non-video upstream responses are errors — surface as JSON.
-		if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 || !strings.HasPrefix(contentType, "video/") && !strings.HasPrefix(contentType, "application/octet-stream") {
-			errBody, _ := io.ReadAll(httpResp.Body)
-			if httpResp.StatusCode >= 200 && httpResp.StatusCode < 300 && strings.HasPrefix(contentType, "application/json") {
-				// Upstream returned a JSON error envelope despite 2xx.
-				c.Data(httpResp.StatusCode, contentType, errBody)
-				return nil
-			}
-			return videoErrorFromUpstream(httpResp.StatusCode, errBody)
+		isVideoCT := strings.HasPrefix(contentType, "video/") || strings.HasPrefix(contentType, "application/octet-stream")
+		if !isVideoCT {
+			// Upstream returned JSON (error envelope or unexpected shape).
+			// Forward verbatim with the upstream's status and content type.
+			body, _ := io.ReadAll(httpResp.Body)
+			c.Data(httpResp.StatusCode, contentType, body)
+			return nil
 		}
 		c.Header("Content-Type", contentType)
 		if cl := httpResp.Header.Get("Content-Length"); cl != "" {
@@ -1146,20 +1205,24 @@ func relayVideoMultipart(c *gin.Context, m *meta.Meta, relayMode int) *relaymode
 	}
 	now := helper.GetTimestamp()
 	task := &model.VideoGenerationTask{
-		TaskId:           upTask.ID,
-		ProviderTaskId:   upTask.ID,
-		UserId:           m.UserId,
-		TokenId:          m.TokenId,
-		ChannelId:        channel.Id,
-		Model:            m.OriginModelName,
-		Status:           upTask.Status,
-		ProviderStatus:   upTask.Status,
-		Seed:             upTask.Seed,
-		Resolution:       upTask.Resolution,
-		Ratio:            upTask.Ratio,
-		Duration:         upTask.Duration,
-		FramesPerSecond:  upTask.FramesPerSecond,
-		RequestPayload:   string(bodyBytes),
+		TaskId:          upTask.ID,
+		ProviderTaskId:  upTask.ID,
+		UserId:          m.UserId,
+		TokenId:         m.TokenId,
+		ChannelId:       channel.Id,
+		Model:           m.OriginModelName,
+		Status:          upTask.Status,
+		ProviderStatus:  upTask.Status,
+		Seed:            upTask.Seed,
+		Resolution:      upTask.Resolution,
+		Ratio:           upTask.Ratio,
+		Duration:        upTask.Duration,
+		FramesPerSecond: upTask.FramesPerSecond,
+		// Persist a UTF-8-safe summary of the multipart body, not the raw bytes:
+		// the body may contain binary file content (e.g. PNG 0x89) that
+		// PostgreSQL text columns reject with "invalid byte sequence for
+		// encoding UTF8". The JSON path stores its body directly, which is safe.
+		RequestPayload:   summarizeMultipartRequest(bodyBytes, clientContentType),
 		ResponsePayload:  string(respBody),
 		PreConsumedQuota: 0,
 		FinalQuota:       0,
@@ -1275,12 +1338,27 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 		pollInterval = videoSyncDefaultPollInterval
 	}
 
+	// Always check the task state immediately — the upstream may have already
+	// finished between create and now, so don't waste a poll interval waiting
+	// on the ticker before the first check.
+	if refreshed, refreshErr := refreshVideoTaskFromUpstream(ctx, task); refreshErr != nil {
+		return refreshErr
+	} else if refreshed != nil {
+		task = refreshed
+	}
+	if task.Status == model.VideoTaskStatusSucceeded || task.Status == model.VideoTaskStatusFailed {
+		return videoSyncRespond(c, task)
+	}
+
 	deadline := time.Now().Add(time.Duration(timeoutSeconds) * time.Second)
 	ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			// Prefer the client-disconnect signal when both ctx.Done() and
+			// ticker.C are ready (Go select is randomized; check ctx first
+			// to avoid an extra poll interval of delay on disconnect).
 			return videoErrorf(http.StatusRequestTimeout, "video_sync_timeout", "client disconnected while waiting for video")
 		case <-ticker.C:
 		}
@@ -1304,19 +1382,23 @@ func RelayVideoHelper(c *gin.Context, relayMode int) *relaymodel.ErrorWithStatus
 			task = refreshed
 		}
 		if task.Status == model.VideoTaskStatusSucceeded || task.Status == model.VideoTaskStatusFailed {
-			// vLLM-OMNI sync returns the raw video bytes directly. For the JSON
-			// path we fetch the generated video_url and stream the bytes back
-			// with a video/* Content-Type; on failure we return the JSON task.
-			if task.Status == model.VideoTaskStatusSucceeded && strings.TrimSpace(task.VideoURL) != "" {
-				if bizErr := streamVideoBytes(c, task.VideoURL); bizErr != nil {
-					return bizErr
-				}
-				return nil
-			}
-			c.JSON(http.StatusOK, mapVideoTaskToOpenAIResponse(task))
-			return nil
+			return videoSyncRespond(c, task)
 		}
 	}
+}
+
+// videoSyncRespond sends the final response for /v1/videos/sync on the JSON
+// path. On success it streams the raw video bytes (vLLM-OMNI sync semantics);
+// on failure it returns the JSON task envelope.
+func videoSyncRespond(c *gin.Context, task *model.VideoGenerationTask) *relaymodel.ErrorWithStatusCode {
+	if task.Status == model.VideoTaskStatusSucceeded && strings.TrimSpace(task.VideoURL) != "" {
+		if bizErr := streamVideoBytes(c, task.VideoURL); bizErr != nil {
+			return bizErr
+		}
+		return nil
+	}
+	c.JSON(http.StatusOK, mapVideoTaskToOpenAIResponse(task))
+	return nil
 }
 
 // streamVideoBytes fetches the video at videoURL and streams the raw bytes to
